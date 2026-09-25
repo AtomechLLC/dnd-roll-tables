@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 2 UI-SPEC approved
-last_updated: "2026-09-25T19:10:02.823Z"
-last_activity: 2026-09-25 -- Phase 2 planning complete
+last_updated: "2026-09-25T19:42:00.265Z"
+last_activity: 2026-09-25
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 25
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** A designer can see, in one glance at a live table and a curve, why attack bonuses saturate (hit chance caps at 95%) while damage bonuses scale linearly, and why the crossover depends on AC and the damage die.
-**Current focus:** Phase 2 — bonus comparison
+**Current focus:** Phase 02 — bonus-comparison
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
+Phase: 02 (bonus-comparison) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-09-25 -- Phase 2 planning complete
+Last activity: 2026-09-25
 
-Progress: [----------] 0%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [----------] 0%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 02 P01 | 8 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,10 @@ Recent decisions affecting current work:
 - [Roadmap]: A minimal skeleton deploys to GitHub Pages in Phase 1 (DEPLOY-01..03). Phase 4 re-verifies the final URL.
 - [Roadmap]: CMP-04 (diff highlighting) sits with the other side-by-side table work in Phase 2, not in the copy/polish phase. The crit-row convention (2 x face + D) is already settled in PROJECT.md, so nothing blocks it.
 - [Roadmap]: STAT-03 (marginal +1 readout) is in Phase 1 with the other stat cards because it only needs the Phase 1 math core.
+- [Phase 02]: 02-01: shared heatMax is the true max cell across the three compact tables; 2X+D+N is only the oracle
+- [Phase 02]: 02-01: compact-table deltas are displayed variant tenths minus displayed baseline tenths
+- [Phase 02]: 02-01: page computeView = statsView + compareView; grids and check-engine call VM.statsView
+- [Phase 02]: 02-01: check-page --expect matches visible text only (self-test panel stripped, entities decoded)
 
 ### Pending Todos
 
@@ -85,6 +90,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-25T18:51:11.537Z
+Last session: 2026-09-25T19:39:46.087Z
 Stopped at: Phase 2 UI-SPEC approved
-Resume file: .planning/phases/02-bonus-comparison/02-UI-SPEC.md
+Resume file: None

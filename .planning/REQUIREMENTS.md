@@ -23,7 +23,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **CTRL-01**: User can set target AC with a range slider paired with a number input (range 10 to 30), and the page updates live on the `input` event
 - [x] **CTRL-02**: User can pick the damage die from d4, d6, d8, d10, d12 via a segmented button group
 - [x] **CTRL-03**: User can set a base attack bonus and a base damage bonus with number steppers (range -5 to +20)
-- [ ] **CTRL-04**: User can set the comparison bonus N (0 to 20) with a slider; N drives the side-by-side tables and the chart marker
+- [x] **CTRL-04**: User can set the comparison bonus N (0 to 20) with a slider; N drives the side-by-side tables and the chart marker
 - [x] **CTRL-05**: Every control value passes through one numeric parser with clamping and fallback into a single state object; renders are coalesced with requestAnimationFrame
 
 ### Outcome Table
@@ -51,11 +51,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Side-by-Side Tables
 
-- [ ] **CMP-01**: Three outcome tables render side by side: baseline, baseline with +N to hit, baseline with +N to damage
-- [ ] **CMP-02**: All three tables share one color-scale domain (max computed across all three before rendering) so a cell shift is visible as a color shift
-- [ ] **CMP-03**: Each comparison table shows its own hit threshold rule and its own expected 20-round total under it
-- [ ] **CMP-04**: The +N-to-hit and +N-to-damage tables show the resulting damage in every cell with no diff highlighting (amended 2026-09-25 in the Phase 2 discussion); the shift is conveyed by the values, the shared color scale (CMP-02), each table's own threshold rule (CMP-03), and each caption's 20-round total with its delta vs baseline
-- [ ] **CMP-05**: The three tables sit side by side on a laptop-width viewport (about 1366 px) at d12 and stack vertically on narrow screens without horizontal page scroll
+- [x] **CMP-01**: Three outcome tables render side by side: baseline, baseline with +N to hit, baseline with +N to damage
+- [x] **CMP-02**: All three tables share one color-scale domain (max computed across all three before rendering) so a cell shift is visible as a color shift
+- [x] **CMP-03**: Each comparison table shows its own hit threshold rule and its own expected 20-round total under it
+- [x] **CMP-04**: The +N-to-hit and +N-to-damage tables show the resulting damage in every cell with no diff highlighting (amended 2026-09-25 in the Phase 2 discussion); the shift is conveyed by the values, the shared color scale (CMP-02), each table's own threshold rule (CMP-03), and each caption's 20-round total with its delta vs baseline
+- [x] **CMP-05**: The three tables sit side by side on a laptop-width viewport (about 1366 px) at d12 and stack vertically on narrow screens without horizontal page scroll
 
 ### Simulation
 
@@ -132,7 +132,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CTRL-01 | Phase 1 | Complete |
 | CTRL-02 | Phase 1 | Complete |
 | CTRL-03 | Phase 1 | Complete |
-| CTRL-04 | Phase 2 | Pending |
+| CTRL-04 | Phase 2 | Complete |
 | CTRL-05 | Phase 1 | Complete |
 | TABLE-01 | Phase 1 | Complete |
 | TABLE-02 | Phase 1 | Complete |
@@ -148,11 +148,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CHART-03 | Phase 2 | Pending |
 | CHART-04 | Phase 2 | Pending |
 | CHART-05 | Phase 2 | Pending |
-| CMP-01 | Phase 2 | Pending |
-| CMP-02 | Phase 2 | Pending |
-| CMP-03 | Phase 2 | Pending |
-| CMP-04 | Phase 2 | Pending |
-| CMP-05 | Phase 2 | Pending |
+| CMP-01 | Phase 2 | Complete |
+| CMP-02 | Phase 2 | Complete |
+| CMP-03 | Phase 2 | Complete |
+| CMP-04 | Phase 2 | Complete |
+| CMP-05 | Phase 2 | Complete |
 | SIM-01 | Phase 3 | Pending |
 | SIM-02 | Phase 3 | Pending |
 | SIM-03 | Phase 3 | Pending |
