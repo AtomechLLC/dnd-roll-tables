@@ -70,7 +70,7 @@ Plans:
   4. The flat stretches of the attack curve (95% cap reached, or only a nat 20 hits) are shaded and labeled on the chart.
   5. At about 1366 px wide with a d12, the three tables sit side by side. On a narrow screen they stack with no horizontal page scroll.
 
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 **Wave 1**
@@ -79,7 +79,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-02-PLAN.md — Sweep chart slice: inline SVG with both exact series, nice-tick axes, slider-driven N marker, direct labels, legend, caption, hover readout (Wave 2)
+- [x] 02-02-PLAN.md — Sweep chart slice: inline SVG with both exact series, nice-tick axes, slider-driven N marker, direct labels, legend, caption, hover readout (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -127,6 +127,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Live Roll Table, Deployed | 5/5 | Complete    | 2026-09-25 |
-| 2. Bonus Comparison | 1/3 | In Progress|  |
+| 2. Bonus Comparison | 2/3 | In Progress|  |
 | 3. Roll-20-Rounds Simulation | 0/TBD | Not started | - |
 | 4. Designer Explanation & Final Ship | 0/TBD | Not started | - |

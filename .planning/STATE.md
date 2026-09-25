@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 UI-SPEC approved
-last_updated: "2026-09-25T19:42:00.265Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-09-25T19:55:46.818Z"
 last_activity: 2026-09-25
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 25
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 02 (bonus-comparison) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-09-25
 
-Progress: [████████░░] 75%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [████████░░] 75%
 
 *Updated after each plan completion*
 | Phase 02 P01 | 8 min | 3 tasks | 3 files |
+| Phase 02 P02 | 10 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-01: compact-table deltas are displayed variant tenths minus displayed baseline tenths
 - [Phase 02]: 02-01: page computeView = statsView + compareView; grids and check-engine call VM.statsView
 - [Phase 02]: 02-01: check-page --expect matches visible text only (self-test panel stripped, entities decoded)
+- [Phase 02]: chartView memoizes its N-independent block per (ac, atk, die, dmg) so N slider drags reuse one sweep
+- [Phase 02]: Chart readout gap is the difference of displayed tenths; caption order compares exact integer numerators
+- [Phase 02]: Direct labels de-collide to 22 units apart (to hit on top on a tie) and shift together into the plot
 
 ### Pending Todos
 
@@ -90,6 +94,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-25T19:39:46.087Z
-Stopped at: Phase 2 UI-SPEC approved
+Last session: 2026-09-25T19:55:46.808Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None

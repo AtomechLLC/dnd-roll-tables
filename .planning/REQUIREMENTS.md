@@ -43,11 +43,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Comparison Chart
 
-- [ ] **CHART-01**: An inline SVG line chart plots bonus N = 0..20 on the x-axis and expected 20-round damage on the y-axis, with two series: N added to the attack bonus, and N added to the damage bonus, at the current AC, die, and base bonuses
-- [ ] **CHART-02**: The chart has labeled axes, tick marks, a legend, and both series start from the same point at N = 0
+- [x] **CHART-01**: An inline SVG line chart plots bonus N = 0..20 on the x-axis and expected 20-round damage on the y-axis, with two series: N added to the attack bonus, and N added to the damage bonus, at the current AC, die, and base bonuses
+- [x] **CHART-02**: The chart has labeled axes, tick marks, a legend, and both series start from the same point at N = 0
 - [ ] **CHART-03**: Crossover points where the two series meet are marked; the chart and its caption handle zero, one, or two crossings as normal states
 - [ ] **CHART-04**: The regions where the attack curve is flat (95% cap reached, or only a nat 20 hits) are shaded and labeled
-- [ ] **CHART-05**: A vertical marker on the chart shows the current comparison bonus N from CTRL-04
+- [x] **CHART-05**: A vertical marker on the chart shows the current comparison bonus N from CTRL-04
 
 ### Side-by-Side Tables
 
@@ -143,11 +143,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | STAT-01 | Phase 1 | Complete |
 | STAT-02 | Phase 1 | Complete |
 | STAT-03 | Phase 1 | Complete |
-| CHART-01 | Phase 2 | Pending |
-| CHART-02 | Phase 2 | Pending |
+| CHART-01 | Phase 2 | Complete |
+| CHART-02 | Phase 2 | Complete |
 | CHART-03 | Phase 2 | Pending |
 | CHART-04 | Phase 2 | Pending |
-| CHART-05 | Phase 2 | Pending |
+| CHART-05 | Phase 2 | Complete |
 | CMP-01 | Phase 2 | Complete |
 | CMP-02 | Phase 2 | Complete |
 | CMP-03 | Phase 2 | Complete |
