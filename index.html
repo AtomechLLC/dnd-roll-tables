@@ -974,6 +974,80 @@ const SelfTest = (() => {
     check(`cmp: grid delta = displayed variant tenths - displayed base tenths (${nCmp} views)`, badDelta, 0);
   });
 
+  // Sweep chart (CHART-01, CHART-02, CHART-05, D-10, D-11, D-13). Cost-bounded: each distinct
+  // sweep is computed once here (a d12 sweep is about 2 ms); exhaustive checks live in
+  // tools/check-engine.mjs (j)..(l).
+  section('chart', () => {
+    const NT = VM.niceTicks;
+    check('chart: niceTicks(274) ticks', NT(274).ticks.join(','), '0,100,200,300');
+    check('chart: niceTicks(33) top', NT(33).top, 40);
+    check('chart: niceTicks(165.5) step and top', NT(165.5).step + ' ' + NT(165.5).top, '50 200');
+    check('chart: niceTicks(20) step and top', NT(20).step + ' ' + NT(20).top, '5 20');
+    check('chart: niceTicks(890) top', NT(890).top, 1000);
+    check('chart: niceTicks(0) top 1 and ticks 0,1', NT(0).top + ' ' + NT(0).ticks.join(','), '1 0,1');
+
+    const memo = new Map();
+    const SW = (ac, atk, die, dmg) => {
+      const k = [ac, atk, die, dmg].join(',');
+      if (!memo.has(k)) memo.set(k, DiceMath.sweep({ ac, atk, die, dmg }, VM.CONTROL_SPEC.n.max));
+      return memo.get(k);
+    };
+    const seq = (f) => Array.from({ length: 21 }, (_, n) => f(n)).join(',');
+    const cases = [
+      ['AC15 +5 d8 D+0', [15, 5, 8, 0], (n) => 3456 + 288 * Math.min(n, 8), (n) => 3456 + 704 * n],
+      ['AC15 +0 d8 D+0', [15, 0, 8, 0], (n) => 2016 + 288 * Math.min(n, 13), (n) => 2016 + 384 * n],
+      ['AC25 +0 d8 D+0', [25, 0, 8, 0], (n) => 576 + 288 * Math.max(0, n - 5), (n) => 576 + 64 * n],
+      ['AC15 +0 d12 D+0', [15, 0, 12, 0], (n) => 6552 + 936 * Math.min(n, 13), (n) => 6552 + 864 * n],
+      ['AC25 +0 d12 D+0', [25, 0, 12, 0], (n) => 1872 + 936 * Math.max(0, n - 5), (n) => 1872 + 144 * n],
+    ];
+    for (const [label, args, fa, fd] of cases) {
+      const s = SW(...args);
+      check(`chart: ${label} sweep attack numerators (closed form)`, s.attack.join(','), seq(fa));
+      check(`chart: ${label} sweep damage numerators (closed form)`, s.damage.join(','), seq(fd));
+      check(`chart: ${label} both curves start at the same point`, s.attack[0], s.damage[0]);
+    }
+
+    const def = SW(15, 5, 8, 0);
+    const cv = VM.chartView({ ac: 15, atk: 5, die: 8, dmg: 0 }, 5);
+    check('chart: view defaults n and den', cv.n + ' ' + cv.den, '5 64');
+    check('chart: view defaults series equal the sweep',
+      cv.attack.join(',') + '|' + cv.damage.join(','), def.attack.join(',') + '|' + def.damage.join(','));
+    check('chart: view defaults y ticks', cv.ticks.ticks.join(','), '0,100,200,300');
+    check('chart: view defaults series text at n 5', cv.attackText[5] + ' ' + cv.damageText[5], '76.5 109.0');
+    check('chart: view defaults 21 readout lines', cv.readout.length, 21);
+    check('chart: view defaults readout at n 5', cv.readout[5],
+      'At +5: to hit 76.5 · to damage 109.0 · to damage ahead by 32.5');
+    check('chart: view defaults readout at n 0', cv.readout[0], 'At +0: to hit 54.0 · to damage 54.0 · even');
+    check('chart: view defaults caption opens with setup and order', cv.caption.startsWith(
+      'Expected damage over 20 rounds at AC 15, d8, attack +5, damage +0. ' +
+      'Both curves start at 54.0 with no extra bonus. +N to damage leads at every N from +1 to +20.'), true);
+    const cf = VM.chartView({ ac: 25, atk: 0, die: 8, dmg: 0 }, 5);
+    check('chart: view AC25 +0 d8 readout at n 7', cf.readout[7],
+      'At +7: to hit 18.0 · to damage 16.0 · to hit ahead by 2.0');
+    check('chart: view AC25 +0 d8 y top', cf.ticks.top, 80);
+
+    const CO = (ac, atk, die, dmg) => { const s = SW(ac, atk, die, dmg); return VM.captionOrder(s.attack, s.damage); };
+    check('chart: order AC15 +0 d8', CO(15, 0, 8, 0), '+N to damage leads at every N from +1 to +20.');
+    check('chart: order AC20 +5 d12 D+3', CO(20, 5, 12, 3), '+N to hit leads at every N from +1 to +20.');
+    check('chart: order AC25 +0 d8', CO(25, 0, 8, 0),
+      '+N to damage leads from +1 to +6, then +N to hit leads from +7 to +20.');
+    check('chart: order AC15 +0 d12', CO(15, 0, 12, 0),
+      '+N to hit leads from +1 to +14, then +N to damage leads from +15 to +20.');
+    check('chart: order AC25 +0 d12', CO(25, 0, 12, 0),
+      '+N to damage leads from +1 to +5, then +N to hit leads from +6 to +20.');
+    check('chart: order AC10 +0 d4 D+14 (tie at 12)', CO(10, 0, 4, 14),
+      '+N to hit leads from +1 to +11, then the two are even at +12, then +N to damage leads from +13 to +20.');
+    check('chart: order AC27 -5 d4 D+0 (end tie)', CO(27, -5, 4, 0),
+      '+N to damage leads from +1 to +19, then the two are even at +20.');
+    check('chart: order synthetic two flips', VM.captionOrder([0, 1, 4, 7, 8, 9], [0, 2, 3, 4, 9, 10]),
+      '+N to damage leads at +1, then +N to hit leads from +2 to +3, then +N to damage leads from +4 to +5.');
+    const zeros = new Array(21).fill(0);
+    check('chart: order synthetic all equal', VM.captionOrder(zeros, zeros),
+      'The two are even at every N from +1 to +20.');
+
+    check('chart: page view chart block n 5', VM.computeView({ ...VM.DEFAULT_STATE }).chart.n, 5);
+  });
+
   const failed = results.filter((r) => !r.ok);
   for (const f of failed) console.error('SELFTEST FAIL:', f.name, '| got', f.actual, '| expected', f.expected);
   const ms = (now() - t0).toFixed(1);
@@ -1563,6 +1637,96 @@ function runUiSmoke() {
     check(`cmp ui: d12 no horizontal page scroll at ${root.clientWidth}px`, root.scrollWidth <= root.clientWidth, true);
   } catch (err) {
     results.push({ name: 'cmp ui smoke crashed: ' + (err && err.message), ok: false });
+  }
+
+  // Phase 2 sweep chart and hover readout (CHART-01/02/05, D-09..D-13). Geometry assumes
+  // x(n) = 64 + 24n and y(v) = 336 - v * 304 / top. Names avoid the displayed strings (IN-06).
+  try {
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); render(); };
+    const nRange = document.getElementById('n-range');
+    const svg = document.getElementById('sweep');
+    const q = (sel) => svg.querySelector(sel);
+    const attr = (sel, name) => { const e = q(sel); return e ? e.getAttribute(name) : null; };
+    const pts = (sel) => (attr(sel, 'points') || '').trim().split(/\s+/);
+    const tickLabel = (label) => Array.from(svg.querySelectorAll('g.x-labels text.tick:not(.marker-label)'))
+      .find((t) => t.textContent === label) || null;
+
+    show({});
+    check('chart ui: svg viewBox', svg.getAttribute('viewBox'), '0 0 640 400');
+    check('chart ui: svg role and label reference',
+      svg.getAttribute('role') + ' ' + svg.getAttribute('aria-labelledby'), 'img chart-caption');
+    check('chart ui: svg has no width or height attribute',
+      svg.hasAttribute('width') || svg.hasAttribute('height'), false);
+    const hitPts = pts('polyline.series-hit'), dmgPts = pts('polyline.series-dmg');
+    check('chart ui: both polylines have 21 points', hitPts.length + ' ' + dmgPts.length, '21 21');
+    check('chart ui: both polylines start at the shared n 0 point', hitPts[0] + ' ' + dmgPts[0],
+      '64.00,281.28 64.00,281.28');
+    check('chart ui: hit polyline last point', hitPts[20], '544.00,244.80');
+    check('chart ui: dmg polyline last point', dmgPts[20], '544.00,58.35');
+    check('chart ui: y tick labels at the defaults',
+      Array.from(svg.querySelectorAll('g.grid-y text')).map((t) => t.textContent).join(','), '0,100,200,300');
+    check('chart ui: five x tick labels',
+      Array.from(svg.querySelectorAll('g.x-labels text.tick:not(.marker-label)')).map((t) => t.textContent).join(' '),
+      ['+0', '+5', '+10', '+15', '+20'].join(' '));
+    check('chart ui: defaults tick label 5 hidden under the marker label',
+      tickLabel('+5') !== null && tickLabel('+5').hasAttribute('hidden'), true);
+    check('chart ui: defaults marker label text and x',
+      (q('text.marker-label') || {}).textContent + ' ' + attr('text.marker-label', 'x'), '+5 184.00');
+
+    send(nRange, '10');
+    render();
+    check('chart ui: slider 10 moves the marker line', attr('line.n-marker', 'x1'), '304.00');
+    check('chart ui: slider 10 hit dot cy', attr('circle.ndot-hit', 'cy'), '244.80');
+    check('chart ui: slider 10 dmg dot cy', attr('circle.ndot-dmg', 'cy'), '169.81');
+    const hitTitle = q('circle.ndot-hit title');
+    check('chart ui: slider 10 hit dot title', hitTitle ? hitTitle.textContent : null, 'to ' + 'hit 90.0');
+    check('chart ui: slider 10 hides tick label 10, shows tick label 5',
+      tickLabel('+10') !== null && tickLabel('+10').hasAttribute('hidden') && !tickLabel('+5').hasAttribute('hidden'), true);
+    check('chart ui: slider 10 marker label text', (q('text.marker-label') || {}).textContent, '+' + '10');
+
+    show({ ac: 27, atk: -5, die: 4, dmg: 0 });
+    check('chart ui: end-tie direct labels de-collide (hit on top)',
+      attr('text.direct-hit', 'y') + ' ' + attr('text.direct-dmg', 'y'), '32.00 54.00');
+
+    show({});
+    check('chart ui: x axis title', (q('text.axis-title') || {}).textContent, 'Extra bonus ' + '+N');
+    const ytitle = document.querySelector('.chart-ytitle');
+    check('chart ui: y axis title', ytitle ? ytitle.textContent : null, 'Expected damage over ' + '20 rounds');
+    const legendText = (document.querySelector('.chart-legend') || {}).textContent || '';
+    check('chart ui: legend names both series and the marker',
+      ['+N to hit (added to the attack ' + 'roll)', '+N to damage (added to the damage ' + 'roll)',
+        'Current +N from the ' + 'slider'].every((s) => legendText.includes(s)), true);
+    check('chart ui: caption equals the view', document.getElementById('chart-caption').textContent,
+      VM.computeView(state).chart.caption);
+    const firstTick = svg.querySelector('g.x-labels text.tick');
+    const px = parseFloat(getComputedStyle(firstTick).fontSize) * svg.getBoundingClientRect().width / 640;
+    check('chart ui: tick text renders at 12 px or more at this width', px >= 11.95, true);
+
+    show({ die: 12 });
+    const root = document.documentElement;
+    check(`chart ui: d12 no horizontal page scroll at ${root.clientWidth}px`, root.scrollWidth <= root.clientWidth, true);
+
+    // Hover readout (D-13): hover never touches state and never re-renders.
+    show({});
+    const readout = document.getElementById('chart-readout');
+    check('readout ui: defaults text equals the view at n 5', readout.textContent, VM.computeView(state).chart.readout[5]);
+    send(nRange, '7');
+    render();
+    check('readout ui: slider 7 readout', readout.textContent.startsWith('At +' + '7:'), true);
+    const before = JSON.stringify(state);
+    const r = svg.getBoundingClientRect();
+    svg.dispatchEvent(new PointerEvent('pointermove',
+      { bubbles: true, clientX: r.left + 424 * r.width / 640, clientY: r.top + r.height / 2 }));
+    if (typeof paintReadout === 'function') paintReadout();   // the handler itself paints in rAF
+    check('readout ui: pointer at x 424 reads n 15', readout.textContent.startsWith('At +' + '15:'), true);
+    check('readout ui: hover guide shown at x 424',
+      !q('line.hover-guide').hasAttribute('hidden') && attr('line.hover-guide', 'x1') === '424.00', true);
+    check('readout ui: hover leaves state unchanged', JSON.stringify(state), before);
+    svg.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+    check('readout ui: leave returns to slider n 7', readout.textContent.startsWith('At +' + '7:'), true);
+    check('readout ui: leave hides the hover guide', q('line.hover-guide').hasAttribute('hidden'), true);
+  } catch (err) {
+    results.push({ name: 'chart ui smoke crashed: ' + (err && err.message), ok: false });
   }
 
   Object.assign(state, VM.DEFAULT_STATE);

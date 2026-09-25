@@ -13,8 +13,14 @@
 //      (h) +N-to-hit threshold (CMP-03) === clamp(C - A - N, 2, 20)
 //      (i) a 1-in-50 sample of VM.compareView agrees with the engine (heatMax, hit threshold,
 //          deltas = difference of the displayed tenths)
-//      with N in {0, 5, 20}. Stats are cached per (ac, die), keyed by (atk, dmg), so the
-//      +N lookups reuse neighbouring combos.
+//      with N in {0, 5, 20}, plus the Phase 2 sweep-chart rules over N = 0..CONTROL_SPEC.n.max:
+//      (j) a 1-in-50 sample of DiceMath.sweep equals the series built from cached stats, and
+//          both series start at the same point (CHART-01/02)
+//      (k) every combo: the damage series strictly increases, the attack series never falls
+//      (l) a 1-in-50 sample of VM.chartView: y ticks cover the larger curve with at most 1.5x
+//          headroom, 4 to 6 ticks, one readout line per N
+//      Stats are cached per (ac, die), keyed by (atk, dmg), so the +N lookups reuse
+//      neighbouring combos.
 // Exit 0 only when everything passes.
 
 import fs from 'node:fs';
@@ -68,8 +74,12 @@ const names = {
   g: '(g) CMP-02: max cell over base, +N hit, +N dmg === max(1, 2X + D + N), N in {0,5,20}',
   h: '(h) CMP-03: +N-to-hit threshold === clamp(C - A - N, 2, 20), N in {0,5,20}',
   i: '(i) sampled VM.compareView agrees (heatMax, hit threshold, deltas = displayed difference)',
+  j: '(j) CHART-01/02: sampled DiceMath.sweep equals the cached series, both start equal',
+  k: '(k) sweep series: damage strictly increasing, attack non-decreasing',
+  l: '(l) sampled VM.chartView: ticks cover max with <= 1.5x headroom, 4..6 ticks, maxN + 1 readouts',
 };
 const NS = [0, 5, 20];
+const MAXN = (VM.CONTROL_SPEC && VM.CONTROL_SPEC.n && VM.CONTROL_SPEC.n.max) || 20;
 const counts = Object.fromEntries(Object.keys(names).map((k) => [k, 0]));
 const firstFailures = [];
 let combos = 0;
@@ -163,6 +173,35 @@ for (let ac = 10; ac <= 30; ac++) {
               if (cv.tables.hit.deltaText !== dh) record('i', p, `N ${N}: hit delta ${cv.tables.hit.deltaText} vs ${dh}`);
               if (cv.tables.dmg.deltaText !== dd) record('i', p, `N ${N}: dmg delta ${cv.tables.dmg.deltaText} vs ${dd}`);
             }
+          }
+        }
+
+        // Sweep series from the cache (j, k, l): +n on the attack roll vs +n on the damage roll
+        const a = [], d = [];
+        for (let n = 0; n <= MAXN; n++) {
+          a.push(statAt(atk + n, dmg).st.e20Num);
+          d.push(statAt(atk, dmg + n).st.e20Num);
+        }
+        const den = die * die;
+        for (let n = 1; n <= MAXN; n++) {
+          if (!(d[n] > d[n - 1])) { record('k', p, `damage not increasing at N ${n}: ${d[n - 1]} -> ${d[n]}`); break; }
+          if (a[n] < a[n - 1]) { record('k', p, `attack falls at N ${n}: ${a[n - 1]} -> ${a[n]}`); break; }
+        }
+        if (combos % 50 === 0) {
+          const sw = DiceMath.sweep(p, MAXN);
+          if (sw.attack.join(',') !== a.join(',')) record('j', p, 'sweep attack differs from the cached series');
+          if (sw.damage.join(',') !== d.join(',')) record('j', p, 'sweep damage differs from the cached series');
+          if (sw.attack[0] !== sw.damage[0]) record('j', p, `start ${sw.attack[0]} vs ${sw.damage[0]}`);
+          if (typeof VM.chartView !== 'function') {
+            record('l', p, 'VM.chartView missing');
+          } else {
+            const c = VM.chartView(p, 5);
+            const m = Math.max(a[MAXN], d[MAXN]) / den;
+            if (!(c.ticks.top >= m)) record('l', p, `top ${c.ticks.top} below max ${m}`);
+            if (!(c.ticks.top <= 1.5 * m)) record('l', p, `top ${c.ticks.top} over 1.5 x max ${m}`);
+            const nt = c.ticks.ticks.length;
+            if (nt < 4 || nt > 6) record('l', p, `${nt} ticks`);
+            if (c.readout.length !== MAXN + 1) record('l', p, `${c.readout.length} readout lines`);
           }
         }
       }
