@@ -619,6 +619,8 @@ const SelfTest = (() => {
   };
 
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  // Coarse-grid axes, shared by the Phase 1 grid and the Phase 2 compare grid.
+  const ACS = [10, 15, 20, 25, 30], ATKS = [-5, 0, 5, 13, 20], DMGS = [-5, -2, -1, 0, 3, 20];
 
   try {
     const S = (ac, atk, die, dmg) => DiceMath.stats({ ac, atk, die, dmg });
@@ -722,7 +724,6 @@ const SelfTest = (() => {
     check('parse returns a number', typeof P('ac', '20', 15), 'number');
 
     // Coarse-grid invariants, one aggregated result each
-    const ACS = [10, 15, 20, 25, 30], ATKS = [-5, 0, 5, 13, 20], DMGS = [-5, -2, -1, 0, 3, 20];
     let nAll = 0, nCf = 0, nMarg = 0, nSum = 0;
     let badClamp = 0, badCf = 0, badMarg = 0, badSum = 0, badFmt = 0;
     for (const ac of ACS) for (const die of DiceMath.DICE) for (const atk of ATKS) for (const dmg of DMGS) {
@@ -753,6 +754,114 @@ const SelfTest = (() => {
   } catch (err) {
     results.push({ name: 'self-test crashed: ' + (err && err.message), ok: false });
   }
+
+  // Phase 2 sections. Each runs in its own try/catch and a crash is reported as
+  // '<name> crashed: ...', never 'self-test crashed', so engineLoaded() stays true and the
+  // page keeps rendering while one of these checks is red.
+  const section = (name, fn) => {
+    try { fn(); } catch (err) {
+      results.push({ name: name + ' crashed: ' + (err && err.message), ok: false });
+    }
+  };
+  const KEYS3 = ['base', 'hit', 'dmg'];
+  const col = (cv, field) => KEYS3.map((k) => cv.tables[k][field]);
+  const maxCell = (rows) => Math.max(...rows.flatMap((r) => r.cells));
+
+  // N control (CTRL-04, D-03): one parser, one domain
+  section('cmp', () => {
+    const P = VM.parseControl;
+    check('cmp: parse n "21" clamps to 20', P('n', '21', 5), 20);
+    check('cmp: parse n "-1" clamps to 0', P('n', '-1', 5), 0);
+    check('cmp: parse n "" keeps previous 5', P('n', '', 5), 5);
+    check('cmp: parse n "7.4" rounds to 7', P('n', '7.4', 5), 7);
+    check('cmp: parse n "abc" keeps previous 5', P('n', 'abc', 5), 5);
+    check('cmp: DEFAULT_STATE.n is 5', VM.DEFAULT_STATE.n, 5);
+    check('cmp: CONTROL_SPEC.n min 0 and max 20',
+      VM.CONTROL_SPEC.n.min === 0 && VM.CONTROL_SPEC.n.max === 20, true);
+  });
+
+  // Compare view at the defaults, N = 5 (CMP-01..04, D-06, D-08)
+  section('cmp', () => {
+    const cv = VM.compareView({ ac: 15, atk: 5, die: 8, dmg: 0 }, 5);
+    check('cmp: defaults n 5 shared heatMax 21', cv.heatMax, 21);
+    check('cmp: defaults n 5 heatMax is the max cell of the three tables',
+      cv.heatMax, Math.max(...KEYS3.map((k) => maxCell(cv.tables[k].rows))));
+    check('cmp: defaults n 5 thresholds base / hit / dmg', col(cv, 'threshold').join(' '), '10 5 10');
+    check('cmp: defaults n 5 20-round totals', col(cv, 'totalText').join(' '), '54.0 76.5 109.0');
+    check('cmp: defaults n 5 baseline has no delta', cv.tables.base.deltaText, null);
+    check('cmp: defaults n 5 +hit delta', cv.tables.hit.deltaText, '+22.5');
+    check('cmp: defaults n 5 +dmg delta', cv.tables.dmg.deltaText, '+55.0');
+    check('cmp: defaults n 5 titles', col(cv, 'title').join('|'), 'Baseline (+0)|+5 to hit|+5 to damage');
+    check('cmp: defaults n 5 baseline stats line', cv.tables.base.statsText,
+      'hits on 10+ · 54.0 over 20 rounds');
+    check('cmp: defaults n 5 +hit stats line', cv.tables.hit.statsText,
+      'hits on 5+ · 76.5 over 20 rounds · +22.5 vs baseline');
+    check('cmp: defaults n 5 +dmg stats line', cv.tables.dmg.statsText,
+      'hits on 10+ · 109.0 over 20 rounds · +55.0 vs baseline');
+    check('cmp: defaults n 5 +hit hidden caption suffix', cv.tables.hit.hiddenText,
+      ': damage for every d20 roll (rows) and d8 face (columns) at AC 15, attack +10, damage +0.');
+    check('cmp: +hit rows are the plain table at atk + N (CMP-04)',
+      same(cv.tables.hit.rows, DiceMath.outcomeTable({ ac: 15, atk: 10, die: 8, dmg: 0 })), true);
+    check('cmp: +dmg rows are the plain table at dmg + N (CMP-04)',
+      same(cv.tables.dmg.rows, DiceMath.outcomeTable({ ac: 15, atk: 5, die: 8, dmg: 5 })), true);
+  });
+
+  // N = 0 and N = 20 at the defaults
+  section('cmp', () => {
+    const c0 = VM.compareView({ ac: 15, atk: 5, die: 8, dmg: 0 }, 0);
+    check('cmp: n 0 heatMax 16', c0.heatMax, 16);
+    check('cmp: n 0 three identical row sets',
+      same(c0.tables.base.rows, c0.tables.hit.rows) && same(c0.tables.base.rows, c0.tables.dmg.rows), true);
+    check('cmp: n 0 both deltas zero', c0.tables.hit.deltaText + ' ' + c0.tables.dmg.deltaText, '+0.0 +0.0');
+    check('cmp: n 0 variant titles', c0.tables.hit.title + '|' + c0.tables.dmg.title, '+0 to hit|+0 to damage');
+    const c20 = VM.compareView({ ac: 15, atk: 5, die: 8, dmg: 0 }, 20);
+    check('cmp: n 20 heatMax 36', c20.heatMax, 36);
+    check('cmp: n 20 thresholds base / hit / dmg', col(c20, 'threshold').join(' '), '10 2 10');
+    check('cmp: n 20 20-round totals', col(c20, 'totalText').join(' '), '54.0 90.0 274.0');
+    check('cmp: n 20 +hit rule phrase at the cap', c20.tables.hit.ruleText, 'hits on 2+ (95% cap)');
+  });
+
+  // Floor: AC 25 / +0 / d12 / +0, N = 5 (the +5 to hit table equals baseline)
+  section('cmp', () => {
+    const cf = VM.compareView({ ac: 25, atk: 0, die: 12, dmg: 0 }, 5);
+    check('cmp: floor thresholds base / hit / dmg', col(cf, 'threshold').join(' '), '20 20 20');
+    check('cmp: floor 20-round totals', col(cf, 'totalText').join(' '), '13.0 13.0 18.0');
+    check('cmp: floor baseline rule phrase', cf.tables.base.ruleText, 'only a nat 20 hits');
+    check('cmp: floor +hit delta is zero', cf.tables.hit.deltaText, '+0.0');
+  });
+
+  // Page view: the big table and legend use the shared domain; the stats-only view does not
+  section('cmp', () => {
+    const pv = VM.computeView({ ...VM.DEFAULT_STATE });
+    check('cmp: page view heatMax 21 at the defaults', pv.heatMax, 21);
+    check('cmp: page view heatMax equals compare.heatMax', pv.heatMax, pv.compare.heatMax);
+    check('cmp: page view keeps the 20-round figure', pv.e20Text, '54.0');
+    check('cmp: stats-only view keeps heatMax 16', VM.statsView(VM.DEFAULT_STATE).heatMax, 16);
+  });
+
+  // Compare grid (CMP-02, CMP-03, Pitfall 7), cost-bounded to 250 compareView calls
+  section('cmp', () => {
+    let nCmp = 0, badTh = 0, badHeat = 0, badDelta = 0;
+    for (const ac of ACS) for (const die of DiceMath.DICE) for (const atk of ATKS) {
+      const p = { ac, atk, die, dmg: 0 };
+      const sB = DiceMath.stats(p);
+      const tB = VM.tenths(sB.e20Num, sB.e20Den);
+      for (const n of [5, 20]) {
+        const cv = VM.compareView(p, n);
+        nCmp++;
+        if (cv.tables.hit.threshold !== Math.min(20, Math.max(2, ac - atk - n))) badTh++;
+        if (cv.heatMax !== Math.max(1, 2 * die + n)) badHeat++;
+        for (const [key, q] of [['hit', { ...p, atk: atk + n }], ['dmg', { ...p, dmg: n }]]) {
+          const sV = DiceMath.stats(q);
+          const tV = VM.tenths(sV.e20Num, sV.e20Den);
+          if (cv.tables[key].deltaText !== '+' + VM.fixed(tV - tB, 1)) badDelta++;
+        }
+      }
+    }
+    check(`cmp: grid +hit threshold = clamp(C - A - N, 2, 20) (${nCmp} views)`, badTh, 0);
+    check(`cmp: grid shared heatMax = max(1, 2X + N) at D 0 (${nCmp} views)`, badHeat, 0);
+    check(`cmp: grid delta = displayed variant tenths - displayed base tenths (${nCmp} views)`, badDelta, 0);
+  });
 
   const failed = results.filter((r) => !r.ok);
   for (const f of failed) console.error('SELFTEST FAIL:', f.name, '| got', f.actual, '| expected', f.expected);
@@ -1156,9 +1265,12 @@ function runUiSmoke() {
     const noteText = (tr) => (tr ? tr.querySelector('td.note').textContent : null);
     const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); render(); };
 
+    const rampText = () => Array.from(legendEl.querySelectorAll('.ramp .swatch.h')).map((s) => s.textContent).join(',');
     show({});
-    check('defaults: legend ramp swatches read 0,4,8,12,16',
-      Array.from(legendEl.querySelectorAll('.ramp .swatch.h')).map((s) => s.textContent).join(','), '0,4,8,12,16');
+    check('defaults (n 5): legend ramp uses the shared compare domain', rampText(), '0,5,11,16,21');
+    show({ n: 0 });
+    check('n 0: legend ramp back to the single-table domain', rampText(), '0,4,8,12,16');
+    show({});
     check('defaults: footnote names the d8 crit', critNoteEl.textContent.includes('2d8'), true);
     check('defaults: threshold rule sits on row 10', rowHead(thRow()), '10');
     check('defaults: threshold row note text', noteText(thRow()), 'hits on ' + '10+');
@@ -1190,6 +1302,99 @@ function runUiSmoke() {
     check('d4 D-5: footnote adds the floor sentence', critNoteEl.textContent.includes('doubled-face shortcut'), true);
   } catch (err) {
     results.push({ name: 'UI smoke crashed: ' + (err && err.message), ok: false });
+  }
+
+  // Phase 2 compare section (CTRL-04, CMP-01..05). Check names avoid the displayed strings
+  // (IN-06) so check-page --expect can only match the real section.
+  try {
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); render(); };
+    const nRange = document.getElementById('n-range');
+    const nOut = document.getElementById('n-out');
+
+    show({});
+    check('cmp ui: slider min attribute comes from the spec', nRange.min, String(VM.CONTROL_SPEC.n.min));
+    check('cmp ui: slider max attribute comes from the spec', nRange.max, String(VM.CONTROL_SPEC.n.max));
+    check('cmp ui: defaults output text', nOut.textContent, '+' + '5');
+    check('cmp ui: defaults slider value', nRange.value, '5');
+    send(nRange, '12');
+    render();
+    check('cmp ui: slider 12 gives n 12', state.n, 12);
+    check('cmp ui: output mirrors slider 12', nOut.textContent, '+' + '12');
+    check('cmp ui: slider leaves AC alone', state.ac, 15);
+
+    show({});
+    const trio = Array.from(document.querySelectorAll('.trio table.outcome'));
+    const three = trio.length === 3;
+    check('cmp ui: three compact tables', trio.length, 3);
+    check('cmp ui: compact table ids in order', trio.map((t) => t.id).join(' '), 'cmp-base cmp-hit cmp-dmg');
+    check('cmp ui: each compact table has 20 body rows',
+      three && trio.every((t) => t.tBodies[0].rows.length === 20), true);
+    check('cmp ui: each compact row has 8 hit or miss cells at d8',
+      three && trio.every((t) => Array.from(t.tBodies[0].rows)
+        .every((tr) => tr.querySelectorAll('td.h, td.m').length === 8)), true);
+
+    const cmpTables = VM.computeView(state).compare.tables;
+    const statsOf = (key) => document.getElementById('cmp-' + key + '-stats').textContent;
+    check('cmp ui: baseline stats paragraph equals the view', statsOf('base'), cmpTables.base.statsText);
+    check('cmp ui: +hit stats paragraph equals the view', statsOf('hit'), cmpTables.hit.statsText);
+    check('cmp ui: +dmg stats paragraph equals the view', statsOf('dmg'), cmpTables.dmg.statsText);
+    const ruleRow = (t) => {
+      const tr = t.tBodies[0].querySelector('tr.threshold');
+      return tr ? tr.querySelector('th').textContent : null;
+    };
+    check('cmp ui: threshold rule rows base / hit / dmg', trio.map(ruleRow).join(' '), '10 5 10');
+    const titles = ['Baseline ' + '(+0)', '+5 ' + 'to hit', '+5 ' + 'to damage'];
+    check('cmp ui: each compact caption starts with its title',
+      three && trio.every((t, i) => t.caption.textContent.startsWith(titles[i])), true);
+
+    // One heat domain for every table on the page (D-08): 16 / 21 = 0.762
+    const face8Row20 = (t) => t.tBodies[0].rows[19].cells[8];
+    const tOf = (td) => td.style.getPropertyValue('--t').trim();
+    const dmgTop = face8Row20(document.getElementById('cmp-dmg'));
+    check('cmp ui: +dmg crit face 8 value', dmgTop.textContent, '21');
+    check('cmp ui: +dmg crit face 8 is the top of the scale', tOf(dmgTop), '1.000');
+    check('cmp ui: study table crit face 8 value', face8Row20(tableEl).textContent, '16');
+    check('cmp ui: study table crit face 8 on the shared scale', tOf(face8Row20(tableEl)), '0.762');
+    show({ n: 0 });
+    check('cmp ui: n 0 study table crit face 8 is the top of the scale', tOf(face8Row20(tableEl)), '1.000');
+
+    // No diff layer in the compact tables (D-04)
+    show({});
+    const allowed = new Set(['h', 'hi', 'm', 'hit', 'miss', 'fumble', 'crit', 'threshold',
+      'note', 'note-miss', 'note-th', 'note-crit']);
+    const tokens = trio.flatMap((t) => Array.from(t.tBodies[0].querySelectorAll('tr, td, th, span'))
+      .flatMap((el) => Array.from(el.classList)));
+    check('cmp ui: compact bodies carry only plain table classes',
+      three && tokens.every((c) => allowed.has(c)), true);
+    check('cmp ui: study table caption unchanged (D-01)', tableEl.caption.textContent,
+      'Damage dealt for every d20 roll (rows) and d8 face (columns). AC 15, attack +5, damage +0.');
+
+    // Layout (CMP-05, D-07) at d12
+    show({ die: 12 });
+    const root = document.documentElement;
+    const cw = document.getElementById('compare').clientWidth;
+    const rem = parseFloat(getComputedStyle(root).fontSize);
+    const wraps = Array.from(document.querySelectorAll('.trio .table-wrap'));
+    const tops = wraps.map((w) => w.getBoundingClientRect().top);
+    if (cw >= 77 * rem) {
+      check(`cmp ui: d12 three-up, wrapper tops level (${cw}px)`,
+        wraps.length === 3 && Math.max(...tops) - Math.min(...tops) <= 1, true);
+    } else {
+      check(`cmp ui: d12 stacked, wrapper tops increase (${cw}px)`,
+        wraps.length === 3 && tops[0] < tops[1] && tops[1] < tops[2], true);
+    }
+    check('cmp ui: d12 compact tables fit their wrappers, mid or narrow tier only',
+      wraps.length === 3 && wraps.every((w) => {
+        const tw = w.querySelector('table').getBoundingClientRect().width;
+        return tw <= w.getBoundingClientRect().width + 1 && tw <= 401;
+      }), true);
+    if (tableEl.closest('.table-wrap').getBoundingClientRect().width >= 42 * rem) {
+      check('cmp ui: d12 study table keeps the wide tier',
+        Math.abs(tableEl.getBoundingClientRect().width - 652) <= 1, true);
+    }
+    check(`cmp ui: d12 no horizontal page scroll at ${root.clientWidth}px`, root.scrollWidth <= root.clientWidth, true);
+  } catch (err) {
+    results.push({ name: 'cmp ui smoke crashed: ' + (err && err.message), ok: false });
   }
 
   Object.assign(state, VM.DEFAULT_STATE);

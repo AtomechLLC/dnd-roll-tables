@@ -7,7 +7,14 @@
 // across runInContext calls, like classic scripts in a page), then:
 //   1. reads the in-page SelfTest result, and
 //   2. sweeps the full control domain (AC 10..30 x 5 dice x atk -5..20 x dmg -5..20
-//      = 70980 combos) checking invariants the in-page self-test only samples.
+//      = 70980 combos) checking invariants the in-page self-test only samples:
+//      (a)..(f) Phase 1 engine and formatting rules, plus the Phase 2 compare rules
+//      (g) shared heat domain (CMP-02): max cell over base, +N hit, +N dmg === max(1, 2X + D + N)
+//      (h) +N-to-hit threshold (CMP-03) === clamp(C - A - N, 2, 20)
+//      (i) a 1-in-50 sample of VM.compareView agrees with the engine (heatMax, hit threshold,
+//          deltas = difference of the displayed tenths)
+//      with N in {0, 5, 20}. Stats are cached per (ac, die), keyed by (atk, dmg), so the
+//      +N lookups reuse neighbouring combos.
 // Exit 0 only when everything passes.
 
 import fs from 'node:fs';
@@ -58,7 +65,11 @@ const names = {
   d: '(d) -1 <= dmg <= 19: E(dmg+1) - E(dmg) === pHit',
   e: '(e) dmg >= -2: tableSum * die === e20Num',
   f: '(f) STAT-02: fixed(round(perRoundText * 200), 1) === e20Text',
+  g: '(g) CMP-02: max cell over base, +N hit, +N dmg === max(1, 2X + D + N), N in {0,5,20}',
+  h: '(h) CMP-03: +N-to-hit threshold === clamp(C - A - N, 2, 20), N in {0,5,20}',
+  i: '(i) sampled VM.compareView agrees (heatMax, hit threshold, deltas = displayed difference)',
 };
+const NS = [0, 5, 20];
 const counts = Object.fromEntries(Object.keys(names).map((k) => [k, 0]));
 const firstFailures = [];
 let combos = 0;
@@ -71,17 +82,32 @@ function record(key, p, detail) {
 const t0 = performance.now();
 for (let ac = 10; ac <= 30; ac++) {
   for (const die of DiceMath.DICE) {
+    // Per-(ac, die) cache keyed `${atk},${dmg}`: invariant (d) reuses dmg + 1 and the
+    // compare invariants reuse atk + N / dmg + N. Created here so memory stays bounded.
+    const cache = new Map();
+    const statAt = (atk, dmg) => {
+      const key = `${atk},${dmg}`;
+      let e = cache.get(key);
+      if (!e) {
+        const st = DiceMath.stats({ ac, atk, die, dmg });
+        let max = -Infinity;
+        for (const row of st.rows) for (const c of row.cells) if (c > max) max = c;
+        e = { st, max };
+        cache.set(key, e);
+      }
+      return e;
+    };
+    const tenthsOf = (st) => VM.tenths(st.e20Num, st.e20Den);
+    const deltaText = (v, b) => {
+      const d = tenthsOf(v) - tenthsOf(b);
+      return (d < 0 ? '−' : '+') + VM.fixed(Math.abs(d), 1);
+    };
     for (let atk = -5; atk <= 20; atk++) {
-      // Cache stats by dmg so invariant (d) reuses the neighbouring value.
-      const byDmg = new Map();
-      const statsAt = (dmg) => {
-        if (!byDmg.has(dmg)) byDmg.set(dmg, DiceMath.stats({ ac, atk, die, dmg }));
-        return byDmg.get(dmg);
-      };
       for (let dmg = -5; dmg <= 20; dmg++) {
         combos++;
         const p = { ac, atk, die, dmg };
-        const s = statsAt(dmg);
+        const base = statAt(atk, dmg);
+        const s = base.st;
 
         if (!(s.pHit >= 0.05 && s.pHit <= 0.95)) record('a', p, `pHit ${s.pHit}`);
 
@@ -100,7 +126,7 @@ for (let ac = 10; ac <= 30; ac++) {
         }
 
         if (dmg >= -1 && dmg <= 19) {
-          const diff = statsAt(dmg + 1).perRound - s.perRound;
+          const diff = statAt(atk, dmg + 1).st.perRound - s.perRound;
           if (!(Math.abs(diff - s.pHit) < TOL)) record('d', p, `E diff ${diff} vs pHit ${s.pHit}`);
         }
 
@@ -109,6 +135,36 @@ for (let ac = 10; ac <= 30; ac++) {
         const view = VM.computeView(p);
         const back = VM.fixed(Math.round(Number(view.perRoundText) * 200), 1);
         if (back !== view.e20Text) record('f', p, `perRound ${view.perRoundText} x 20 -> ${back} vs ${view.e20Text}`);
+
+        // Phase 2 compare invariants, from the engine alone (g, h)
+        for (const N of NS) {
+          const hitV = statAt(atk + N, dmg), dmgV = statAt(atk, dmg + N);
+          const maxCell = Math.max(base.max, hitV.max, dmgV.max);
+          const oracle = Math.max(1, 2 * die + dmg + N);
+          if (maxCell !== oracle) record('g', p, `N ${N}: max cell ${maxCell} vs ${oracle}`);
+          const th = Math.min(20, Math.max(2, ac - atk - N));
+          if (hitV.st.threshold !== th) record('h', p, `N ${N}: threshold ${hitV.st.threshold} vs ${th}`);
+        }
+
+        // Sampled VM.compareView agreement (i)
+        if (combos % 50 === 0) {
+          if (typeof VM.compareView !== 'function') {
+            record('i', p, 'VM.compareView missing');
+          } else {
+            for (const N of NS) {
+              const cv = VM.compareView(p, N);
+              const hitV = statAt(atk + N, dmg), dmgV = statAt(atk, dmg + N);
+              const heat = Math.max(1, base.max, hitV.max, dmgV.max);
+              if (cv.heatMax !== heat) record('i', p, `N ${N}: heatMax ${cv.heatMax} vs ${heat}`);
+              if (cv.tables.hit.threshold !== hitV.st.threshold) {
+                record('i', p, `N ${N}: hit threshold ${cv.tables.hit.threshold} vs ${hitV.st.threshold}`);
+              }
+              const dh = deltaText(hitV.st, s), dd = deltaText(dmgV.st, s);
+              if (cv.tables.hit.deltaText !== dh) record('i', p, `N ${N}: hit delta ${cv.tables.hit.deltaText} vs ${dh}`);
+              if (cv.tables.dmg.deltaText !== dd) record('i', p, `N ${N}: dmg delta ${cv.tables.dmg.deltaText} vs ${dd}`);
+            }
+          }
+        }
       }
     }
   }

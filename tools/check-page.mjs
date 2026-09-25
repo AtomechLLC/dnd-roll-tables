@@ -6,9 +6,11 @@
 // the final DOM (--dump-dom) and the console (--enable-logging), then checks:
 //   (1) the console contains SELFTEST PASSED
 //   (2) the console has no Uncaught / SELFTEST FAIL / CSP / parse / load errors
-//   (3) the DOM has exactly 20 row headers (<th scope="row")
+//   (3) the DOM has exactly 80 row headers (<th scope="row"): 4 tables x 20 rows
 //   (4) test mode: the visible self-test panel passed; plain mode: the panel is hidden
-//   (5) every --expect string appears in the DOM
+//   (5) every --expect string appears in the visible page text: the self-test panel is
+//       removed first (its check names could echo UI strings, 01-REVIEW IN-06) and the
+//       &amp; &lt; &gt; &quot; entities are decoded
 //
 // Default url: file:// URL of ../index.html plus ?test (--plain drops ?test).
 // For an explicit url, test mode is on exactly when the url contains ?test.
@@ -98,6 +100,11 @@ if (dump) fs.writeFileSync(dump, dom, 'utf8');
 const rendered = dom
   .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
   .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+// --expect matches only the visible page: drop the self-test panel, decode entities
+// (&amp; last so an encoded "&lt;" is not decoded twice).
+const visible = rendered
+  .replace(/<section id="selftest"[^>]*>[\s\S]*?<\/section>/i, '')
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
 const consoleLines = consoleText.split(/\r?\n/).filter((l) => /CONSOLE/.test(l));
 const results = [];
 const check = (name, ok, detail = '') => results.push({ name, ok, detail });
@@ -109,7 +116,7 @@ const badLines = consoleText.split(/\r?\n/).filter((l) => bad.test(l));
 check('console has no errors', badLines.length === 0, badLines.slice(0, 5).join('\n      '));
 
 const rowHeads = rendered.split('<th scope="row"').length - 1;
-check('DOM has 20 <th scope="row"> headers', rowHeads === 20, `found ${rowHeads}`);
+check('DOM has 80 <th scope="row"> headers', rowHeads === 80, `found ${rowHeads}`);
 
 if (testMode) {
   check('self-test panel shows "Self-test passed"',
@@ -118,7 +125,7 @@ if (testMode) {
   check('self-test panel stays hidden', /<section id="selftest"[^>]*hidden/.test(rendered));
 }
 
-for (const text of expects) check(`DOM contains ${JSON.stringify(text)}`, rendered.includes(text));
+for (const text of expects) check(`page shows ${JSON.stringify(text)}`, visible.includes(text));
 
 console.log(`url: ${url} (${testMode ? 'test' : 'plain'} mode, ${width}px, ${path.basename(browser)})`);
 console.log(`console lines: ${consoleLines.length}`);
