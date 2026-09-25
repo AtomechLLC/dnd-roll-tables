@@ -127,9 +127,18 @@
     }
 
     /* Stat cards */
-    #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--sp-3); }
+    /* auto-fit minmax(10rem, 1fr), with the track minimum raised to a sixth of the row so there
+       are never more than six tracks: the full-row marginal card (grid-column: 1 / -1) would
+       otherwise keep a seventh, empty track alive and leave a gap on wide screens. */
+    #stats {
+      display: grid; gap: var(--sp-3);
+      grid-template-columns: repeat(auto-fit, minmax(max(10rem, (100% - 5 * var(--sp-3)) / 6), 1fr));
+    }
+    /* Each stat card spans three subgrid rows so labels, values and sub-lines line up across a
+       row even when one label wraps. */
+    #stats > .card:not(.marginal) { grid-row: span 3; grid-template-rows: subgrid; }
     .card {
-      display: grid; gap: var(--sp-2); padding: var(--sp-3);
+      display: grid; gap: var(--sp-2); padding: var(--sp-3); align-content: start;
       background: var(--surface);
       border: 1px solid var(--line); border-radius: 8px;
     }
@@ -138,7 +147,14 @@
       font-family: var(--font-num); font-variant-numeric: tabular-nums;
       font-size: 1.75rem; font-weight: 700; line-height: 1.2; white-space: nowrap;
     }
+    .card .sub { font-size: 0.75rem; line-height: 1.4; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
     .card.focal { border-top: 3px solid var(--ink); }
+    /* "Value of the next +1" (STAT-03): full grid row, h2 then two Body lines. */
+    .card.marginal { grid-column: 1 / -1; }
+    .card.marginal h2 { margin: 0; }
+    .marg-line { margin: 0; font-size: 1rem; line-height: 1.5; }
+    .marg-line .lead { font-weight: 700; }
+    .marg-line .mv { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; }
 
     /* Outcome table (D-18, TABLE-06). Size tiers come from the wrapper's own width
        (container queries, never viewport media queries). Explicit width, never width:auto.
@@ -330,12 +346,39 @@
 
     <section id="stats" aria-label="Headline numbers">
       <div class="card">
+        <span class="label">Hits on</span>
+        <span class="value" id="stat-threshold"></span>
+        <span class="sub" id="stat-threshold-sub"></span>
+      </div>
+      <div class="card">
         <span class="label">Hit chance</span>
         <span class="value" id="stat-hit"></span>
+        <span class="sub" id="stat-hit-sub"></span>
+      </div>
+      <div class="card">
+        <span class="label">Crit chance</span>
+        <span class="value" id="stat-crit"></span>
+        <span class="sub" id="stat-crit-sub"></span>
+      </div>
+      <div class="card">
+        <span class="label">Average damage on a hit</span>
+        <span class="value" id="stat-avg"></span>
+        <span class="sub" id="stat-avg-sub"></span>
+      </div>
+      <div class="card">
+        <span class="label">Expected per round</span>
+        <span class="value" id="stat-round"></span>
+        <span class="sub" id="stat-round-sub"></span>
       </div>
       <div class="card focal">
         <span class="label">Expected over 20 rounds</span>
         <span class="value" id="stat-e20"></span>
+        <span class="sub" id="stat-e20-sub"></span>
+      </div>
+      <div class="card marginal" id="marginal">
+        <h2>Value of the next +1</h2>
+        <p class="marg-line" id="marg-hit"><span class="lead">+1 to hit:</span> <span class="mv" id="marg-hit-v"></span><span class="mnote" id="marg-hit-n"></span></p>
+        <p class="marg-line" id="marg-dmg"><span class="lead">+1 to damage:</span> <span class="mv" id="marg-dmg-v"></span></p>
       </div>
     </section>
 
@@ -453,6 +496,17 @@ const DiceMath = (() => {
     return { hitNum, dmgNum, den: p.die * p.die, reason };
   }
 
+  // STAT-01 sub-line: average normal hit and average crit, through damageFor (RULES-05).
+  // d20 = 20 always passes the hit gate; one roll = a normal hit, two rolls = a true 2dX crit.
+  function hitAverages(p) {
+    assertParams(p);
+    const X = p.die;
+    let normalNum = 0, critNum = 0;
+    for (let k = 1; k <= X; k++) normalNum += damageFor(20, [k], p);
+    for (let a = 1; a <= X; a++) for (let b = 1; b <= X; b++) critNum += damageFor(20, [a, b], p);
+    return { normalNum, normalDen: X, critNum, critDen: X * X };
+  }
+
   // +0..+maxN added to attack vs damage (Phase 2 chart; RULES-08 sanity check now).
   function sweep(p, maxN = 20) {
     const attack = [], damage = [];
@@ -465,7 +519,7 @@ const DiceMath = (() => {
 
   return Object.freeze({
     DICE, avg, assertParams, outcome, isHit, damageFor, threshold,
-    outcomeTable, stats, closedFormPerRound, marginals, sweep,
+    outcomeTable, stats, closedFormPerRound, marginals, hitAverages, sweep,
   });
 })();
   </script>
@@ -509,10 +563,14 @@ const VM = (() => {
   // A 20-round value in tenths, as an integer.
   const tenths = (num, den) => Math.round((10 * num) / den);
 
+  // Signed display value: +5, +0, and U+2212 MINUS SIGN for negatives.
+  const signed = (n) => (n < 0 ? '−' + Math.abs(n) : '+' + n);
+
   function computeView(state) {
     const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
     const s = DiceMath.stats(p);
     const m = DiceMath.marginals(p);
+    const ha = DiceMath.hitAverages(p);
     const e20T = tenths(s.e20Num, s.e20Den);   // STAT-02: round the 20-round figure once,
     const mHitT = tenths(m.hitNum, m.den);
     const mDmgT = tenths(m.dmgNum, m.den);
@@ -527,6 +585,9 @@ const VM = (() => {
       perRoundText: fixed(e20T * 5, 3),                         // ...then per round = tenths x 5 thousandths
       avgPerHitText: s.hitFaces
         ? fixed(Math.round((100 * s.e20Num) / (s.e20Den * s.hitFaces)), 2) : '0.00',
+      normalAvgText: fixed(Math.round((100 * ha.normalNum) / ha.normalDen), 2),
+      critAvgText: fixed(Math.round((100 * ha.critNum) / ha.critDen), 2),
+      hitState: s.threshold === 2 ? 'cap' : s.threshold === 20 ? 'floor' : 'normal',
       marg: {
         hit20: fixed(mHitT, 1), hitRound: fixed(mHitT * 5, 3),
         dmg20: fixed(mDmgT, 1), dmgRound: fixed(mDmgT * 5, 3),
@@ -537,7 +598,7 @@ const VM = (() => {
     };
   }
 
-  return Object.freeze({ CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, computeView });
+  return Object.freeze({ CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, computeView });
 })();
   </script>
 
@@ -636,6 +697,16 @@ const SelfTest = (() => {
     check('view AC15 +0 d8: "31.5" / "1.575"', vA.e20Text + ' / ' + vA.perRoundText, '31.5 / 1.575');
     const vB = V(15, 5, 6, -2);
     check('view AC15 +5 d6 D-2: "21.7" / "1.085"', vB.e20Text + ' / ' + vB.perRoundText, '21.7 / 1.085');
+    const ha = DiceMath.hitAverages({ ac: 15, atk: 5, die: 8, dmg: 0 });
+    check('hitAverages defaults: 36/8 normal, 576/64 crit',
+      [ha.normalNum, ha.normalDen, ha.critNum, ha.critDen].join(' '), '36 8 576 64');
+    check('view defaults: normal / crit / per-hit averages',
+      [vDef.normalAvgText, vDef.critAvgText, vDef.avgPerHitText].join(' | '), '4.50 | 9.00 | 4.91');
+    check('view AC15 +5 d6 D-2: normal average 1.67', vB.normalAvgText, '1.67');
+    check('view hitState: defaults normal, +13 cap, AC30 -5 floor',
+      [vDef.hitState, V(15, 13, 8, 0).hitState, V(30, -5, 8, 0).hitState].join(' '), 'normal cap floor');
+    check('signed(-2) uses U+2212', VM.signed(-2), '−2');
+    check('signed(0) and signed(5)', VM.signed(0) + ' ' + VM.signed(5), '+0 +5');
 
     // Parser (CTRL-05)
     const P = VM.parseControl;
@@ -695,8 +766,11 @@ const SelfTest = (() => {
 // DOM layer: state, render registry, controls, init, ?test panel.
 const form = document.getElementById('controls');
 const tableEl = document.getElementById('outcome');
-const statHitEl = document.getElementById('stat-hit');
-const statE20El = document.getElementById('stat-e20');
+// Stat cards: value element by id, sub-line at id + '-sub'.
+const statEl = (id) => document.getElementById(id);
+const margHitVEl = document.getElementById('marg-hit-v');
+const margHitNEl = document.getElementById('marg-hit-n');
+const margDmgVEl = document.getElementById('marg-dmg-v');
 const legendEl = document.getElementById('legend');
 const critNoteEl = document.getElementById('crit-note');
 
@@ -720,8 +794,9 @@ function render() {
   for (const r of RENDERERS) r(view);
 }
 
-// Signed display value: +5, +0, U+2212 for negatives.
-const signed = (n) => (n < 0 ? '−' + Math.abs(n) : '+' + n);
+// Signed display value (VM.signed), looked up lazily so a broken VM block cannot
+// crash this block before the error banner is shown.
+const signed = (n) => VM.signed(n);
 
 function onControl(e) {
   const key = e.target.dataset && e.target.dataset.key;
@@ -740,9 +815,44 @@ function renderControls(view) {
   }
 }
 
+function setCard(id, value, sub) {
+  statEl(id).textContent = value;
+  statEl(id + '-sub').textContent = sub;
+}
+
+// Marginal +1-to-hit copy when it adds nothing (UI-SPEC; 'nodmg' covers the damage-penalty case).
+const MARG_HIT_ZERO = Object.freeze({
+  cap: ' (already hits on 2+, the 95% cap)',
+  floor: ' (still only a natural 20 hits)',
+  nodmg: ' (the extra hits deal 0 damage at this damage penalty)',
+});
+
+// STAT-01..03. textContent only. STAT-02 holds by construction: perRoundText comes from the
+// rounded 20-round tenths (VM.computeView).
 function renderStats(view) {
-  statHitEl.textContent = view.hitPct + '%';
-  statE20El.textContent = view.e20Text;
+  const { params: p, threshold, hitState, marg } = view;
+  if (hitState === 'cap') {
+    setCard('stat-threshold', '2+', 'only a natural 1 misses (95% cap)');
+  } else if (hitState === 'floor') {
+    setCard('stat-threshold', '20', 'only a natural 20 hits (5% floor)');
+  } else {
+    setCard('stat-threshold', threshold + '+',
+      `d20 ${p.atk < 0 ? '−' : '+'} ${Math.abs(p.atk)} ≥ AC ${p.ac}`);
+  }
+  setCard('stat-hit', view.hitPct + '%', `${view.hitFaces} of 20 d20 faces, crit included`);
+  setCard('stat-crit', '5%', 'natural 20 only');
+  setCard('stat-avg', view.avgPerHitText, `normal ${view.normalAvgText} · crit ${view.critAvgText}`);
+  setCard('stat-round', view.perRoundText, `= ${view.e20Text} ÷ 20`);
+  setCard('stat-e20', view.e20Text, `= ${view.perRoundText} × 20`);
+
+  if (marg.reason) {
+    margHitVEl.textContent = '+0';
+    margHitNEl.textContent = MARG_HIT_ZERO[marg.reason];
+  } else {
+    margHitVEl.textContent = `+${marg.hitRound} per round (+${marg.hit20} over 20 rounds)`;
+    margHitNEl.textContent = '';
+  }
+  margDmgVEl.textContent = `+${marg.dmgRound} per round (+${marg.dmg20} over 20 rounds)`;
 }
 
 // Note column labels (D-10). Fixed markup plus the integer threshold only (T-01-12).
@@ -1003,6 +1113,38 @@ function runUiSmoke() {
     render();
     check('die radio 4 click gives die 4', state.die, 4);
     Object.assign(state, VM.DEFAULT_STATE);
+    renderControls();
+    render();
+
+    // Stat cards and marginal readout (STAT-01..03). Names avoid the displayed strings so
+    // check-page --expect can only match the real cards.
+    const txt = (id) => document.getElementById(id).textContent;
+    check('defaults: six stat card values',
+      ['stat-threshold', 'stat-hit', 'stat-crit', 'stat-avg', 'stat-round', 'stat-e20'].map(txt).join(' | '),
+      ['10', '+ | 55', '% | 5% | 4.9', '1 | 2.7', '00 | 54', '.0'].join(''));
+    check('defaults: marginal to-hit line (per round and 20-round parts)',
+      txt('marg-hit').includes('+0.2' + '25 per round') && txt('marg-hit').includes('+4' + '.5 over 20 rounds'), true);
+    check('defaults: marginal damage line (per round and 20-round parts)',
+      txt('marg-dmg').includes('+0.5' + '50 per round') && txt('marg-dmg').includes('+11' + '.0 over 20 rounds'), true);
+    check('STAT-02 in the DOM: displayed per round x 20 = displayed 20-round figure',
+      VM.fixed(Math.round(Number(txt('stat-round')) * 200), 1), txt('stat-e20'));
+
+    send(atkNum, '13');
+    render();
+    check('atk box 13: threshold card at the cap', txt('stat-threshold'), '2' + '+');
+    check('atk box 13: marginal to-hit shows the cap copy', txt('marg-hit').includes('95' + '% cap'), true);
+
+    send(atkNum, '5');
+    send(document.getElementById('ac-num'), '30');
+    send(atkNum, '-5');
+    render();
+    check('AC box 30, atk box -5: threshold card at the floor', txt('stat-threshold'), '2' + '0');
+    check('AC box 30, atk box -5: threshold sub-line shows the floor copy',
+      txt('stat-threshold-sub').includes('5% ' + 'floor'), true);
+    check('AC box 30, atk box -5: marginal to-hit shows the floor copy',
+      txt('marg-hit').includes('still only a natural ' + '20 hits'), true);
+    Object.assign(state, VM.DEFAULT_STATE);
+    renderControls();
     render();
 
     // Table anatomy, legend, footnote (plan 01-04). State is set directly; plan 01-05 adds
