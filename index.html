@@ -117,40 +117,77 @@
     }
     .card.focal { border-top: 3px solid var(--ink); }
 
-    /* Outcome table (D-18, TABLE-06): explicit width, never width:auto */
-    .table-wrap { container-type: inline-size; overflow-x: auto; }
+    /* Outcome table (D-18, TABLE-06). Size tiers come from the wrapper's own width
+       (container queries, never viewport media queries). Explicit width, never width:auto.
+       overflow-x is a last resort only; the page itself never scrolls sideways. */
+    .table-wrap { display: block; container-type: inline-size; overflow-x: auto; }
     #outcome {
-      --cell: 2.5rem; --rowhead: 2.75rem; --note: 8rem; --row: 1.75rem;
+      /* wide tier: >= 42rem container (UI-SPEC approved single-table size) */
+      --cell: 40px; --row: 28px; --rowhead: 44px; --note: 128px;
       border-collapse: collapse;
       table-layout: fixed;
       width: calc(var(--rowhead) + var(--cols, 8) * var(--cell) + var(--note));
+      margin: 0;
       font-size: 0.875rem;
     }
-    @container (width < 42rem) {
-      #outcome { --cell: 1.5rem; --rowhead: 2rem; --note: 5rem; --row: 1.5rem; font-size: 0.75rem; }
+    #outcome caption {
+      caption-side: top; text-align: left;
+      font-size: 0.875rem; font-weight: 400; line-height: 1.4; color: var(--ink-muted);
+      padding-bottom: var(--sp-2);
     }
-    @container (width < 25rem) {
-      #outcome { --cell: 1.25rem; --rowhead: 1.5rem; --note: 4rem; --row: 1.25rem; }
-    }
-    #outcome caption { caption-side: top; text-align: left; font-size: 0.875rem; padding-bottom: var(--sp-2); }
     #outcome th, #outcome td {
       font-family: var(--font-num);
       font-variant-numeric: tabular-nums;
+      font-weight: 400;
       text-align: center;
       padding: 0;
       height: var(--row);
       line-height: var(--row);
-      border: 1px solid color-mix(in oklch, var(--ink) 20%, var(--paper));
+      border: 1px solid var(--line);
     }
-    #outcome thead th { width: var(--cell); }
-    #outcome thead th.corner { width: var(--rowhead); font-size: 0.75rem; white-space: nowrap; overflow: hidden; }
+    #outcome tr { height: var(--row); line-height: var(--row); }
+    #outcome thead th, #outcome tbody th { background: var(--surface); font-weight: 700; }
+    #outcome thead th { width: var(--cell); border-bottom: 1px solid var(--line); }
+    /* Corner: "d20 \ d12" does not fit one line in the 44px row-header column, so the wide
+       tier stacks it (d20 over "\ d12", 12px); mid and narrow hide .cd and show "d20". */
+    #outcome thead th.corner {
+      width: var(--rowhead); white-space: nowrap; overflow: hidden;
+      font-size: 0.75rem; line-height: 12px; text-align: left; padding-inline: 3px;
+    }
+    #outcome thead th.corner .cd { display: block; text-align: right; }
     #outcome thead th.note, #outcome td.note { width: var(--note); }
+    #outcome thead th.note { background: var(--paper); }
     #outcome td.note {
       font-family: var(--font-prose); font-style: italic; text-align: left;
       padding-left: var(--sp-1); white-space: nowrap; overflow: hidden; background: var(--paper);
     }
-    #outcome tr.threshold td.note { font-weight: 700; }
-    #outcome tr.crit td.note { color: var(--accent); font-weight: 700; }
+    #outcome tr.fumble th { color: var(--ink-muted); }
+    /* Note column labels (D-10) */
+    .note-miss { color: var(--ink-muted); font-weight: 400; }
+    .note-th { color: var(--ink); font-weight: 700; }
+    .note-crit { color: var(--accent); font-weight: 700; }
+    /* mid tier (Phase 2 three-up at 1366px) and narrow tier (phones): D-18 compact sizes.
+       Kept after the base table rules so equal-specificity overrides win. */
+    @container (width < 42rem) {
+      #outcome { --cell: 24px; --row: 24px; --rowhead: 32px; --note: 80px; font-size: 0.75rem; }
+      #outcome thead th.corner { line-height: var(--row); text-align: center; padding-inline: 0; }
+      #outcome thead th.corner .cd { display: none; }
+    }
+    @container (width < 25rem) {
+      #outcome { --cell: 20px; --row: 20px; --rowhead: 24px; --note: 64px; font-size: 0.75rem; }
+      /* "hits on N+" -> "N+": the phrase stays in the DOM and the accessible text; only the
+         visual label shortens. Both boxes are pinned to the top of the row-high line box so
+         the zero-size hidden text cannot shift the label off center. */
+      #outcome .note-th {
+        display: inline-block; vertical-align: top; height: var(--row);
+        font-size: 0; line-height: 0;
+      }
+      #outcome .note-th::after {
+        content: attr(data-short) / "";
+        display: inline-block; vertical-align: top;
+        font-size: 0.75rem; line-height: var(--row);
+      }
+    }
     /* Heat ramp (D-08) and miss style (D-09). Class-only selectors so legend swatches can reuse them. */
     .h {
       --s: calc(var(--t) * 2 * var(--ramp-a));
@@ -166,9 +203,37 @@
         color-mix(in oklch, var(--miss-bg) 85%, var(--ink)) 4px 5px);
       color: var(--miss-ink);
     }
-    tr.threshold > * { box-shadow: inset 0 3px 0 0 var(--rule); }
-    tr.crit > * { box-shadow: inset 0 -2px 0 0 var(--accent); }
+    /* Threshold rule and crit rule: box-shadows only, so they move by class toggle with no
+       layout shift (D-10). The legend swatches use the same class names. */
+    tr.threshold > *, .swatch.threshold { box-shadow: inset 0 3px 0 0 var(--rule); }
+    tr.crit > *, .swatch.crit { box-shadow: inset 0 -2px 0 0 var(--accent); }
     tr.threshold.crit > * { box-shadow: inset 0 3px 0 0 var(--rule), inset 0 -2px 0 0 var(--accent); }
+
+    /* Legend (TABLE-05): one wrapping row between the h2 and the table */
+    .legend {
+      display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3);
+      padding-block: var(--sp-2); margin-bottom: var(--sp-3);
+      font-size: 0.875rem; line-height: 1.4;
+    }
+    .legend-item { display: flex; align-items: center; gap: var(--sp-1); }
+    .ramp { display: flex; }
+    .swatch {
+      display: inline-block; width: 40px; height: 28px; line-height: 26px;
+      text-align: center; font-family: var(--font-num); font-variant-numeric: tabular-nums;
+      font-size: 0.875rem; font-weight: 400;
+      border: 1px solid var(--line); border-radius: 4px;
+    }
+    .swatch.threshold { background: var(--paper); }
+    .ramp .swatch { border-radius: 0; }
+    .ramp .swatch + .swatch { border-left-width: 0; }
+    .ramp .swatch:first-child { border-radius: 4px 0 0 4px; }
+    .ramp .swatch:last-child { border-radius: 0 4px 4px 0; }
+
+    /* Crit footnote (TABLE-04) */
+    .footnote {
+      margin: var(--sp-3) 0 0; max-width: 72ch;
+      font-size: 0.875rem; line-height: 1.4; color: var(--ink-muted);
+    }
 
     /* Self-test panel and engine-error banner (UI-SPEC Self-test Panel, States) */
     #selftest, #engine-error {
@@ -235,9 +300,11 @@
 
     <section id="tables">
       <h2>Outcome table</h2>
+      <div id="legend" class="legend"></div>
       <div class="table-wrap">
         <table id="outcome"><caption></caption><thead></thead><tbody></tbody></table>
       </div>
+      <p id="crit-note" class="footnote"></p>
     </section>
   </main>
 
@@ -589,11 +656,13 @@ const form = document.getElementById('controls');
 const tableEl = document.getElementById('outcome');
 const statHitEl = document.getElementById('stat-hit');
 const statE20El = document.getElementById('stat-e20');
+const legendEl = document.getElementById('legend');
+const critNoteEl = document.getElementById('crit-note');
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
 const state = {};
-const RENDERERS = [renderControls, renderStats, renderTable];
+const RENDERERS = [renderControls, renderStats, renderTable, renderLegend, renderFootnote];
 
 let pending = false;
 function setState(patch) {
@@ -635,17 +704,23 @@ function renderStats(view) {
   statE20El.textContent = view.e20Text;
 }
 
+// Note column labels (D-10). Fixed markup plus the integer threshold only (T-01-12).
+// The narrow tier shows data-short ("N+") via ::after; the full phrase stays in the DOM
+// and in the accessible text at every width.
 function noteFor(row, threshold) {
-  if (row.d20 === 1) return 'auto-miss';
-  if (row.d20 === 20) return 'crit*';
-  if (row.d20 === threshold) return `hits on ${threshold}+`;
+  if (row.d20 === 1) return '<span class="note-miss">auto-miss</span>';
+  if (row.d20 === 20) return '<span class="note-crit">crit*</span>';   // also when threshold is 20
+  if (row.d20 === threshold) {
+    const n = Number(threshold) | 0;
+    return `<span class="note-th" data-short="${n}+">hits on ${n}+</span>`;
+  }
   return '';
 }
 
 // Only numbers and fixed label strings reach innerHTML (T-01-01).
 function renderTable(view) {
   const { rows, params: p, threshold, heatMax } = view;
-  const head = `<tr><th scope="col" class="corner">d20 \\ d${p.die}</th>` +
+  const head = `<tr><th scope="col" class="corner">d20<span class="cd"> \\ d${p.die}</span></th>` +
     Array.from({ length: p.die }, (_, i) => `<th scope="col">${i + 1}</th>`).join('') +
     '<th scope="col" class="note"><span class="vh">Notes</span></th></tr>';
   const body = rows.map((row) => {
@@ -663,6 +738,52 @@ function renderTable(view) {
   tableEl.caption.textContent =
     `Damage dealt for every d20 roll (rows) and d${p.die} face (columns). ` +
     `AC ${p.ac}, attack ${signed(p.atk)}, damage ${signed(p.dmg)}.`;
+}
+
+// Legend (TABLE-05): built with createElement / textContent / style.setProperty only.
+// Swatches reuse the table's own .h / .h.hi / .m / crit / threshold classes.
+function swatch(classes, text, t) {
+  const s = document.createElement('span');
+  s.className = 'swatch ' + classes;
+  s.textContent = text;
+  if (t !== undefined) s.style.setProperty('--t', String(t));
+  return s;
+}
+
+function legendItem(mark, text) {
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  const label = document.createElement('span');
+  label.textContent = text;
+  item.append(mark, label);
+  return item;
+}
+
+function renderLegend(view) {
+  const ramp = document.createElement('span');
+  ramp.className = 'ramp';
+  for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+    ramp.append(swatch(t >= 0.5 ? 'h hi' : 'h', String(Math.round(t * view.heatMax)), t));
+  }
+  legendEl.replaceChildren(
+    legendItem(ramp, 'Hit damage, low to high'),
+    legendItem(swatch('m', '0'), 'Miss: always 0, whatever the die shows'),
+    legendItem(swatch('h hi crit', '', 1), 'Natural 20: crit, shown as 2 × face + damage bonus*'),
+    legendItem(swatch('threshold', ''), 'Rule: first d20 roll that hits'),
+  );
+}
+
+// Crit footnote (TABLE-04), live die size. Adds the floor sentence when D <= -3.
+function renderFootnote(view) {
+  const d = 'd' + view.params.die;
+  let text = `* On a natural 20 you roll the damage die twice and add the bonus once (for a ${d}: 2${d} + damage bonus). ` +
+    'Each column here is one die face, so the crit row shows 2 × face + damage bonus. ' +
+    `Averaged across the row, that equals the average of a real 2${d} crit, so this table's average is exactly the expected damage.`;
+  if (view.critFloorDiffers) {
+    text += ' With a damage penalty this large, the 0-damage floor makes the doubled-face shortcut slightly off. ' +
+      'The stats above use the real two-dice rule.';
+  }
+  critNoteEl.textContent = text;
 }
 
 function fmtValue(v) {
@@ -781,6 +902,48 @@ function runUiSmoke() {
     check('table body has 20 rows', bodyRows.length, 20);
     check('every row has 8 hit or miss cells',
       Array.from(bodyRows).every((tr) => tr.querySelectorAll('td.h, td.m').length === 8), true);
+
+    // Table anatomy, legend, footnote (plan 01-04). State is set directly; plan 01-05 adds
+    // the control-driven versions. Check names avoid the exact label strings so that
+    // check-page --expect can only match the real table, legend and footnote.
+    const rowOf = (n) => tableEl.tBodies[0].rows[n - 1];
+    const thRow = () => tableEl.tBodies[0].querySelector('tr.threshold');
+    const rowHead = (tr) => (tr ? tr.querySelector('th').textContent : null);
+    const noteText = (tr) => (tr ? tr.querySelector('td.note').textContent : null);
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); render(); };
+
+    show({});
+    check('defaults: legend ramp swatches read 0,4,8,12,16',
+      Array.from(legendEl.querySelectorAll('.ramp .swatch.h')).map((s) => s.textContent).join(','), '0,4,8,12,16');
+    check('defaults: footnote names the d8 crit', critNoteEl.textContent.includes('2d8'), true);
+    check('defaults: threshold rule sits on row 10', rowHead(thRow()), '10');
+    check('defaults: threshold row note text', noteText(thRow()), 'hits on ' + '10+');
+    check('defaults: row 1 note text', noteText(rowOf(1)), 'auto-' + 'miss');
+
+    show({ atk: 13 });
+    check('atk +13: threshold rule sits on row 2', rowHead(thRow()), '2');
+    check('atk +13: threshold row note text', noteText(thRow()), 'hits on ' + '2+');
+
+    show({ ac: 30, atk: -5 });
+    check('AC 30 atk -5: threshold rule sits on row 20', rowHead(thRow()), '20');
+    check('AC 30 atk -5: row 20 is crit and threshold',
+      rowOf(20).classList.contains('crit') && rowOf(20).classList.contains('threshold'), true);
+
+    show({ die: 12 });
+    check('d12: every row has 12 hit or miss cells',
+      Array.from(tableEl.tBodies[0].rows).every((tr) => tr.querySelectorAll('td.h, td.m').length === 12), true);
+    check('d12: footnote names the d12 crit', critNoteEl.textContent.includes('2d12'), true);
+    const root = document.documentElement;
+    check(`d12: no horizontal page scroll at ${root.clientWidth}px`, root.scrollWidth <= root.clientWidth, true);
+    const wrap = tableEl.closest('.table-wrap');
+    check('d12: table fits inside its wrapper',
+      tableEl.getBoundingClientRect().width <= wrap.getBoundingClientRect().width + 1, true);
+
+    show({ die: 4, dmg: -5 });
+    const c10 = rowOf(10).cells[1];
+    check('d4 D-5: row 10 face 1 is a hit cell showing 0',
+      c10.classList.contains('h') && !c10.classList.contains('m') && c10.textContent === '0', true);
+    check('d4 D-5: footnote adds the floor sentence', critNoteEl.textContent.includes('doubled-face shortcut'), true);
   } catch (err) {
     results.push({ name: 'UI smoke crashed: ' + (err && err.message), ok: false });
   }
