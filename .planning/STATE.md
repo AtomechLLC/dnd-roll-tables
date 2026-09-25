@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 1 UI-SPEC approved
-last_updated: "2026-09-25T01:59:55.025Z"
-last_activity: 2026-09-25 -- Phase 1 planning complete
+last_updated: "2026-09-25T02:00:34.221Z"
+last_activity: 2026-09-25 -- Phase 1 execution started
 progress:
   total_phases: 4
   completed_phases: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** A designer can see, in one glance at a live table and a curve, why attack bonuses saturate (hit chance caps at 95%) while damage bonuses scale linearly, and why the crossover depends on AC and the damage die.
-**Current focus:** Phase 1: Live Roll Table, Deployed
+**Current focus:** Phase 1 — Live Roll Table, Deployed
 
 ## Current Position
 
-Phase: 1 of 4 (Live Roll Table, Deployed)
-Plan: 0 of TBD in current phase
-Status: Ready to execute
-Last activity: 2026-09-25 -- Phase 1 planning complete
+Phase: 1 (Live Roll Table, Deployed) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 1
+Last activity: 2026-09-25 -- Phase 1 execution started
 
 Progress: [----------] 0%
 
