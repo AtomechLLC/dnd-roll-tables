@@ -9,37 +9,37 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Rules Engine
 
-- [ ] **RULES-01**: An attack hits when d20 + attack bonus >= AC, evaluated numerically (never string comparison)
-- [ ] **RULES-02**: A natural 1 always misses regardless of bonus; a natural 20 always hits regardless of AC
-- [ ] **RULES-03**: A natural 20 is a critical hit: damage dice are rolled twice, the damage bonus is added once
-- [ ] **RULES-04**: A miss deals 0 damage
-- [ ] **RULES-05**: A single pure function resolves damage for (d20 result, die roll(s), AC, attack bonus, damage bonus), and the table, exact stats, chart, and simulator all call it
-- [ ] **RULES-06**: Exact hit chance is computed by counting d20 faces (loop 1..20), so it is clamped between 5% and 95% by construction
-- [ ] **RULES-07**: Expected damage per round and over 20 rounds is derived from the outcome table and cross-checked against the closed form (P(normal hit) x (avg + D) + P(crit) x (2 x avg + D))
-- [ ] **RULES-08**: An in-page self-test runs on load, asserts known reference values (AC 15 / +5 gives 55% hit; AC 15 / +0 / d8 gives 31.5 over 20 rounds; AC 15 / +5 / d8 gives 54.0; AC 25 / +0 gives 5%; both sweep curves equal at N = 0; E(D+1) - E(D) = P(any hit)), logs to console, and shows a visible pass/fail panel when the URL contains `?test`
+- [x] **RULES-01**: An attack hits when d20 + attack bonus >= AC, evaluated numerically (never string comparison)
+- [x] **RULES-02**: A natural 1 always misses regardless of bonus; a natural 20 always hits regardless of AC
+- [x] **RULES-03**: A natural 20 is a critical hit: damage dice are rolled twice, the damage bonus is added once
+- [x] **RULES-04**: A miss deals 0 damage
+- [x] **RULES-05**: A single pure function resolves damage for (d20 result, die roll(s), AC, attack bonus, damage bonus), and the table, exact stats, chart, and simulator all call it
+- [x] **RULES-06**: Exact hit chance is computed by counting d20 faces (loop 1..20), so it is clamped between 5% and 95% by construction
+- [x] **RULES-07**: Expected damage per round and over 20 rounds is derived from the outcome table and cross-checked against the closed form (P(normal hit) x (avg + D) + P(crit) x (2 x avg + D))
+- [x] **RULES-08**: An in-page self-test runs on load, asserts known reference values (AC 15 / +5 gives 55% hit; AC 15 / +0 / d8 gives 31.5 over 20 rounds; AC 15 / +5 / d8 gives 54.0; AC 25 / +0 gives 5%; both sweep curves equal at N = 0; E(D+1) - E(D) = P(any hit)), logs to console, and shows a visible pass/fail panel when the URL contains `?test`
 
 ### Controls
 
-- [ ] **CTRL-01**: User can set target AC with a range slider paired with a number input (range 10 to 30), and the page updates live on the `input` event
-- [ ] **CTRL-02**: User can pick the damage die from d4, d6, d8, d10, d12 via a segmented button group
-- [ ] **CTRL-03**: User can set a base attack bonus and a base damage bonus with number steppers (range -5 to +20)
+- [x] **CTRL-01**: User can set target AC with a range slider paired with a number input (range 10 to 30), and the page updates live on the `input` event
+- [x] **CTRL-02**: User can pick the damage die from d4, d6, d8, d10, d12 via a segmented button group
+- [x] **CTRL-03**: User can set a base attack bonus and a base damage bonus with number steppers (range -5 to +20)
 - [ ] **CTRL-04**: User can set the comparison bonus N (0 to 20) with a slider; N drives the side-by-side tables and the chart marker
-- [ ] **CTRL-05**: Every control value passes through one numeric parser with clamping and fallback into a single state object; renders are coalesced with requestAnimationFrame
+- [x] **CTRL-05**: Every control value passes through one numeric parser with clamping and fallback into a single state object; renders are coalesced with requestAnimationFrame
 
 ### Outcome Table
 
-- [ ] **TABLE-01**: A 2D outcome table renders with rows = d20 result 1..20 (ascending) and columns = damage die face 1..X, each cell showing damage dealt (0 on a miss)
-- [ ] **TABLE-02**: Miss cells use a distinct neutral style (not the low end of the damage color ramp); hit cells use one sequential color scale
-- [ ] **TABLE-03**: The hit threshold is marked with a visible rule and a label such as "hits on 14+"; the nat 1 row is labeled auto-miss and the nat 20 row is labeled crit
-- [ ] **TABLE-04**: The nat 20 row shows 2 x face + damage bonus, with a footnote stating that a real crit rolls a second die and that the table's average equals the true expected value
-- [ ] **TABLE-05**: A legend explains the color scale, the miss style, and the crit row
-- [ ] **TABLE-06**: The table is real `<table>` markup with row and column headers (`<th scope>`), and stays legible at d12 width
+- [x] **TABLE-01**: A 2D outcome table renders with rows = d20 result 1..20 (ascending) and columns = damage die face 1..X, each cell showing damage dealt (0 on a miss)
+- [x] **TABLE-02**: Miss cells use a distinct neutral style (not the low end of the damage color ramp); hit cells use one sequential color scale
+- [x] **TABLE-03**: The hit threshold is marked with a visible rule and a label such as "hits on 14+"; the nat 1 row is labeled auto-miss and the nat 20 row is labeled crit
+- [x] **TABLE-04**: The nat 20 row shows 2 x face + damage bonus, with a footnote stating that a real crit rolls a second die and that the table's average equals the true expected value
+- [x] **TABLE-05**: A legend explains the color scale, the miss style, and the crit row
+- [x] **TABLE-06**: The table is real `<table>` markup with row and column headers (`<th scope>`), and stays legible at d12 width
 
 ### Headline Stats
 
-- [ ] **STAT-01**: Stat cards show hit threshold ("needs N+"), hit chance including crit, crit chance, average damage on a hit, expected damage per round, and expected damage over 20 rounds
-- [ ] **STAT-02**: Displayed numbers are rounded consistently so per-round x 20 matches the 20-round figure shown
-- [ ] **STAT-03**: A marginal-value readout states what the next +1 to hit is worth (5% x (avg die + D) per round while unclamped, 0 when capped or in the nat-20-only floor) and what the next +1 to damage is worth (P(any hit) per round)
+- [x] **STAT-01**: Stat cards show hit threshold ("needs N+"), hit chance including crit, crit chance, average damage on a hit, expected damage per round, and expected damage over 20 rounds
+- [x] **STAT-02**: Displayed numbers are rounded consistently so per-round x 20 matches the 20-round figure shown
+- [x] **STAT-03**: A marginal-value readout states what the next +1 to hit is worth (5% x (avg die + D) per round while unclamped, 0 when capped or in the nat-20-only floor) and what the next +1 to damage is worth (P(any hit) per round)
 
 ### Comparison Chart
 
@@ -76,9 +76,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Deployment
 
-- [ ] **DEPLOY-01**: The whole site is one `index.html` with inline CSS and classic inline `<script>` blocks, no build step, no external requests; it also works when opened directly from disk
-- [ ] **DEPLOY-02**: The repository is on GitHub as a public repo with the default branch renamed to `main`, with a `.nojekyll` file and a README describing the page
-- [ ] **DEPLOY-03**: GitHub Pages is enabled from the `main` branch root via the REST API (gh CLI installed and authenticated as a prerequisite), and the public URL returns HTTP 200 with the page rendering and no console errors
+- [x] **DEPLOY-01**: The whole site is one `index.html` with inline CSS and classic inline `<script>` blocks, no build step, no external requests; it also works when opened directly from disk
+- [x] **DEPLOY-02**: The repository is on GitHub as a public repo with the default branch renamed to `main`, with a `.nojekyll` file and a README describing the page
+- [x] **DEPLOY-03**: GitHub Pages is enabled from the `main` branch root via the REST API (gh CLI installed and authenticated as a prerequisite), and the public URL returns HTTP 200 with the page rendering and no console errors
 - [ ] **DEPLOY-04**: Controls are keyboard operable, every control has a label, and miss vs hit is not encoded by color alone
 
 ## v2 Requirements
@@ -121,28 +121,28 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RULES-01 | Phase 1 | Pending |
-| RULES-02 | Phase 1 | Pending |
-| RULES-03 | Phase 1 | Pending |
-| RULES-04 | Phase 1 | Pending |
-| RULES-05 | Phase 1 | Pending |
-| RULES-06 | Phase 1 | Pending |
-| RULES-07 | Phase 1 | Pending |
-| RULES-08 | Phase 1 | Pending |
-| CTRL-01 | Phase 1 | Pending |
-| CTRL-02 | Phase 1 | Pending |
-| CTRL-03 | Phase 1 | Pending |
+| RULES-01 | Phase 1 | Complete |
+| RULES-02 | Phase 1 | Complete |
+| RULES-03 | Phase 1 | Complete |
+| RULES-04 | Phase 1 | Complete |
+| RULES-05 | Phase 1 | Complete |
+| RULES-06 | Phase 1 | Complete |
+| RULES-07 | Phase 1 | Complete |
+| RULES-08 | Phase 1 | Complete |
+| CTRL-01 | Phase 1 | Complete |
+| CTRL-02 | Phase 1 | Complete |
+| CTRL-03 | Phase 1 | Complete |
 | CTRL-04 | Phase 2 | Pending |
-| CTRL-05 | Phase 1 | Pending |
-| TABLE-01 | Phase 1 | Pending |
-| TABLE-02 | Phase 1 | Pending |
-| TABLE-03 | Phase 1 | Pending |
-| TABLE-04 | Phase 1 | Pending |
-| TABLE-05 | Phase 1 | Pending |
-| TABLE-06 | Phase 1 | Pending |
-| STAT-01 | Phase 1 | Pending |
-| STAT-02 | Phase 1 | Pending |
-| STAT-03 | Phase 1 | Pending |
+| CTRL-05 | Phase 1 | Complete |
+| TABLE-01 | Phase 1 | Complete |
+| TABLE-02 | Phase 1 | Complete |
+| TABLE-03 | Phase 1 | Complete |
+| TABLE-04 | Phase 1 | Complete |
+| TABLE-05 | Phase 1 | Complete |
+| TABLE-06 | Phase 1 | Complete |
+| STAT-01 | Phase 1 | Complete |
+| STAT-02 | Phase 1 | Complete |
+| STAT-03 | Phase 1 | Complete |
 | CHART-01 | Phase 2 | Pending |
 | CHART-02 | Phase 2 | Pending |
 | CHART-03 | Phase 2 | Pending |
@@ -164,9 +164,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COPY-03 | Phase 4 | Pending |
 | COPY-04 | Phase 4 | Pending |
 | COPY-05 | Phase 4 | Pending |
-| DEPLOY-01 | Phase 1 | Pending |
-| DEPLOY-02 | Phase 1 | Pending |
-| DEPLOY-03 | Phase 1 | Pending |
+| DEPLOY-01 | Phase 1 | Complete |
+| DEPLOY-02 | Phase 1 | Partial (main branch, .nojekyll, README done locally; public repo deferred 2026-09-25, user chose local git) |
+| DEPLOY-03 | Phase 1 | Deferred (user chose local git only on 2026-09-25; gh installed, not authenticated) |
 | DEPLOY-04 | Phase 4 | Pending |
 
 **Coverage:**

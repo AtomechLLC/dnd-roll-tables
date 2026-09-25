@@ -113,7 +113,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Live Roll Table, Deployed | 5/5 | Complete   | 2026-09-25 |
+| 1. Live Roll Table, Deployed | 5/5 | Complete    | 2026-09-25 |
 | 2. Bonus Comparison | 0/TBD | Not started | - |
 | 3. Roll-20-Rounds Simulation | 0/TBD | Not started | - |
 | 4. Designer Explanation & Final Ship | 0/TBD | Not started | - |
