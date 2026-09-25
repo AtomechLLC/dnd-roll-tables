@@ -30,6 +30,8 @@
       --ramp-b: 0.70;
       --pass:        oklch(0.45 0.11 145);
       --fail:        oklch(0.47 0.17 27);
+      --series-hit:  oklch(0.45 0.13 255);
+      --series-dmg:  oklch(0.47 0.12 50);
       --sp-1: 4px; --sp-2: 8px; --sp-3: 16px; --sp-4: 24px; --sp-5: 32px; --sp-6: 48px;
     }
     /* DARK: candlelit (UI-SPEC Color, D-06). The only theming mechanism; no light-dark(). */
@@ -51,6 +53,8 @@
         --ramp-b: 0.72;
         --pass:        oklch(0.78 0.13 145);
         --fail:        oklch(0.74 0.15 27);
+        --series-hit:  oklch(0.78 0.10 245);
+        --series-dmg:  oklch(0.78 0.13 55);
       }
     }
     [hidden] { display: none !important; }
@@ -303,6 +307,61 @@
     .cmp-stats { margin: var(--sp-2) 0 0; font-size: 0.875rem; line-height: 1.4; color: var(--ink); }
     .cmp-stats .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; }
 
+    /* Sweep chart (D-09..D-12). SVG colors come only from these class rules, never from
+       presentation attributes (RESEARCH Pattern 4). Paint classes are unscoped so the
+       legend keys reuse them. Strokes stay in screen px via non-scaling-stroke. */
+    .series-hit, .series-dmg {
+      fill: none; stroke-width: 3px; stroke-linejoin: round; vector-effect: non-scaling-stroke;
+    }
+    .series-hit { stroke: var(--series-hit); }
+    .series-dmg { stroke: var(--series-dmg); stroke-dasharray: 8 4; }
+    .n-marker { stroke: var(--ink-muted); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+    .ndot-hit, .ndot-dmg { stroke: var(--paper); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+    .ndot-hit { fill: var(--series-hit); }
+    .ndot-dmg { fill: var(--series-dmg); }
+    .chart-wrap { container: chart / inline-size; max-width: 50rem; }
+    .chart { display: block; width: 100%; height: auto; overflow: visible; }
+    .key { width: 32px; height: 16px; overflow: visible; }
+    .key.key-sm { width: 24px; }
+    .chart-ytitle {
+      margin: 0 0 var(--sp-1);
+      font-family: var(--font-prose); font-size: 0.875rem; line-height: 1.4; color: var(--ink);
+    }
+    .chart-caption {
+      margin: var(--sp-3) 0 0; max-width: 72ch;
+      font-family: var(--font-prose); font-size: 1rem; line-height: 1.5; color: var(--ink);
+    }
+    .chart .grid-y line { stroke: var(--line); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+    .chart .axis, .chart .tickmark { stroke: var(--ink-muted); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+    .chart .hover-guide {
+      stroke: var(--ink-muted); stroke-width: 1px; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke;
+    }
+    /* SVG font-size is in user units and scales with the viewBox (width / 640), so it steps
+       by the chart container's width to keep every label at 12px or more (UI-SPEC Typography). */
+    .chart text {
+      font-size: 11.2px; font-family: var(--font-num); font-variant-numeric: tabular-nums;
+      fill: var(--ink-muted);
+    }
+    .chart .axis-title { font-family: var(--font-prose); fill: var(--ink); }
+    .chart .marker-label { fill: var(--ink); font-weight: 700; }
+    .chart .direct { font-family: var(--font-prose); font-weight: 700; }
+    .chart .direct-hit { fill: var(--series-hit); }
+    .chart .direct-dmg { fill: var(--series-dmg); }
+    .chart .ndot { r: 5px; }
+    @container chart (width < 43rem) {
+      .chart text { font-size: 14px; }
+      .chart .ndot { r: 6px; }
+    }
+    @container chart (width < 35rem) {
+      .chart text { font-size: 17.5px; }
+      .chart .ndot { r: 7px; }
+    }
+    @container chart (width < 28rem) {
+      .chart text { font-size: 24px; }
+      .chart .ndot { r: 9px; }
+      .chart .direct { display: none; }
+    }
+
     /* Self-test panel and engine-error banner (UI-SPEC Self-test Panel, States) */
     #selftest, #engine-error {
       padding: var(--sp-3); border-radius: 8px;
@@ -447,6 +506,22 @@
         </div>
       </div>
     </section>
+
+    <section id="chart" aria-labelledby="chart-h">
+      <h2 id="chart-h">Bonus sweep, +0 to +20</h2>
+      <p class="section-intro">Expected damage over 20 rounds for every extra bonus from +0 to +20, at the settings above. Point at or drag across the chart to read any N; the slider sets the marker.</p>
+      <div class="chart-wrap">
+        <div class="legend chart-legend">
+          <div class="legend-item"><svg class="key" aria-hidden="true" focusable="false"><line class="series-hit" x1="0" y1="8" x2="32" y2="8"></line></svg><span>+N to hit (added to the attack roll)</span></div>
+          <div class="legend-item"><svg class="key" aria-hidden="true" focusable="false"><line class="series-dmg" x1="0" y1="8" x2="32" y2="8"></line></svg><span>+N to damage (added to the damage roll)</span></div>
+          <div class="legend-item"><svg class="key key-sm" aria-hidden="true" focusable="false"><line class="n-marker" x1="12" y1="0" x2="12" y2="16"></line><circle class="ndot ndot-hit" cx="12" cy="8" r="4"></circle></svg><span>Current +N from the slider</span></div>
+        </div>
+        <p class="chart-ytitle">Expected damage over 20 rounds</p>
+        <div class="plot"><svg id="sweep" class="chart" viewBox="0 0 640 400" role="img" aria-labelledby="chart-caption" focusable="false"></svg></div>
+        <p id="chart-readout" class="readout"></p>
+        <p id="chart-caption" class="chart-caption"></p>
+      </div>
+    </section>
   </main>
 
   <footer>
@@ -583,7 +658,8 @@ const DiceMath = (() => {
 
   <script id="view-model">
 // Pure view-model: control spec, the one parser, exact fixed-point formatting, and the views:
-// statsView (Phase 1 stats only), compareView (three compact tables), computeView (the page).
+// statsView (Phase 1 stats only), compareView (three compact tables), chartView (the sweep
+// chart), computeView (the page).
 const VM = (() => {
   'use strict';
   const CONTROL_SPEC = Object.freeze({
@@ -699,16 +775,74 @@ const VM = (() => {
     return { n, heatMax, tables };
   }
 
-  // The page view (D-08, D-16): stats view plus the compare block. The big table and the one
-  // legend use the shared compare domain, so the same number is the same color everywhere.
+  // Y-axis ticks from 0 to a nice ceiling >= max, step in {1, 2, 5} x 10^k (D-11).
+  function niceTicks(max, target = 5) {
+    if (!(max > 0)) return { step: 1, top: 1, ticks: [0, 1] };
+    const raw = max / target;
+    const mag = 10 ** Math.floor(Math.log10(raw));
+    const r = raw / mag;
+    const step = (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * mag;
+    const count = Math.ceil(max / step - 1e-9);
+    return { step, top: count * step, ticks: Array.from({ length: count + 1 }, (_, i) => i * step) };
+  }
+
+  // Caption sentence 2 (UI-SPEC): runs of equal sign(to hit - to damage) over N = 1..maxN,
+  // compared on the exact integer numerators, joined with ', then '.
+  function captionOrder(a, d) {
+    const maxN = a.length - 1;
+    const runs = [];
+    for (let n = 1; n <= maxN; n++) {
+      const sg = Math.sign(a[n] - d[n]);
+      const last = runs[runs.length - 1];
+      if (last && last.sg === sg) last.to = n;
+      else runs.push({ sg, from: n, to: n });
+    }
+    const parts = runs.map((r, i) => {
+      const lead = r.sg > 0 ? '+N to hit leads' : r.sg < 0 ? '+N to damage leads'
+        : (i === 0 ? 'The two are even' : 'the two are even');
+      const range = runs.length === 1 && r.from === 1 && r.to === maxN
+        ? `at every N from ${signed(1)} to ${signed(maxN)}`
+        : r.from === r.to ? `at ${signed(r.from)}` : `from ${signed(r.from)} to ${signed(r.to)}`;
+      return `${lead} ${range}`;
+    });
+    return parts.join(', then ') + '.';
+  }
+
+  // Sweep chart block (CHART-01, CHART-02, D-10, D-11, D-13): both exact series for
+  // N = 0..maxN, nice y ticks, precomputed readout lines, and the generated caption.
+  // Readout gaps are the difference of the displayed tenths (RESEARCH Pitfall 7).
+  function chartView(p, n) {
+    const maxN = CONTROL_SPEC.n.max;
+    const { attack, damage, den } = DiceMath.sweep(p, CONTROL_SPEC.n.max);
+    const aT = attack.map((v) => tenths(v, den));
+    const dT = damage.map((v) => tenths(v, den));
+    const attackText = aT.map((t) => fixed(t, 1));
+    const damageText = dT.map((t) => fixed(t, 1));
+    const ticks = niceTicks(Math.max(attack[maxN], damage[maxN]) / den);
+    const readout = aT.map((ta, k) => {
+      const td = dT[k];
+      const gap = ta > td ? `to hit ahead by ${fixed(ta - td, 1)}`
+        : td > ta ? `to damage ahead by ${fixed(td - ta, 1)}` : 'even';
+      return `At ${signed(k)}: to hit ${attackText[k]} · to damage ${damageText[k]} · ${gap}`;
+    });
+    const caption = `Expected damage over 20 rounds at AC ${p.ac}, d${p.die}, attack ${signed(p.atk)}, ` +
+      `damage ${signed(p.dmg)}. Both curves start at ${attackText[0]} with no extra bonus.` +
+      ' ' + captionOrder(attack, damage);
+    return { n, maxN, den, attack, damage, attackText, damageText, ticks, readout, caption };
+  }
+
+  // The page view (D-08, D-16): stats view plus the compare and chart blocks. The big table and
+  // the one legend use the shared compare domain, so the same number is the same color everywhere.
+  // statsView stays chart-free: the grids call it per combo (RESEARCH Pitfall 4).
   function computeView(state) {
     const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
     const compare = compareView(p, state.n);
-    return { ...statsView(state), heatMax: compare.heatMax, compare };
+    return { ...statsView(state), heatMax: compare.heatMax, compare, chart: chartView(p, state.n) };
   }
 
   return Object.freeze({
-    CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, compareView, computeView,
+    CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, compareView,
+    niceTicks, captionOrder, chartView, computeView,
   });
 })();
   </script>
@@ -1076,11 +1210,15 @@ const cmpEls = Object.fromEntries(CMP_KEYS.map((k) => [k, {
   table: document.getElementById('cmp-' + k),
   stats: document.getElementById('cmp-' + k + '-stats'),
 }]));
+// Sweep chart (Phase 2): an inline SVG skeleton built once by chartInit(), updated in place.
+const sweepEl = document.getElementById('sweep');
+const chartCaptionEl = document.getElementById('chart-caption');
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
 const state = {};
-const RENDERERS = [renderControls, renderStats, renderTable, renderLegend, renderFootnote, renderCompare];
+const RENDERERS = [renderControls, renderStats, renderTable, renderLegend, renderFootnote, renderCompare,
+  renderChart];
 
 let pending = false;
 function setState(patch) {
@@ -1240,6 +1378,122 @@ function renderCompare(view) {
     if (t.deltaText !== null) parts.push(' · ', num(t.deltaText), ' vs baseline');
     cmpEls[key].stats.replaceChildren(...parts);
   }
+}
+
+// ---- Sweep chart (CHART-01, CHART-02, CHART-05, D-09..D-12) --------------------------
+// Every node is made with createElementNS and filled with setAttribute / textContent
+// (T-02-05). viewBox 0 0 640 400; plot x 64..544 (24 units per N), y 32..336.
+const SVGNS = 'http://www.w3.org/2000/svg';
+const VB_W = 640, PLOT_L = 64, PLOT_R = 544, PLOT_T = 32, PLOT_B = 336;
+const chart = {};        // element references, filled by chartInit()
+let xScale = null;
+
+function svgEl(tag, attrs = {}, text) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, String(attrs[k]));
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function linearScale(d0, d1, r0, r1) {
+  const k = (r1 - r0) / (d1 - d0);
+  const f = (v) => r0 + (v - d0) * k;
+  f.invert = (u) => d0 + (u - r0) / k;
+  return f;
+}
+
+// Built once, in paint order (UI-SPEC): hit rect, bands, y grid, x axis, N marker, hover
+// guide, damage line, to-hit line, N dots, crossing / label groups (plan 02-03), direct
+// labels, tick labels + marker label, axis title.
+function chartInit() {
+  const maxN = VM.CONTROL_SPEC.n.max;
+  xScale = linearScale(0, VM.CONTROL_SPEC.n.max, PLOT_L, PLOT_R);
+  const add = (parent, tag, attrs, text) => parent.appendChild(svgEl(tag, attrs, text));
+  const s = sweepEl;
+  chart.hit = add(s, 'rect', {
+    class: 'hit', x: PLOT_L, y: PLOT_T, width: PLOT_R - PLOT_L, height: PLOT_B - PLOT_T,
+    fill: 'none', 'pointer-events': 'all',
+  });
+  chart.bands = add(s, 'g', { class: 'bands' });
+  chart.gridY = add(s, 'g', { class: 'grid-y' });
+  const xAxis = add(s, 'g', { class: 'x-axis' });
+  add(xAxis, 'line', { class: 'axis', x1: PLOT_L, y1: PLOT_B, x2: PLOT_R, y2: PLOT_B });
+  for (let n = 0; n <= maxN; n++) {
+    const x = xScale(n).toFixed(2);
+    add(xAxis, 'line', { class: 'tickmark', x1: x, y1: PLOT_B, x2: x, y2: PLOT_B + (n % 5 === 0 ? 6 : 4) });
+  }
+  chart.marker = add(s, 'line', { class: 'n-marker', x1: PLOT_L, y1: PLOT_T, x2: PLOT_L, y2: PLOT_B });
+  chart.hoverGuide = add(s, 'line', { class: 'hover-guide', x1: PLOT_L, y1: PLOT_T, x2: PLOT_L, y2: PLOT_B });
+  chart.hoverGuide.toggleAttribute('hidden', true);
+  chart.dmgLine = add(s, 'polyline', { class: 'series-dmg' });
+  chart.hitLine = add(s, 'polyline', { class: 'series-hit' });
+  chart.dotDmg = add(s, 'circle', { class: 'ndot ndot-dmg', r: 5 });
+  chart.dotDmgTitle = add(chart.dotDmg, 'title');
+  chart.dotHit = add(s, 'circle', { class: 'ndot ndot-hit', r: 5 });
+  chart.dotHitTitle = add(chart.dotHit, 'title');
+  chart.crossings = add(s, 'g', { class: 'crossings' });
+  chart.crossLabels = add(s, 'g', { class: 'cross-labels' });
+  chart.bandLabels = add(s, 'g', { class: 'band-labels' });
+  chart.directHit = add(s, 'text', { class: 'direct direct-hit', x: 552, dy: '0.35em' }, 'to hit');
+  chart.directDmg = add(s, 'text', { class: 'direct direct-dmg', x: 552, dy: '0.35em' }, 'to damage');
+  const xLabels = add(s, 'g', { class: 'x-labels' });
+  chart.tickLabels = [];
+  for (let n = 0; n <= maxN; n += 5) {
+    chart.tickLabels.push({ n, el: add(xLabels, 'text', {
+      class: 'tick', x: xScale(n).toFixed(2), y: 344, dy: '0.8em', 'text-anchor': 'middle',
+    }, signed(n)) });
+  }
+  chart.markerLabel = add(xLabels, 'text', { class: 'tick marker-label', y: 344, dy: '0.8em', 'text-anchor': 'middle' });
+  add(s, 'text', { class: 'axis-title', x: 304, y: 390, 'text-anchor': 'middle' }, 'Extra bonus +N');
+}
+
+// Updates the skeleton in place: never rebuilds the svg, never uses innerHTML (D-09).
+function renderChart(view) {
+  if (!xScale) return;
+  const c = view.chart;
+  const n = c.n, maxN = c.maxN, den = c.den;
+  const y = linearScale(0, c.ticks.top, PLOT_B, PLOT_T);
+  const pts = (nums) => nums.map((v, k) => `${xScale(k).toFixed(2)},${y(v / den).toFixed(2)}`).join(' ');
+  chart.hitLine.setAttribute('points', pts(c.attack));
+  chart.dmgLine.setAttribute('points', pts(c.damage));
+
+  chart.gridY.replaceChildren(...c.ticks.ticks.flatMap((t) => {
+    const ty = y(t).toFixed(2);
+    return [
+      svgEl('line', { x1: PLOT_L, y1: ty, x2: PLOT_R, y2: ty }),
+      svgEl('text', { x: PLOT_L - 6, y: ty, dy: '0.35em', 'text-anchor': 'end' }, String(t)),
+    ];
+  }));
+
+  // N marker (CHART-05, D-12): line, one dot per curve, bold +N in the tick row.
+  const mx = xScale(n).toFixed(2);
+  chart.marker.setAttribute('x1', mx);
+  chart.marker.setAttribute('x2', mx);
+  chart.dotHit.setAttribute('cx', mx);
+  chart.dotHit.setAttribute('cy', y(c.attack[n] / den).toFixed(2));
+  chart.dotDmg.setAttribute('cx', mx);
+  chart.dotDmg.setAttribute('cy', y(c.damage[n] / den).toFixed(2));
+  chart.dotHitTitle.textContent = `to hit ${c.attackText[n]}`;
+  chart.dotDmgTitle.textContent = `to damage ${c.damageText[n]}`;
+  for (const t of chart.tickLabels) t.el.toggleAttribute('hidden', Math.abs(t.n - n) <= 1);
+  chart.markerLabel.textContent = signed(n);
+  chart.markerLabel.setAttribute('x', mx);
+
+  // Direct labels at the right end, de-collided to 22 units apart (to hit on top on an
+  // exact tie), then shifted together so both stay inside the plot (RESEARCH Pitfall 9).
+  let yh = y(c.attack[maxN] / den), yd = y(c.damage[maxN] / den);
+  if (Math.abs(yh - yd) < 22) {
+    const mid = (yh + yd) / 2;
+    if (yh <= yd) { yh = mid - 11; yd = mid + 11; } else { yd = mid - 11; yh = mid + 11; }
+    const top = Math.min(yh, yd), bottom = Math.max(yh, yd);
+    const shift = top < PLOT_T ? PLOT_T - top : bottom > PLOT_B ? PLOT_B - bottom : 0;
+    yh += shift;
+    yd += shift;
+  }
+  chart.directHit.setAttribute('y', yh.toFixed(2));
+  chart.directDmg.setAttribute('y', yd.toFixed(2));
+
+  chartCaptionEl.textContent = c.caption;
 }
 
 // Legend (TABLE-05): built with createElement / textContent / style.setProperty only.
@@ -1772,6 +2026,7 @@ function init() {
   // The N slider's range comes only from CONTROL_SPEC.n (IN-04: no second copy in the markup).
   nRangeEl.min = String(VM.CONTROL_SPEC.n.min);
   nRangeEl.max = String(VM.CONTROL_SPEC.n.max);
+  chartInit();                             // SVG skeleton once, before the first render (D-09)
   Object.assign(state, VM.DEFAULT_STATE);
   renderControls();                        // D-04: state -> controls, never the reverse
   for (const root of [form, compareForm]) {   // two control roots, one handler (Pattern 1)
