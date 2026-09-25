@@ -32,6 +32,7 @@
       --fail:        oklch(0.47 0.17 27);
       --series-hit:  oklch(0.45 0.13 255);
       --series-dmg:  oklch(0.47 0.12 50);
+      --band:        color-mix(in oklch, var(--ink) 8%, var(--paper));   /* recomputes from the dark tokens */
       --sp-1: 4px; --sp-2: 8px; --sp-3: 16px; --sp-4: 24px; --sp-5: 32px; --sp-6: 48px;
     }
     /* DARK: candlelit (UI-SPEC Color, D-06). The only theming mechanism; no light-dark(). */
@@ -348,6 +349,19 @@
     .chart .direct-hit { fill: var(--series-hit); }
     .chart .direct-dmg { fill: var(--series-dmg); }
     .chart .ndot { r: 5px; }
+    /* Flat-stretch bands and crossing rings (CHART-03, CHART-04). The band tint is a region
+       cue that always carries its in-band text label. The ring is hollow, so it never reads
+       as an N dot. Ring labels get a paper halo so they stay legible over lines and bands.
+       Unscoped paint classes, so the legend keys reuse them. */
+    .band { fill: var(--band); }
+    .cross { fill: var(--paper); stroke: var(--ink); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+    .key .band { stroke: var(--line); stroke-width: 1px; }
+    .chart .band-label { font-family: var(--font-prose); font-style: italic; }
+    .chart .cross-label {
+      font-family: var(--font-prose); font-style: italic; font-weight: 700; fill: var(--ink);
+      paint-order: stroke; stroke: var(--paper); stroke-width: 3px; stroke-linejoin: round;
+    }
+    .chart .cross { r: 7px; }
     /* Hover readout (D-13). Vertical swipes scroll the page, horizontal drags scrub the
        readout. The panel reserves its height so hovering never shifts the page. No motion. */
     .plot { touch-action: pan-y; }
@@ -362,15 +376,18 @@
     @container chart (width < 43rem) {
       .chart text { font-size: 14px; }
       .chart .ndot { r: 6px; }
+      .chart .cross { r: 8px; }
     }
     @container chart (width < 35rem) {
       .chart text { font-size: 17.5px; }
       .chart .ndot { r: 7px; }
+      .chart .cross { r: 9px; }
       .readout { min-height: calc(3em + 18px); }
     }
     @container chart (width < 28rem) {
       .chart text { font-size: 24px; }
       .chart .ndot { r: 9px; }
+      .chart .cross { r: 12px; }
       .chart .direct { display: none; }
     }
 
@@ -526,7 +543,9 @@
         <div class="legend chart-legend">
           <div class="legend-item"><svg class="key" aria-hidden="true" focusable="false"><line class="series-hit" x1="0" y1="8" x2="32" y2="8"></line></svg><span>+N to hit (added to the attack roll)</span></div>
           <div class="legend-item"><svg class="key" aria-hidden="true" focusable="false"><line class="series-dmg" x1="0" y1="8" x2="32" y2="8"></line></svg><span>+N to damage (added to the damage roll)</span></div>
+          <div class="legend-item"><svg class="key key-sm" aria-hidden="true" focusable="false"><rect class="band" x="0.5" y="0.5" width="23" height="15"></rect></svg><span>Shaded: the to-hit curve is flat (95% cap, or only a nat 20 hits)</span></div>
           <div class="legend-item"><svg class="key key-sm" aria-hidden="true" focusable="false"><line class="n-marker" x1="12" y1="0" x2="12" y2="16"></line><circle class="ndot ndot-hit" cx="12" cy="8" r="4"></circle></svg><span>Current +N from the slider</span></div>
+          <div class="legend-item"><svg class="key key-sm" aria-hidden="true" focusable="false"><circle class="cross" cx="12" cy="8" r="6"></circle></svg><span>Where the curves cross, if they do</span></div>
         </div>
         <p class="chart-ytitle">Expected damage over 20 rounds</p>
         <div class="plot"><svg id="sweep" class="chart" viewBox="0 0 640 400" role="img" aria-labelledby="chart-caption" focusable="false"></svg></div>
@@ -661,9 +680,54 @@ const DiceMath = (() => {
     return { attack, damage, den: p.die * p.die };
   }
 
+  // Where two equal-length series cross (CHART-03, D-14). a, d: integer numerators over one
+  // den, a[0] === d[0]; never floats divided by den. A crossing is a change between the last
+  // non-zero sign of a[n] - d[n] and the next one. Adjacent: the exact intersection of the two
+  // drawn segments. Across a tie: at the tied N (tieN). A tie with the same leader on both
+  // sides (a touch) is not a crossing. endTieN: the series end tied after a lead. first: the
+  // first leader for N >= 1 ('none' if all equal). ties: every N >= 1 where the two are equal.
+  function crossings(a, d) {
+    const list = [], ties = [];
+    let lastN = 0, lastS = 0, first = 0;
+    for (let n = 1; n < a.length; n++) {
+      const diff = a[n] - d[n];
+      const s = Math.sign(diff);
+      if (s === 0) { ties.push(n); continue; }
+      if (first === 0) first = s;
+      if (lastS !== 0 && s !== lastS) {
+        const adjacent = n - lastN === 1;
+        const d0 = a[lastN] - d[lastN];
+        const x = adjacent ? lastN + d0 / (d0 - diff) : lastN + 1;
+        const yNum = adjacent ? a[lastN] + (a[n] - a[lastN]) * (x - lastN) : a[lastN + 1];
+        list.push({
+          x, yNum, lastLeadN: lastN, flipN: n, tieN: adjacent ? null : lastN + 1,
+          to: s > 0 ? 'attack' : 'damage',
+        });
+      }
+      lastN = n;
+      lastS = s;
+    }
+    const endTieN = lastS !== 0 && lastN < a.length - 1 ? lastN + 1 : null;
+    const lead = (sg) => (sg > 0 ? 'attack' : sg < 0 ? 'damage' : 'none');
+    return { first: lead(first), list, endTieN, ties };
+  }
+
+  // Flat stretches of the attack curve over N = 0..maxN (CHART-04, D-15). Reads only ac and atk.
+  // floor: only a nat 20 hits while C - (A + N) >= 20, so flat on [0, C - A - 20].
+  // cap: hits on 2+ once A + N >= C - 2, so flat on [C - A - 2, maxN].
+  // A band needs two points. A d4 whose normal hits deal 0 is flat for another reason and
+  // gets no band here (RESEARCH Pitfall 8).
+  function attackBands(p, maxN = 20) {
+    const fe = p.ac - p.atk - 20, cs = Math.max(0, p.ac - p.atk - 2);
+    return {
+      floor: fe >= 1 ? [0, Math.min(maxN, fe)] : null,
+      cap: cs <= maxN - 1 ? [cs, maxN] : null,
+    };
+  }
+
   return Object.freeze({
     DICE, avg, assertParams, outcome, isHit, damageFor, threshold,
-    outcomeTable, stats, closedFormPerRound, marginals, hitAverages, sweep,
+    outcomeTable, stats, closedFormPerRound, marginals, hitAverages, sweep, crossings, attackBands,
   });
 })();
   </script>
@@ -820,8 +884,37 @@ const VM = (() => {
     return parts.join(', then ') + '.';
   }
 
-  // Sweep chart block (CHART-01, CHART-02, D-10, D-11, D-13): both exact series for
-  // N = 0..maxN, nice y ticks, precomputed readout lines, and the generated caption.
+  // Caption sentence 3 (UI-SPEC): the crossing count, from the same DiceMath.crossings result
+  // that places the markers.
+  function captionCross(cr) {
+    const k = cr.list.length;
+    if (cr.first === 'none' || (k === 0 && cr.ties.length === 0)) return 'The curves never cross.';
+    if (k === 0) return `The curves meet at ${signed(cr.ties[0])} but do not cross.`;
+    if (k === 1) {
+      const t = cr.list[0].tieN;
+      return 'The curves cross once' + (t !== null ? `, at ${signed(t)}` : '') + '.';
+    }
+    return k === 2 ? 'The curves cross twice.' : `The curves cross ${k} times.`;
+  }
+
+  // Caption sentence 4 (UI-SPEC): one sentence per drawn band, floor first; '' when none.
+  function captionBands(b) {
+    const parts = [];
+    if (b.floor) {
+      parts.push(`Shaded from ${signed(b.floor[0])} to ${signed(b.floor[1])}: ` +
+        'only a nat 20 hits, so more to-hit adds nothing yet.');
+    }
+    if (b.cap) {
+      parts.push(`Shaded from ${signed(b.cap[0])} to ${signed(b.cap[1])}: ` +
+        'the 95% cap, where more to-hit adds nothing.');
+    }
+    return parts.join(' ');
+  }
+
+  // Sweep chart block (CHART-01..04, D-10, D-11, D-13..D-15): both exact series for
+  // N = 0..maxN, nice y ticks, precomputed readout lines, crossings, bands, markers, and the
+  // generated caption. Markers, bands, and caption all come from one crossings / attackBands
+  // result, so the caption never claims a crossing the chart does not draw.
   // Readout gaps are the difference of the displayed tenths (RESEARCH Pitfall 7).
   // Everything but n depends only on (ac, atk, die, dmg), so a one-entry memo keeps a slider
   // drag from recomputing the sweep (RESEARCH Anti-Patterns). Callers never mutate the arrays.
@@ -845,10 +938,29 @@ const VM = (() => {
         : td > ta ? `to damage ahead by ${fixed(td - ta, 1)}` : 'even';
       return `At ${signed(k)}: to hit ${attackText[k]} · to damage ${damageText[k]} · ${gap}`;
     });
-    const caption = `Expected damage over 20 rounds at AC ${p.ac}, d${p.die}, attack ${signed(p.atk)}, ` +
-      `damage ${signed(p.dmg)}. Both curves start at ${attackText[0]} with no extra bonus.` +
-      ' ' + captionOrder(attack, damage);
-    return { maxN, den, attack, damage, attackText, damageText, ticks, readout, caption };
+    const crossings = DiceMath.crossings(attack, damage);
+    const bands = DiceMath.attackBands(p, CONTROL_SPEC.n.max);
+    // One marker per crossing (touches get none), plus one for curves tied at the right edge.
+    const markers = crossings.list.map((e) => (e.tieN !== null
+      ? { x: e.x, yNum: e.yNum, label: `tie at ${signed(e.tieN)}`, title: `The curves tie at ${signed(e.tieN)}.` }
+      : {
+        x: e.x, yNum: e.yNum, label: `flips at ${signed(e.flipN)}`,
+        title: `The curves cross between ${signed(e.lastLeadN)} and ${signed(e.flipN)}.`,
+      }));
+    if (crossings.endTieN !== null) {
+      const t = crossings.endTieN;
+      markers.push({ x: t, yNum: attack[t], label: `tie at ${signed(t)}`, title: `The curves meet at ${signed(t)}.` });
+    }
+    const caption = [
+      `Expected damage over 20 rounds at AC ${p.ac}, d${p.die}, attack ${signed(p.atk)}, ` +
+        `damage ${signed(p.dmg)}. Both curves start at ${attackText[0]} with no extra bonus.`,
+      captionOrder(attack, damage),
+      captionCross(crossings),
+      captionBands(bands),
+    ].filter((part) => part !== '').join(' ');
+    return {
+      maxN, den, attack, damage, attackText, damageText, ticks, readout, crossings, bands, markers, caption,
+    };
   }
 
   // The page view (D-08, D-16): stats view plus the compare and chart blocks. The big table and
@@ -862,7 +974,7 @@ const VM = (() => {
 
   return Object.freeze({
     CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, compareView,
-    niceTicks, captionOrder, chartView, computeView,
+    niceTicks, captionOrder, captionCross, captionBands, chartView, computeView,
   });
 })();
   </script>
@@ -1533,6 +1645,7 @@ function renderCompare(view) {
 // (T-02-05). viewBox 0 0 640 400; plot x 64..544 (24 units per N), y 32..336.
 const SVGNS = 'http://www.w3.org/2000/svg';
 const VB_W = 640, PLOT_L = 64, PLOT_R = 544, PLOT_T = 32, PLOT_B = 336;
+const BAND_T = 4;   // band rects start above the plot so the band label strip is shaded too
 const chart = {};        // element references, filled by chartInit()
 let xScale = null;
 // Hover readout (D-13, RESEARCH Pattern 6). The hovered N lives here, never in state: hover
@@ -1575,8 +1688,8 @@ function linearScale(d0, d1, r0, r1) {
 }
 
 // Built once, in paint order (UI-SPEC): hit rect, bands, y grid, x axis, N marker, hover
-// guide, damage line, to-hit line, N dots, crossing / label groups (plan 02-03), direct
-// labels, tick labels + marker label, axis title.
+// guide, damage line, to-hit line, N dots, crossing rings, crossing labels, band labels,
+// direct labels, tick labels + marker label, axis title.
 function chartInit() {
   const maxN = VM.CONTROL_SPEC.n.max;
   xScale = linearScale(0, VM.CONTROL_SPEC.n.max, PLOT_L, PLOT_R);
@@ -1678,6 +1791,34 @@ function renderChart(view) {
   }
   chart.directHit.setAttribute('y', yh.toFixed(2));
   chart.directDmg.setAttribute('y', yd.toFixed(2));
+
+  // Flat bands (CHART-04, D-15), floor then cap. The rect spans the label strip and the plot
+  // (y 4 to the baseline), so each label sits inside its own shading at the band start.
+  const bandList = [['floor', 'only a nat 20 hits'], ['cap', '95% cap']].filter(([k]) => c.bands[k] !== null);
+  chart.bands.replaceChildren(...bandList.map(([k]) => {
+    const [b0, b1] = c.bands[k];
+    return svgEl('rect', {
+      class: 'band', x: xScale(b0).toFixed(2), y: BAND_T, width: (xScale(b1) - xScale(b0)).toFixed(2), height: PLOT_B - BAND_T,
+    });
+  }));
+  chart.bandLabels.replaceChildren(...bandList.map(([k, text]) => svgEl('text', {
+    class: 'band-label', x: (xScale(c.bands[k][0]) + 4).toFixed(2), y: 24, 'text-anchor': 'start',
+  }, text)));
+
+  // Crossing rings and labels (CHART-03, D-14): hollow ring at the view's marker point, label
+  // 20 units below (12 above near the baseline), kept inside the plot by its anchor, so no
+  // layout reads are needed.
+  const rings = c.markers.map((m) => ({ m, cx: xScale(m.x), cy: y(m.yNum / den) }));
+  chart.crossings.replaceChildren(...rings.map(({ m, cx, cy }) => {
+    const ring = svgEl('circle', { class: 'cross', cx: cx.toFixed(2), cy: cy.toFixed(2), r: 7 });
+    ring.append(svgEl('title', {}, m.title));
+    return ring;
+  }));
+  chart.crossLabels.replaceChildren(...rings.map(({ m, cx, cy }) => {
+    const ly = cy + 20 > 330 ? cy - 12 : cy + 20;
+    const [lx, anchor] = cx >= PLOT_R - 40 ? [PLOT_R, 'end'] : cx <= PLOT_L + 40 ? [PLOT_L, 'start'] : [cx, 'middle'];
+    return svgEl('text', { class: 'cross-label', x: lx.toFixed(2), y: ly.toFixed(2), 'text-anchor': anchor }, m.label);
+  }));
 
   chartCaptionEl.textContent = c.caption;
 }
