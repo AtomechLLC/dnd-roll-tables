@@ -14,7 +14,7 @@ The project goes from an empty repo to a public GitHub Pages explorable explanat
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Live Roll Table, Deployed** - Self-tested 5e rules engine driving a live baseline outcome table and stat cards, published to a public GitHub Pages URL (completed 2026-09-25)
-- [ ] **Phase 2: Bonus Comparison** - N slider, three side-by-side tables (baseline / +N hit / +N damage), and the SVG sweep chart with crossover and plateau marking
+- [x] **Phase 2: Bonus Comparison** - N slider, three side-by-side tables (baseline / +N hit / +N damage), and the SVG sweep chart with crossover and plateau marking (completed 2026-09-25)
 - [ ] **Phase 3: Roll-20-Rounds Simulation** - Real dice rolls with a per-round log, realized vs expected (with standard deviation), and stale-result handling
 - [ ] **Phase 4: Designer Explanation & Final Ship** - Live-substituted formulas, generated crossover/plateau copy, suggested explorations, accessibility pass, final public deploy
 
@@ -70,7 +70,7 @@ Plans:
   4. The flat stretches of the attack curve (95% cap reached, or only a nat 20 hits) are shaded and labeled on the chart.
   5. At about 1366 px wide with a d12, the three tables sit side by side. On a narrow screen they stack with no horizontal page scroll.
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -83,7 +83,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-03-PLAN.md — Crossing markers, shaded cap/floor bands, full generated caption, phase verification, ROADMAP SC1/SC3 wording (Wave 3)
+- [x] 02-03-PLAN.md — Crossing markers, shaded cap/floor bands, full generated caption, phase verification, ROADMAP SC1/SC3 wording (Wave 3)
 **UI hint**: yes
 
 ### Phase 3: Roll-20-Rounds Simulation
@@ -127,6 +127,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Live Roll Table, Deployed | 5/5 | Complete    | 2026-09-25 |
-| 2. Bonus Comparison | 2/3 | In Progress|  |
+| 2. Bonus Comparison | 3/3 | Complete   | 2026-09-25 |
 | 3. Roll-20-Rounds Simulation | 0/TBD | Not started | - |
 | 4. Designer Explanation & Final Ship | 0/TBD | Not started | - |
