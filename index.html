@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">
+  <link rel="icon" href="data:,">
+  <title>D&amp;D Combat Roll Simulator</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --font-prose: Georgia, "Palatino Linotype", Palatino, "Book Antiqua", serif;
+      --font-num: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      /* LIGHT: parchment & ink (UI-SPEC Color). Plan 01-04 adds the rest and the dark block. */
+      --paper:       oklch(0.96 0.022 85);
+      --ink:         oklch(0.27 0.035 45);
+      --rule:        oklch(0.30 0.04 40);
+      --accent:      oklch(0.48 0.10 70);
+      --miss-bg:     oklch(0.87 0.006 80);
+      --miss-ink:    oklch(0.45 0.01 80);
+      --heat-lo:     oklch(0.925 0.04 62);
+      --heat-hi:     oklch(0.42 0.16 25);
+      --cell-ink-lo: oklch(0.20 0.03 40);
+      --cell-ink-hi: oklch(1 0 0);
+      --ramp-a: 0.62;
+      --ramp-b: 0.70;
+      --sp-1: 4px; --sp-2: 8px; --sp-3: 16px; --sp-4: 24px; --sp-5: 32px; --sp-6: 48px;
+    }
+    [hidden] { display: none !important; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-prose);
+      font-size: 1rem;
+      line-height: 1.5;
+    }
+    main, footer { max-width: 90rem; margin-inline: auto; padding-inline: var(--sp-3); }
+    main { display: grid; gap: var(--sp-5); padding-top: var(--sp-4); }
+    h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 var(--sp-2); }
+    h2 { font-size: 1rem; line-height: 1.2; font-variant-caps: small-caps; letter-spacing: 0.04em; margin: 0 0 var(--sp-3); }
+    .lede { margin: 0; max-width: 72ch; }
+    .vh {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+
+    /* Control strip (D-01) */
+    .strip {
+      display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-4); align-items: flex-end;
+      padding: var(--sp-3) var(--sp-4);
+      border: 1px solid color-mix(in oklch, var(--ink) 20%, var(--paper));
+      border-radius: 8px;
+    }
+    .group { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+    .group-label { font-size: 0.875rem; font-weight: 700; line-height: 1.4; }
+    .hint { font-weight: 400; font-size: 0.75rem; margin-left: var(--sp-1); }
+    .pair { display: flex; gap: var(--sp-2); align-items: center; }
+    .pair input[type="range"] { flex: 1 1 192px; width: 192px; accent-color: var(--accent); }
+    input[type="number"] {
+      width: 80px; height: 40px; font: inherit; font-family: var(--font-num);
+      font-variant-numeric: tabular-nums; text-align: center;
+      background: var(--paper); color: var(--ink);
+      border: 1px solid var(--ink); border-radius: 4px;
+    }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* Stat cards */
+    #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--sp-3); }
+    .card {
+      display: grid; gap: var(--sp-2); padding: var(--sp-3);
+      border: 1px solid color-mix(in oklch, var(--ink) 20%, var(--paper)); border-radius: 8px;
+    }
+    .card .label { font-size: 0.875rem; line-height: 1.4; }
+    .card .value {
+      font-family: var(--font-num); font-variant-numeric: tabular-nums;
+      font-size: 1.75rem; font-weight: 700; line-height: 1.2; white-space: nowrap;
+    }
+    .card.focal { border-top: 3px solid var(--ink); }
+
+    /* Outcome table (D-18, TABLE-06): explicit width, never width:auto */
+    .table-wrap { container-type: inline-size; overflow-x: auto; }
+    #outcome {
+      --cell: 2.5rem; --rowhead: 2.75rem; --note: 8rem; --row: 1.75rem;
+      border-collapse: collapse;
+      table-layout: fixed;
+      width: calc(var(--rowhead) + var(--cols, 8) * var(--cell) + var(--note));
+      font-size: 0.875rem;
+    }
+    @container (width < 42rem) {
+      #outcome { --cell: 1.5rem; --rowhead: 2rem; --note: 5rem; --row: 1.5rem; font-size: 0.75rem; }
+    }
+    @container (width < 25rem) {
+      #outcome { --cell: 1.25rem; --rowhead: 1.5rem; --note: 4rem; --row: 1.25rem; }
+    }
+    #outcome caption { caption-side: top; text-align: left; font-size: 0.875rem; padding-bottom: var(--sp-2); }
+    #outcome th, #outcome td {
+      font-family: var(--font-num);
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+      padding: 0;
+      height: var(--row);
+      line-height: var(--row);
+      border: 1px solid color-mix(in oklch, var(--ink) 20%, var(--paper));
+    }
+    #outcome thead th { width: var(--cell); }
+    #outcome thead th.corner { width: var(--rowhead); font-size: 0.75rem; white-space: nowrap; overflow: hidden; }
+    #outcome thead th.note, #outcome td.note { width: var(--note); }
+    #outcome td.note {
+      font-family: var(--font-prose); font-style: italic; text-align: left;
+      padding-left: var(--sp-1); white-space: nowrap; overflow: hidden; background: var(--paper);
+    }
+    #outcome tr.threshold td.note { font-weight: 700; }
+    #outcome tr.crit td.note { color: var(--accent); font-weight: 700; }
+    /* Heat ramp (D-08) and miss style (D-09). Class-only selectors so legend swatches can reuse them. */
+    .h {
+      --s: calc(var(--t) * 2 * var(--ramp-a));
+      background: color-mix(in oklch, var(--heat-hi) calc(var(--s) * 100%), var(--heat-lo));
+      color: var(--cell-ink-lo);
+    }
+    .h.hi {
+      --s: calc(var(--ramp-b) + (var(--t) - 0.5) * 2 * (1 - var(--ramp-b)));
+      color: var(--cell-ink-hi);
+    }
+    .m {
+      background: repeating-linear-gradient(135deg, var(--miss-bg) 0 4px,
+        color-mix(in oklch, var(--miss-bg) 85%, var(--ink)) 4px 5px);
+      color: var(--miss-ink);
+    }
+    tr.threshold > * { box-shadow: inset 0 3px 0 0 var(--rule); }
+    tr.crit > * { box-shadow: inset 0 -2px 0 0 var(--accent); }
+    tr.threshold.crit > * { box-shadow: inset 0 3px 0 0 var(--rule), inset 0 -2px 0 0 var(--accent); }
+
+    /* Self-test panel and engine-error banner */
+    #selftest, #engine-error {
+      padding: var(--sp-3); border-radius: 8px;
+      border: 1px solid color-mix(in oklch, var(--ink) 20%, var(--paper));
+      border-left-width: 4px;
+    }
+    #selftest .summary { font-size: 0.875rem; font-weight: 700; margin: 0; }
+    #selftest .why { font-size: 0.75rem; margin: var(--sp-1) 0 var(--sp-2); }
+    #selftest ol { list-style: none; margin: var(--sp-2) 0 0; padding: 0; }
+    #selftest li { font-family: var(--font-num); font-size: 0.75rem; white-space: pre-wrap; }
+    #selftest li.fail { font-weight: 700; }
+
+    footer {
+      margin-top: var(--sp-6); padding-top: var(--sp-3); padding-bottom: var(--sp-3);
+      border-top: 1px solid color-mix(in oklch, var(--ink) 20%, var(--paper));
+      font-size: 0.75rem;
+    }
+    footer p { margin: 0; max-width: 72ch; }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="selftest" hidden aria-label="Self-test results"></section>
+    <div id="engine-error" role="alert" hidden></div>
+
+    <header>
+      <h1>D&amp;D Combat Roll Simulator</h1>
+      <p class="lede">One attack roll, laid out as a table: a d20 to hit against Armor Class, then a damage die. Change the numbers and every outcome updates.</p>
+    </header>
+
+    <noscript><p>This page needs JavaScript to calculate the table. Everything runs in your browser; nothing is sent anywhere.</p></noscript>
+
+    <form id="controls" class="strip" novalidate>
+      <div class="group">
+        <label class="group-label" for="ac-range">Target AC <span class="hint">10 to 30</span></label>
+        <div class="pair">
+          <input type="range" id="ac-range" data-key="ac" min="10" max="30" step="1">
+          <input type="number" id="ac-num" data-key="ac" min="10" max="30" step="1" aria-label="Target AC (exact value)">
+        </div>
+      </div>
+    </form>
+
+    <section id="stats" aria-label="Headline numbers">
+      <div class="card">
+        <span class="label">Hit chance</span>
+        <span class="value" id="stat-hit"></span>
+      </div>
+      <div class="card focal">
+        <span class="label">Expected over 20 rounds</span>
+        <span class="value" id="stat-e20"></span>
+      </div>
+    </section>
+
+    <section id="tables">
+      <h2>Outcome table</h2>
+      <div class="table-wrap">
+        <table id="outcome"><caption></caption><thead></thead><tbody></tbody></table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>D&amp;D 5e rules for a single attack: a natural 1 always misses, a natural 20 always hits and crits, and damage never goes below 0. Every number is exact and computed in your browser. Add ?test to the address to see the self-test.</p>
+  </footer>
+
+  <script id="dice-math">
+// Pure 5e attack-resolution engine: no DOM, no randomness, no formatting.
+// damageFor() is THE rule (RULES-05). Tables, stats, marginals and sweeps all call it.
+const DiceMath = (() => {
+  'use strict';
+  const DICE = Object.freeze([4, 6, 8, 10, 12]);
+  const avg = (x) => (x + 1) / 2;
+
+  // RULES-01: numeric comparison only; a string parameter is a programming error.
+  function assertParams(p) {
+    for (const k of ['ac', 'atk', 'die', 'dmg']) {
+      if (!Number.isInteger(p[k])) {
+        throw new TypeError(`DiceMath: ${k} must be an integer, got ${JSON.stringify(p[k])}`);
+      }
+    }
+  }
+
+  // 'fumble' | 'crit' | 'hit' | 'miss'. Order matters: nat 1, then nat 20, then d20 + atk >= AC (RULES-02).
+  function outcome(d20, atk, ac) {
+    if (d20 === 1) return 'fumble';
+    if (d20 === 20) return 'crit';
+    return d20 + atk >= ac ? 'hit' : 'miss';
+  }
+
+  function isHit(d20, atk, ac) {
+    const o = outcome(d20, atk, ac);
+    return o === 'hit' || o === 'crit';
+  }
+
+  // dieRolls: [k] for a normal hit, [k1, k2] for a crit. Damage bonus added once (RULES-03).
+  // A miss deals 0 (RULES-04) and damage never goes below 0 (5e floor).
+  function damageFor(d20, dieRolls, p) {
+    if (!isHit(d20, p.atk, p.ac)) return 0;
+    let sum = p.dmg;
+    for (const k of dieRolls) sum += k;
+    return Math.max(0, sum);
+  }
+
+  // "hits on N+": the lowest d20 face that hits, clamped to 2..20.
+  const threshold = (p) => Math.min(20, Math.max(2, p.ac - p.atk));
+
+  // 20 rows (d20 = 1..20) x die columns. The crit row displays 2 x face + dmg.
+  function outcomeTable(p) {
+    assertParams(p);
+    const rows = [];
+    for (let r = 1; r <= 20; r++) {
+      const kind = outcome(r, p.atk, p.ac);
+      const cells = [];
+      for (let k = 1; k <= p.die; k++) cells.push(damageFor(r, r === 20 ? [k, k] : [k], p));
+      rows.push({ d20: r, kind, cells });
+    }
+    return rows;
+  }
+
+  // Exact stats. The 20-round expectation is e20Num / e20Den with e20Den = die^2 (integers).
+  // The crit row is enumerated as a true 2dX roll (equals the displayed row whenever dmg >= -2).
+  function stats(p) {
+    const X = p.die;
+    const rows = outcomeTable(p);
+    let hitFaces = 0, num = 0, tableSum = 0;
+    for (const row of rows) {
+      let rowSum = 0;
+      for (const c of row.cells) rowSum += c;
+      tableSum += rowSum;
+      if (row.kind === 'hit') {
+        hitFaces++;
+        num += X * rowSum;
+      } else if (row.kind === 'crit') {
+        hitFaces++;
+        for (let a = 1; a <= X; a++) for (let b = 1; b <= X; b++) num += damageFor(20, [a, b], p);
+      }
+    }
+    const e20 = num / (X * X);
+    return {
+      rows, hitFaces, pHit: hitFaces / 20, pCrit: 1 / 20,
+      e20Num: num, e20Den: X * X, e20, perRound: e20 / 20, tableSum, threshold: threshold(p),
+    };
+  }
+
+  // PROJECT.md closed form. Test oracle only: valid for dmg >= -1 (the 0 floor is non-linear).
+  function closedFormPerRound(p) {
+    let normal = 0;
+    for (let r = 2; r <= 19; r++) if (r + p.atk >= p.ac) normal++;
+    return (normal / 20) * (avg(p.die) + p.dmg) + (1 / 20) * (2 * avg(p.die) + p.dmg);
+  }
+
+  // STAT-03: exact value of the next +1, as 20-round numerators over den = die^2.
+  function marginals(p) {
+    const base = stats(p).e20Num;
+    const hitNum = stats({ ...p, atk: p.atk + 1 }).e20Num - base;
+    const dmgNum = stats({ ...p, dmg: p.dmg + 1 }).e20Num - base;
+    let reason = null;
+    if (hitNum === 0) {
+      if (p.atk >= p.ac - 2) reason = 'cap';                 // already hits on 2+
+      else if (p.ac - (p.atk + 1) >= 20) reason = 'floor';   // +1 still leaves only a nat 20
+      else reason = 'nodmg';                                 // extra hits deal 0 at this penalty
+    }
+    return { hitNum, dmgNum, den: p.die * p.die, reason };
+  }
+
+  // +0..+maxN added to attack vs damage (Phase 2 chart; RULES-08 sanity check now).
+  function sweep(p, maxN = 20) {
+    const attack = [], damage = [];
+    for (let n = 0; n <= maxN; n++) {
+      attack.push(stats({ ...p, atk: p.atk + n }).e20Num);
+      damage.push(stats({ ...p, dmg: p.dmg + n }).e20Num);
+    }
+    return { attack, damage, den: p.die * p.die };
+  }
+
+  return Object.freeze({
+    DICE, avg, assertParams, outcome, isHit, damageFor, threshold,
+    outcomeTable, stats, closedFormPerRound, marginals, sweep,
+  });
+})();
+  </script>
+
+  <script id="view-model">
+// Pure view-model: control spec, the one parser, exact fixed-point formatting, computeView.
+const VM = (() => {
+  'use strict';
+  const CONTROL_SPEC = Object.freeze({
+    ac:  Object.freeze({ min: 10, max: 30 }),
+    die: Object.freeze({ set: Object.freeze([4, 6, 8, 10, 12]) }),
+    atk: Object.freeze({ min: -5, max: 20 }),
+    dmg: Object.freeze({ min: -5, max: 20 }),
+  });
+  const DEFAULT_STATE = Object.freeze({ ac: 15, die: 8, atk: 5, dmg: 0 });   // D-03
+
+  // raw: a control's string value (or a number). Blank / non-numeric -> prev. Never Number('') === 0.
+  function parseControl(key, raw, prev) {
+    const spec = CONTROL_SPEC[key];
+    let n;
+    if (typeof raw === 'number') {
+      n = raw;
+    } else {
+      const s = String(raw ?? '').trim();
+      if (s === '') return prev;
+      n = Number(s);                       // not parseInt: '12abc' must be rejected
+    }
+    if (!Number.isFinite(n)) return prev;
+    const i = Math.round(n);
+    if (spec.set) return spec.set.includes(i) ? i : prev;
+    return Math.min(spec.max, Math.max(spec.min, i));
+  }
+
+  // Exact formatting from a scaled integer: fixed(1575, 3) -> "1.575" (no float toFixed).
+  function fixed(intScaled, decimals) {
+    const neg = intScaled < 0, a = Math.abs(intScaled), p = 10 ** decimals;
+    const whole = Math.trunc(a / p), frac = String(a % p).padStart(decimals, '0');
+    return (neg ? '-' : '') + whole + (decimals ? '.' + frac : '');
+  }
+
+  // A 20-round value in tenths, as an integer.
+  const tenths = (num, den) => Math.round((10 * num) / den);
+
+  function computeView(state) {
+    const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
+    const s = DiceMath.stats(p);
+    const m = DiceMath.marginals(p);
+    const e20T = tenths(s.e20Num, s.e20Den);   // STAT-02: round the 20-round figure once,
+    const mHitT = tenths(m.hitNum, m.den);
+    const mDmgT = tenths(m.dmgNum, m.den);
+    const X = p.die;
+    return {
+      params: p,
+      rows: s.rows,
+      threshold: s.threshold,
+      hitFaces: s.hitFaces,
+      hitPct: s.hitFaces * 5,                                   // exact integer percent
+      e20Text: fixed(e20T, 1),
+      perRoundText: fixed(e20T * 5, 3),                         // ...then per round = tenths x 5 thousandths
+      avgPerHitText: s.hitFaces
+        ? fixed(Math.round((100 * s.e20Num) / (s.e20Den * s.hitFaces)), 2) : '0.00',
+      marg: {
+        hit20: fixed(mHitT, 1), hitRound: fixed(mHitT * 5, 3),
+        dmg20: fixed(mDmgT, 1), dmgRound: fixed(mDmgT * 5, 3),
+        reason: m.reason,
+      },
+      heatMax: Math.max(1, 2 * X + p.dmg),                      // heat domain [0, crit max]
+      critFloorDiffers: s.tableSum * X !== s.e20Num,            // only when dmg <= -3
+    };
+  }
+
+  return Object.freeze({ CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, computeView });
+})();
+  </script>
+
+  <script id="dice-selftest">
+// DOM-free self-test (RULES-08). Runs on every load; also runs unchanged in Node (tools/check-engine.mjs).
+const SelfTest = (() => {
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const t0 = now();
+  const results = [];
+  const check = (name, actual, expected, tol = 1e-9) => {
+    const ok = typeof expected === 'number' && typeof actual === 'number'
+      ? Math.abs(actual - expected) <= tol
+      : Object.is(actual, expected);
+    results.push({ name, ok, actual, expected });
+  };
+  const throwsType = (fn) => {
+    try { fn(); return false; } catch (err) { return err instanceof TypeError; }
+  };
+
+  try {
+    const S = (ac, atk, die, dmg) => DiceMath.stats({ ac, atk, die, dmg });
+
+    check('AC15 +5: hit chance 55%', S(15, 5, 8, 0).pHit, 0.55);
+    check('AC25 +0: hit chance 5% (nat 20 only)', S(25, 0, 8, 0).pHit, 0.05);
+    check('AC15 +0 d8 D+0: E20 = 31.5', S(15, 0, 8, 0).e20, 31.5);
+    check('AC15 +5 d8 D+0: E20 = 54.0', S(15, 5, 8, 0).e20, 54);
+
+    const sw = DiceMath.sweep({ ac: 15, atk: 0, die: 8, dmg: 0 });
+    check('sweep AC15 +0 d8 D+0: attack[0] === damage[0]', sw.attack[0], sw.damage[0]);
+
+    const e0 = S(15, 5, 8, 0), e1 = S(15, 5, 8, 1);
+    check('AC15 +5 d8: E(D+1) - E(D) per round = hit chance', e1.perRound - e0.perRound, e0.pHit);
+
+    check('string AC "15" throws TypeError',
+      throwsType(() => DiceMath.stats({ ac: '15', atk: 5, die: 8, dmg: 0 })), true);
+  } catch (err) {
+    results.push({ name: 'self-test crashed: ' + (err && err.message), ok: false });
+  }
+
+  const failed = results.filter((r) => !r.ok);
+  for (const f of failed) console.error('SELFTEST FAIL:', f.name, '| got', f.actual, '| expected', f.expected);
+  const ms = (now() - t0).toFixed(1);
+  console.info(`SELFTEST ${failed.length ? 'FAILED' : 'PASSED'}: ${results.length - failed.length}/${results.length} (${ms} ms)`);
+  return Object.freeze({ results, passed: results.length - failed.length, failed: failed.length, ms });
+})();
+  </script>
+
+  <script id="app">
+// DOM layer: state, render registry, controls, init, ?test panel.
+const form = document.getElementById('controls');
+const tableEl = document.getElementById('outcome');
+const statHitEl = document.getElementById('stat-hit');
+const statE20El = document.getElementById('stat-e20');
+
+const state = { ...VM.DEFAULT_STATE };
+const RENDERERS = [renderControls, renderStats, renderTable];
+
+let pending = false;
+function setState(patch) {
+  Object.assign(state, patch);
+  scheduleRender();
+}
+function scheduleRender() {
+  if (pending) return;
+  pending = true;
+  requestAnimationFrame(() => { pending = false; render(); });
+}
+function render() {
+  const view = VM.computeView(state);
+  for (const r of RENDERERS) r(view);
+}
+
+// Signed display value: +5, +0, U+2212 for negatives.
+const signed = (n) => (n < 0 ? '−' + Math.abs(n) : '+' + n);
+
+function onControl(e) {
+  const key = e.target.dataset && e.target.dataset.key;
+  if (!key) return;
+  const v = VM.parseControl(key, e.target.value, state[key]);
+  if (v !== state[key]) setState({ [key]: v });
+  else scheduleRender();
+}
+
+function renderControls(view) {
+  for (const el of form.querySelectorAll('[data-key]')) {
+    const v = String(state[el.dataset.key]);
+    if (el.type === 'radio') { el.checked = el.value === v; continue; }
+    if (el === document.activeElement && el.type === 'number') continue;   // never fight the typist
+    if (el.value !== v) el.value = v;
+  }
+}
+
+function renderStats(view) {
+  statHitEl.textContent = view.hitPct + '%';
+  statE20El.textContent = view.e20Text;
+}
+
+function noteFor(row, threshold) {
+  if (row.d20 === 1) return 'auto-miss';
+  if (row.d20 === 20) return 'crit*';
+  if (row.d20 === threshold) return `hits on ${threshold}+`;
+  return '';
+}
+
+// Only numbers and fixed label strings reach innerHTML (T-01-01).
+function renderTable(view) {
+  const { rows, params: p, threshold, heatMax } = view;
+  const head = `<tr><th scope="col" class="corner">d20 \\ d${p.die}</th>` +
+    Array.from({ length: p.die }, (_, i) => `<th scope="col">${i + 1}</th>`).join('') +
+    '<th scope="col" class="note"><span class="vh">Notes</span></th></tr>';
+  const body = rows.map((row) => {
+    const cls = [row.kind, row.d20 === threshold ? 'threshold' : ''].join(' ').trim();
+    const cells = row.cells.map((d) => {
+      if (row.kind === 'miss' || row.kind === 'fumble') return '<td class="m">0</td>';
+      const t = Math.min(1, d / heatMax);
+      return `<td class="h${t >= 0.5 ? ' hi' : ''}" style="--t:${t.toFixed(3)}">${d}</td>`;
+    }).join('');
+    return `<tr class="${cls}"><th scope="row">${row.d20}</th>${cells}<td class="note">${noteFor(row, threshold)}</td></tr>`;
+  }).join('');
+  tableEl.style.setProperty('--cols', String(p.die));
+  tableEl.tHead.innerHTML = head;
+  tableEl.tBodies[0].innerHTML = body;
+  tableEl.caption.textContent =
+    `Damage dealt for every d20 roll (rows) and d${p.die} face (columns). ` +
+    `AC ${p.ac}, attack ${signed(p.atk)}, damage ${signed(p.dmg)}.`;
+}
+
+function fmtValue(v) {
+  if (typeof v === 'string') return JSON.stringify(v);
+  if (Array.isArray(v) || (v && typeof v === 'object')) return JSON.stringify(v);
+  return String(v);
+}
+
+function checkLine(r) {
+  const li = document.createElement('li');
+  if (r.ok) {
+    li.textContent = 'PASS  ' + r.name;
+  } else {
+    li.className = 'fail';
+    const detail = ('actual' in r || 'expected' in r)
+      ? `: got ${fmtValue(r.actual)}, expected ${fmtValue(r.expected)}` : '';
+    li.textContent = 'FAIL  ' + r.name + detail;
+  }
+  return li;
+}
+
+function showSelfTestPanel(st) {
+  const panel = document.getElementById('selftest');
+  const all = st.results;
+  const failed = all.filter((r) => !r.ok).length;
+  const n = all.length;
+  panel.replaceChildren();
+
+  const summary = document.createElement('p');
+  summary.className = 'summary ' + (failed ? 'fail' : 'pass');
+  summary.textContent = failed
+    ? `Self-test FAILED: ${failed} of ${n} checks failed (${st.ms} ms). The numbers on this page may be wrong.`
+    : `Self-test passed: ${n} of ${n} checks (${st.ms} ms)`;
+
+  const why = document.createElement('p');
+  why.className = 'why';
+  why.textContent = 'Shown because the address contains ?test. Normal loads log these results to the browser console.';
+
+  const details = document.createElement('details');
+  details.open = failed > 0;
+  const sum = document.createElement('summary');
+  sum.textContent = `Show all ${n} checks`;
+  const list = document.createElement('ol');
+  for (const r of all) list.append(checkLine(r));
+  details.append(sum, list);
+
+  panel.append(summary, why, details);
+  panel.hidden = false;
+}
+
+function init() {
+  renderControls();                        // D-04: state -> controls, never the reverse
+  form.addEventListener('submit', (e) => e.preventDefault());
+  form.addEventListener('input', onControl);
+  form.addEventListener('change', (e) => {
+    onControl(e);
+    if (e.target.type === 'number' && e.target.dataset.key) {
+      e.target.value = String(state[e.target.dataset.key]);   // normalize the committed box
+    }
+  });
+  render();
+  if (new URLSearchParams(location.search).has('test')) showSelfTestPanel(SelfTest);
+}
+
+init();
+  </script>
+</body>
+</html>

@@ -93,6 +93,11 @@ try {
 if (dump) fs.writeFileSync(dump, dom, 'utf8');
 
 // ---- checks ------------------------------------------------------------------
+// Judge rendered markup only: script and style source text also contains strings
+// like '<th scope="row"', 'Self-test FAILED' and 'crit*', which would fake a match.
+const rendered = dom
+  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+  .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
 const consoleLines = consoleText.split(/\r?\n/).filter((l) => /CONSOLE/.test(l));
 const results = [];
 const check = (name, ok, detail = '') => results.push({ name, ok, detail });
@@ -103,17 +108,17 @@ const bad = /Uncaught|SELFTEST FAIL|Content Security Policy|cannot be parsed|Fai
 const badLines = consoleText.split(/\r?\n/).filter((l) => bad.test(l));
 check('console has no errors', badLines.length === 0, badLines.slice(0, 5).join('\n      '));
 
-const rowHeads = dom.split('<th scope="row"').length - 1;
+const rowHeads = rendered.split('<th scope="row"').length - 1;
 check('DOM has 20 <th scope="row"> headers', rowHeads === 20, `found ${rowHeads}`);
 
 if (testMode) {
   check('self-test panel shows "Self-test passed"',
-    dom.includes('Self-test passed') && !dom.includes('Self-test FAILED'));
+    rendered.includes('Self-test passed') && !rendered.includes('Self-test FAILED'));
 } else {
-  check('self-test panel stays hidden', /<section id="selftest"[^>]*hidden/.test(dom));
+  check('self-test panel stays hidden', /<section id="selftest"[^>]*hidden/.test(rendered));
 }
 
-for (const text of expects) check(`DOM contains ${JSON.stringify(text)}`, dom.includes(text));
+for (const text of expects) check(`DOM contains ${JSON.stringify(text)}`, rendered.includes(text));
 
 console.log(`url: ${url} (${testMode ? 'test' : 'plain'} mode, ${width}px, ${path.basename(browser)})`);
 console.log(`console lines: ${consoleLines.length}`);
