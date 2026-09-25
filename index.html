@@ -102,6 +102,29 @@
       border: 1px solid var(--ink-muted); border-radius: 4px;
     }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    /* Die group (CTRL-02, D-16): a real radio group, one tab stop, arrow keys move the
+       selection. Radios are clipped (.vh), never display:none, so they stay keyboard reachable. */
+    fieldset.dice { border: 0; margin: 0; padding: 0; min-width: 0; }
+    fieldset.dice legend { padding: 0; margin-bottom: var(--sp-2); }
+    .segs { display: flex; }
+    .segs label { position: relative; display: block; }
+    .segs span {
+      display: flex; align-items: center; justify-content: center;
+      width: 48px; height: 40px; margin-left: -1px;
+      font-family: var(--font-num); font-variant-numeric: tabular-nums;
+      font-size: 0.875rem; font-weight: 400; line-height: 1;
+      background: var(--surface); color: var(--ink);
+      border: 1px solid var(--ink-muted);
+      cursor: pointer;
+    }
+    .segs label:first-child span { margin-left: 0; border-radius: 4px 0 0 4px; }
+    .segs label:last-child span { border-radius: 0 4px 4px 0; }
+    .segs input:not(:checked) + span:hover { background: color-mix(in oklch, var(--surface) 85%, var(--ink)); }
+    .segs input:checked + span { background: var(--accent); color: var(--paper); font-weight: 700; }
+    .segs input:focus-visible + span {
+      position: relative; z-index: 1;
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
 
     /* Stat cards */
     #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--sp-3); }
@@ -284,6 +307,24 @@
           <input type="range" id="ac-range" data-key="ac" min="10" max="30" step="1">
           <input type="number" id="ac-num" data-key="ac" min="10" max="30" step="1" aria-label="Target AC (exact value)">
         </div>
+      </div>
+      <fieldset class="group dice">
+        <legend class="group-label">Damage die</legend>
+        <div class="segs">
+          <label><input type="radio" name="die" value="4" data-key="die" class="vh"><span>d4</span></label>
+          <label><input type="radio" name="die" value="6" data-key="die" class="vh"><span>d6</span></label>
+          <label><input type="radio" name="die" value="8" data-key="die" class="vh"><span>d8</span></label>
+          <label><input type="radio" name="die" value="10" data-key="die" class="vh"><span>d10</span></label>
+          <label><input type="radio" name="die" value="12" data-key="die" class="vh"><span>d12</span></label>
+        </div>
+      </fieldset>
+      <div class="group">
+        <label class="group-label" for="atk-num">Attack bonus <span class="hint">−5 to +20</span></label>
+        <input type="number" id="atk-num" data-key="atk" min="-5" max="20" step="1">
+      </div>
+      <div class="group">
+        <label class="group-label" for="dmg-num">Damage bonus <span class="hint">−5 to +20</span></label>
+        <input type="number" id="dmg-num" data-key="dmg" min="-5" max="20" step="1">
       </div>
     </form>
 
@@ -902,6 +943,67 @@ function runUiSmoke() {
     check('table body has 20 rows', bodyRows.length, 20);
     check('every row has 8 hit or miss cells',
       Array.from(bodyRows).every((tr) => tr.querySelectorAll('td.h, td.m').length === 8), true);
+
+    // Bonus steppers and die radios (plan 01-05), through the same delegated handler.
+    // Check names avoid the control label strings so check-page --expect matches the real strip.
+    Object.assign(state, VM.DEFAULT_STATE);
+    render();
+    const atkNum = document.getElementById('atk-num');
+    const dmgNum = document.getElementById('dmg-num');
+    const commit = (el) => el.dispatchEvent(new Event('change', { bubbles: true }));
+
+    send(atkNum, '');
+    render();
+    check('atk box "" keeps atk 5', state.atk, 5);
+    const atkProxy = document.createElement('input');   // number boxes cannot hold "abc"
+    atkProxy.type = 'text';
+    atkProxy.dataset.key = 'atk';
+    form.append(atkProxy);
+    send(atkProxy, 'abc');
+    atkProxy.remove();
+    render();
+    check('atk text "abc" keeps atk 5', state.atk, 5);
+    send(atkNum, '99');
+    render();
+    check('atk box "99" clamps atk to 20', state.atk, 20);
+    commit(atkNum);
+    check('atk box normalizes to "20" on change', atkNum.value, '20');
+    send(atkNum, '-99');
+    render();
+    check('atk box "-99" clamps atk to -5', state.atk, -5);
+    send(atkNum, '2.6');
+    render();
+    check('atk box "2.6" rounds atk to 3', state.atk, 3);
+    send(atkNum, '12');
+    render();
+    check('atk box "12" gives numeric atk 12', typeof state.atk === 'number' && state.atk === 12, true);
+
+    send(dmgNum, '');
+    render();
+    check('dmg box "" keeps dmg 0', state.dmg, 0);
+    send(dmgNum, '99');
+    render();
+    check('dmg box "99" clamps dmg to 20', state.dmg, 20);
+    send(dmgNum, '-99');
+    render();
+    check('dmg box "-99" clamps dmg to -5', state.dmg, -5);
+
+    Object.assign(state, VM.DEFAULT_STATE);
+    render();
+    document.querySelector('input[data-key="die"][value="12"]').click();
+    render();
+    check('die radio 12 click gives die 12', state.die, 12);
+    check('die radio 12: every row has 12 hit or miss cells',
+      Array.from(tableEl.tBodies[0].rows).every((tr) => tr.querySelectorAll('td.h, td.m').length === 12), true);
+    check('die radio 12: corner cell names the d12',
+      tableEl.tHead.querySelector('th.corner').textContent.includes('d12'), true);
+    check('die radio 12 is the checked radio',
+      document.querySelector('input[data-key="die"]:checked').value, '12');
+    document.querySelector('input[data-key="die"][value="4"]').click();
+    render();
+    check('die radio 4 click gives die 4', state.die, 4);
+    Object.assign(state, VM.DEFAULT_STATE);
+    render();
 
     // Table anatomy, legend, footnote (plan 01-04). State is set directly; plan 01-05 adds
     // the control-driven versions. Check names avoid the exact label strings so that
