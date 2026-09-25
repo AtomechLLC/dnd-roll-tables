@@ -34,17 +34,17 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Opening the page with `?test` shows a visible pass/fail panel with every reference assertion passing. A normal load logs the same results to the console.
   5. Typing a blank, non-numeric, or out-of-range value into any control clamps to a valid value. The table never breaks or compares numbers as strings.
 
-**Plans:** 1/5 plans executed
+**Plans:** 3/5 plans executed
 
 Plans:
 **Wave 1**
 
 - [x] 01-01-PLAN.md — Walking-skeleton page: DiceMath engine + VM + self-test + AC control driving a live table, plus dev check tools (Wave 1)
-- [ ] 01-02-PLAN.md — Install gh via winget; single human checkpoint for `gh auth login` (Wave 1, parallel)
+- [x] 01-02-PLAN.md — Install gh via winget; single human checkpoint for `gh auth login` (Wave 1, parallel)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-03-PLAN.md — Publish the skeleton: branch main, .nojekyll, README, public repo, Pages from main /, live verification (Wave 2)
+- [x] 01-03-PLAN.md — Publish the skeleton: branch main, .nojekyll, README, public repo, Pages from main /, live verification (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -113,7 +113,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Live Roll Table, Deployed | 1/5 | In Progress|  |
+| 1. Live Roll Table, Deployed | 3/5 | In Progress|  |
 | 2. Bonus Comparison | 0/TBD | Not started | - |
 | 3. Roll-20-Rounds Simulation | 0/TBD | Not started | - |
 | 4. Designer Explanation & Final Ship | 0/TBD | Not started | - |
