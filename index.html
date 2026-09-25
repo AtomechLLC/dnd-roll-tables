@@ -160,7 +160,7 @@
        (container queries, never viewport media queries). Explicit width, never width:auto.
        overflow-x is a last resort only; the page itself never scrolls sideways. */
     .table-wrap { display: block; container-type: inline-size; overflow-x: auto; }
-    #outcome {
+    .outcome {
       /* wide tier: >= 42rem container (UI-SPEC approved single-table size) */
       --cell: 40px; --row: 28px; --rowhead: 44px; --note: 128px;
       border-collapse: collapse;
@@ -169,12 +169,12 @@
       margin: 0;
       font-size: 0.875rem;
     }
-    #outcome caption {
+    .outcome caption {
       caption-side: top; text-align: left;
       font-size: 0.875rem; font-weight: 400; line-height: 1.4; color: var(--ink-muted);
       padding-bottom: var(--sp-2);
     }
-    #outcome th, #outcome td {
+    .outcome th, .outcome td {
       font-family: var(--font-num);
       font-variant-numeric: tabular-nums;
       font-weight: 400;
@@ -184,23 +184,23 @@
       line-height: var(--row);
       border: 1px solid var(--line);
     }
-    #outcome tr { height: var(--row); line-height: var(--row); }
-    #outcome thead th, #outcome tbody th { background: var(--surface); font-weight: 700; }
-    #outcome thead th { width: var(--cell); border-bottom: 1px solid var(--line); }
+    .outcome tr { height: var(--row); line-height: var(--row); }
+    .outcome thead th, .outcome tbody th { background: var(--surface); font-weight: 700; }
+    .outcome thead th { width: var(--cell); border-bottom: 1px solid var(--line); }
     /* Corner: "d20 \ d12" does not fit one line in the 44px row-header column, so the wide
        tier stacks it (d20 over "\ d12", 12px); mid and narrow hide .cd and show "d20". */
-    #outcome thead th.corner {
+    .outcome thead th.corner {
       width: var(--rowhead); white-space: nowrap; overflow: hidden;
       font-size: 0.75rem; line-height: 12px; text-align: left; padding-inline: 3px;
     }
-    #outcome thead th.corner .cd { display: block; text-align: right; }
-    #outcome thead th.note, #outcome td.note { width: var(--note); }
-    #outcome thead th.note { background: var(--paper); }
-    #outcome td.note {
+    .outcome thead th.corner .cd { display: block; text-align: right; }
+    .outcome thead th.note, .outcome td.note { width: var(--note); }
+    .outcome thead th.note { background: var(--paper); }
+    .outcome td.note {
       font-family: var(--font-prose); font-style: italic; text-align: left;
       padding-left: var(--sp-1); white-space: nowrap; overflow: hidden; background: var(--paper);
     }
-    #outcome tr.fumble th { color: var(--ink-muted); }
+    .outcome tr.fumble th { color: var(--ink-muted); }
     /* Note column labels (D-10) */
     .note-miss { color: var(--ink-muted); font-weight: 400; }
     .note-th { color: var(--ink); font-weight: 700; }
@@ -208,20 +208,20 @@
     /* mid tier (Phase 2 three-up at 1366px) and narrow tier (phones): D-18 compact sizes.
        Kept after the base table rules so equal-specificity overrides win. */
     @container (width < 42rem) {
-      #outcome { --cell: 24px; --row: 24px; --rowhead: 32px; --note: 80px; font-size: 0.75rem; }
-      #outcome thead th.corner { line-height: var(--row); text-align: center; padding-inline: 0; }
-      #outcome thead th.corner .cd { display: none; }
+      .outcome { --cell: 24px; --row: 24px; --rowhead: 32px; --note: 80px; font-size: 0.75rem; }
+      .outcome thead th.corner { line-height: var(--row); text-align: center; padding-inline: 0; }
+      .outcome thead th.corner .cd { display: none; }
     }
     @container (width < 25rem) {
-      #outcome { --cell: 20px; --row: 20px; --rowhead: 24px; --note: 64px; font-size: 0.75rem; }
+      .outcome { --cell: 20px; --row: 20px; --rowhead: 24px; --note: 64px; font-size: 0.75rem; }
       /* "hits on N+" -> "N+": the phrase stays in the DOM and the accessible text; only the
          visual label shortens. Both boxes are pinned to the top of the row-high line box so
          the zero-size hidden text cannot shift the label off center. */
-      #outcome .note-th {
+      .outcome .note-th {
         display: inline-block; vertical-align: top; height: var(--row);
         font-size: 0; line-height: 0;
       }
-      #outcome .note-th::after {
+      .outcome .note-th::after {
         content: attr(data-short) / "";
         display: inline-block; vertical-align: top;
         font-size: 0.75rem; line-height: var(--row);
@@ -273,6 +273,17 @@
       margin: var(--sp-3) 0 0; max-width: 72ch;
       font-size: 0.875rem; line-height: 1.4; color: var(--ink-muted);
     }
+
+    /* Compare section (D-02, D-07, CMP-05). A named container, so the unnamed table-tier
+       queries above keep resolving to each .table-wrap (RESEARCH Pitfall 12). One column,
+       or three at >= 77rem (3 x 400px d12 tables + 2 x 16px); never a 2 + 1 layout. */
+    #compare { container: compare / inline-size; }
+    .trio { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4) var(--sp-3); }
+    @container compare (width >= 77rem) {
+      .trio { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    /* Compact tables stay in the mid (or narrow) tier even when stacked full width. */
+    .trio .table-wrap { max-width: calc(42rem - 1px); }
 
     /* Self-test panel and engine-error banner (UI-SPEC Self-test Panel, States) */
     #selftest, #engine-error {
@@ -386,9 +397,37 @@
       <h2>Outcome table</h2>
       <div id="legend" class="legend"></div>
       <div class="table-wrap">
-        <table id="outcome"><caption></caption><thead></thead><tbody></tbody></table>
+        <table id="outcome" class="outcome"><caption></caption><thead></thead><tbody></tbody></table>
       </div>
       <p id="crit-note" class="footnote"></p>
+    </section>
+
+    <section id="compare" aria-labelledby="compare-h">
+      <h2 id="compare-h">Compare +N to hit vs +N to damage</h2>
+      <p class="section-intro">The same attack three ways: as set above, with +N added to the attack roll, and with +N added to the damage roll. All tables share the color scale in the legend above, so the same damage is the same color everywhere.</p>
+      <form id="compare-controls" class="strip n-strip" novalidate>
+        <div class="group">
+          <label class="group-label" for="n-range">Compare at +N <span class="hint">0 to 20</span></label>
+          <div class="pair">
+            <input type="range" id="n-range" data-key="n" step="1">
+            <output id="n-out" for="n-range"></output>
+          </div>
+        </div>
+      </form>
+      <div class="trio">
+        <div class="cmp">
+          <div class="table-wrap"><table class="outcome" id="cmp-base" aria-describedby="cmp-base-stats"><caption></caption><thead></thead><tbody></tbody></table></div>
+          <p class="cmp-stats" id="cmp-base-stats"></p>
+        </div>
+        <div class="cmp">
+          <div class="table-wrap"><table class="outcome" id="cmp-hit" aria-describedby="cmp-hit-stats"><caption></caption><thead></thead><tbody></tbody></table></div>
+          <p class="cmp-stats" id="cmp-hit-stats"></p>
+        </div>
+        <div class="cmp">
+          <div class="table-wrap"><table class="outcome" id="cmp-dmg" aria-describedby="cmp-dmg-stats"><caption></caption><thead></thead><tbody></tbody></table></div>
+          <p class="cmp-stats" id="cmp-dmg-stats"></p>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -525,7 +564,8 @@ const DiceMath = (() => {
   </script>
 
   <script id="view-model">
-// Pure view-model: control spec, the one parser, exact fixed-point formatting, computeView.
+// Pure view-model: control spec, the one parser, exact fixed-point formatting, and the views:
+// statsView (Phase 1 stats only), compareView (three compact tables), computeView (the page).
 const VM = (() => {
   'use strict';
   const CONTROL_SPEC = Object.freeze({
@@ -533,8 +573,9 @@ const VM = (() => {
     die: Object.freeze({ set: Object.freeze([4, 6, 8, 10, 12]) }),
     atk: Object.freeze({ min: -5, max: 20 }),
     dmg: Object.freeze({ min: -5, max: 20 }),
+    n: Object.freeze({ min: 0, max: 20 }),   // Phase 2 "Compare at +N" (CTRL-04): the one copy of its domain
   });
-  const DEFAULT_STATE = Object.freeze({ ac: 15, die: 8, atk: 5, dmg: 0 });   // D-03
+  const DEFAULT_STATE = Object.freeze({ ac: 15, die: 8, atk: 5, dmg: 0, n: 5 });   // D-03 (Phase 1 and 2)
 
   // raw: a control's string value (or a number). Blank / non-numeric -> prev. Never Number('') === 0.
   function parseControl(key, raw, prev) {
@@ -566,7 +607,10 @@ const VM = (() => {
   // Signed display value: +5, +0, and U+2212 MINUS SIGN for negatives.
   const signed = (n) => (n < 0 ? '−' + Math.abs(n) : '+' + n);
 
-  function computeView(state) {
+  // Stats-only view (Phase 1 cards, big table). The self-test grid and check-engine call it per
+  // combo, so it never pulls in compare or sweep work (RESEARCH Pitfall 4). Its heatMax is the
+  // single-table domain; the page view below replaces it with the shared compare domain.
+  function statsView(state) {
     const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
     const s = DiceMath.stats(p);
     const m = DiceMath.marginals(p);
@@ -598,7 +642,56 @@ const VM = (() => {
     };
   }
 
-  return Object.freeze({ CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, computeView });
+  // Threshold phrase for a compact table's stats line (UI-SPEC Copywriting).
+  const ruleText = (t) => (t === 2 ? 'hits on 2+ (95% cap)' : t === 20 ? 'only a nat 20 hits' : `hits on ${t}+`);
+
+  // CMP-01..04 (D-04, D-06, D-08): Baseline, +N to hit, +N to damage, one DiceMath.stats call
+  // each. Plain values only. heatMax is the true largest cell across the three row sets.
+  // Deltas are displayed variant tenths minus displayed baseline tenths (RESEARCH Pitfall 7).
+  function compareView(p, n) {
+    const specs = [
+      ['base', p, 'Baseline (+0)'],
+      ['hit', { ...p, atk: p.atk + n }, `${signed(n)} to hit`],
+      ['dmg', { ...p, dmg: p.dmg + n }, `${signed(n)} to damage`],
+    ];
+    const tables = {};
+    let heatMax = 1, baseT = 0;
+    for (const [key, q, title] of specs) {
+      const s = DiceMath.stats(q);
+      for (const row of s.rows) for (const c of row.cells) if (c > heatMax) heatMax = c;
+      const t = tenths(s.e20Num, s.e20Den);
+      if (key === 'base') baseT = t;
+      const dT = t - baseT;
+      const rule = ruleText(s.threshold);
+      const totalText = fixed(t, 1);
+      const deltaText = key === 'base' ? null : (dT < 0 ? '−' : '+') + fixed(Math.abs(dT), 1);
+      tables[key] = {
+        params: q,
+        rows: s.rows,
+        threshold: s.threshold,
+        title,
+        hiddenText: `: damage for every d20 roll (rows) and d${q.die} face (columns) at AC ${q.ac}, ` +
+          `attack ${signed(q.atk)}, damage ${signed(q.dmg)}.`,
+        ruleText: rule,
+        totalText,
+        deltaText,
+        statsText: `${rule} · ${totalText} over 20 rounds` + (deltaText === null ? '' : ` · ${deltaText} vs baseline`),
+      };
+    }
+    return { n, heatMax, tables };
+  }
+
+  // The page view (D-08, D-16): stats view plus the compare block. The big table and the one
+  // legend use the shared compare domain, so the same number is the same color everywhere.
+  function computeView(state) {
+    const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
+    const compare = compareView(p, state.n);
+    return { ...statsView(state), heatMax: compare.heatMax, compare };
+  }
+
+  return Object.freeze({
+    CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, compareView, computeView,
+  });
 })();
   </script>
 
@@ -626,7 +719,7 @@ const SelfTest = (() => {
     const S = (ac, atk, die, dmg) => DiceMath.stats({ ac, atk, die, dmg });
     const T = (ac, atk, die, dmg) => DiceMath.outcomeTable({ ac, atk, die, dmg });
     const M = (ac, atk, die, dmg) => DiceMath.marginals({ ac, atk, die, dmg });
-    const V = (ac, atk, die, dmg) => VM.computeView({ ac, atk, die, dmg });
+    const V = (ac, atk, die, dmg) => VM.statsView({ ac, atk, die, dmg });
 
     // Hit chance by counting faces (RULES-01, RULES-02, RULES-06)
     check('AC15 +5: hit chance 55%', S(15, 5, 8, 0).pHit, 0.55);
@@ -743,7 +836,7 @@ const SelfTest = (() => {
         if (s.tableSum * die !== s.e20Num) badSum++;
       }
       // STAT-02: the displayed per-round value x 20 must give the displayed 20-round value
-      const { e20Text, perRoundText } = VM.computeView(p);
+      const { e20Text, perRoundText } = VM.statsView(p);
       if (VM.fixed(Math.round(Number(perRoundText) * 200), 1) !== e20Text) badFmt++;
     }
     check(`grid: 5% <= hit chance <= 95% (${nAll} combos)`, badClamp, 0);
@@ -882,11 +975,20 @@ const margHitNEl = document.getElementById('marg-hit-n');
 const margDmgVEl = document.getElementById('marg-dmg-v');
 const legendEl = document.getElementById('legend');
 const critNoteEl = document.getElementById('crit-note');
+// Compare section (Phase 2): a second control root plus three compact tables.
+const compareForm = document.getElementById('compare-controls');
+const nRangeEl = document.getElementById('n-range');
+const nOutEl = document.getElementById('n-out');
+const CMP_KEYS = ['base', 'hit', 'dmg'];
+const cmpEls = Object.fromEntries(CMP_KEYS.map((k) => [k, {
+  table: document.getElementById('cmp-' + k),
+  stats: document.getElementById('cmp-' + k + '-stats'),
+}]));
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
 const state = {};
-const RENDERERS = [renderControls, renderStats, renderTable, renderLegend, renderFootnote];
+const RENDERERS = [renderControls, renderStats, renderTable, renderLegend, renderFootnote, renderCompare];
 
 let pending = false;
 function setState(patch) {
@@ -915,13 +1017,22 @@ function onControl(e) {
   else scheduleRender();
 }
 
+function onChange(e) {
+  onControl(e);
+  if (e.target.type === 'number' && e.target.dataset.key) {
+    e.target.value = String(state[e.target.dataset.key]);   // normalize the committed box
+  }
+}
+
+// Every control on the page, in both control roots (RESEARCH Pattern 1).
 function renderControls(view) {
-  for (const el of form.querySelectorAll('[data-key]')) {
+  for (const el of document.querySelectorAll('[data-key]')) {
     const v = String(state[el.dataset.key]);
     if (el.type === 'radio') { el.checked = el.value === v; continue; }
     if (el === document.activeElement && el.type === 'number') continue;   // never fight the typist
     if (el.value !== v) el.value = v;
   }
+  nOutEl.textContent = signed(state.n);
 }
 
 function setCard(id, value, sub) {
@@ -977,11 +1088,13 @@ function noteFor(row, threshold) {
   return '';
 }
 
-// Only numbers and fixed label strings reach innerHTML (T-01-01).
-function renderTable(view) {
-  const { rows, params: p, threshold, heatMax } = view;
-  const head = `<tr><th scope="col" class="corner">d20<span class="cd"> \\ d${p.die}</span></th>` +
-    Array.from({ length: p.die }, (_, i) => `<th scope="col">${i + 1}</th>`).join('') +
+// One renderer for all four tables (D-17). Only numbers and fixed label strings reach
+// innerHTML (T-01-01, T-02-01); captions use textContent, and the optional hidden caption
+// suffix is a .vh span built with createElement.
+function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captionHidden }) {
+  const X = Number(die) | 0;
+  const head = `<tr><th scope="col" class="corner">d20<span class="cd"> \\ d${X}</span></th>` +
+    Array.from({ length: X }, (_, i) => `<th scope="col">${i + 1}</th>`).join('') +
     '<th scope="col" class="note"><span class="vh">Notes</span></th></tr>';
   const body = rows.map((row) => {
     const cls = [row.kind, row.d20 === threshold ? 'threshold' : ''].join(' ').trim();
@@ -992,12 +1105,49 @@ function renderTable(view) {
     }).join('');
     return `<tr class="${cls}"><th scope="row">${row.d20}</th>${cells}<td class="note">${noteFor(row, threshold)}</td></tr>`;
   }).join('');
-  tableEl.style.setProperty('--cols', String(p.die));
-  tableEl.tHead.innerHTML = head;
-  tableEl.tBodies[0].innerHTML = body;
-  tableEl.caption.textContent =
-    `Damage dealt for every d20 roll (rows) and d${p.die} face (columns). ` +
-    `AC ${p.ac}, attack ${signed(p.atk)}, damage ${signed(p.dmg)}.`;
+  el.style.setProperty('--cols', String(X));
+  el.tHead.innerHTML = head;
+  el.tBodies[0].innerHTML = body;
+  if (captionHidden === undefined) {
+    el.caption.textContent = caption;
+  } else {
+    const vh = document.createElement('span');
+    vh.className = 'vh';
+    vh.textContent = captionHidden;
+    el.caption.replaceChildren(document.createTextNode(caption), vh);
+  }
+}
+
+// The Phase 1 study table: same caption as before (D-01), shared heat domain (D-08).
+function renderTable(view) {
+  const p = view.params;
+  renderOutcomeTable(tableEl, {
+    rows: view.rows, die: p.die, threshold: view.threshold, heatMax: view.heatMax,
+    caption: `Damage dealt for every d20 roll (rows) and d${p.die} face (columns). ` +
+      `AC ${p.ac}, attack ${signed(p.atk)}, damage ${signed(p.dmg)}.`,
+  });
+}
+
+// CMP-01..04: three compact tables on the shared scale, each with its stats line
+// (rule · total over 20 rounds · delta vs baseline), built with createElement/textContent.
+function renderCompare(view) {
+  const { heatMax, tables } = view.compare;
+  const num = (text) => {
+    const b = document.createElement('b');
+    b.className = 'num';
+    b.textContent = text;
+    return b;
+  };
+  for (const key of CMP_KEYS) {
+    const t = tables[key];
+    renderOutcomeTable(cmpEls[key].table, {
+      rows: t.rows, die: t.params.die, threshold: t.threshold, heatMax,
+      caption: t.title, captionHidden: t.hiddenText,
+    });
+    const parts = [t.ruleText + ' · ', num(t.totalText), ' over 20 rounds'];
+    if (t.deltaText !== null) parts.push(' · ', num(t.deltaText), ' vs baseline');
+    cmpEls[key].stats.replaceChildren(...parts);
+  }
 }
 
 // Legend (TABLE-05): built with createElement / textContent / style.setProperty only.
@@ -1026,7 +1176,7 @@ function renderLegend(view) {
     ramp.append(swatch(t >= 0.5 ? 'h hi' : 'h', String(Math.round(t * view.heatMax)), t));
   }
   legendEl.replaceChildren(
-    legendItem(ramp, 'Hit damage, low to high'),
+    legendItem(ramp, 'Hit damage, low to high (one scale for every table on the page)'),
     legendItem(swatch('m', '0'), 'Miss: always 0, whatever the die shows'),
     legendItem(swatch('h hi crit', '', 1), 'Natural 20: crit, shown as 2 × face + damage bonus*'),
     legendItem(swatch('threshold', ''), 'Rule: first d20 roll that hits'),
@@ -1437,16 +1587,16 @@ function init() {
     return;
   }
 
+  // The N slider's range comes only from CONTROL_SPEC.n (IN-04: no second copy in the markup).
+  nRangeEl.min = String(VM.CONTROL_SPEC.n.min);
+  nRangeEl.max = String(VM.CONTROL_SPEC.n.max);
   Object.assign(state, VM.DEFAULT_STATE);
   renderControls();                        // D-04: state -> controls, never the reverse
-  form.addEventListener('submit', (e) => e.preventDefault());
-  form.addEventListener('input', onControl);
-  form.addEventListener('change', (e) => {
-    onControl(e);
-    if (e.target.type === 'number' && e.target.dataset.key) {
-      e.target.value = String(state[e.target.dataset.key]);   // normalize the committed box
-    }
-  });
+  for (const root of [form, compareForm]) {   // two control roots, one handler (Pattern 1)
+    root.addEventListener('submit', (e) => e.preventDefault());
+    root.addEventListener('input', onControl);
+    root.addEventListener('change', onChange);
+  }
   render();
   if (testMode) showSelfTestPanel(SelfTest, runUiSmoke());
 }

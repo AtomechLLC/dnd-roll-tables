@@ -132,7 +132,7 @@ for (let ac = 10; ac <= 30; ac++) {
 
         if (dmg >= -2 && s.tableSum * die !== s.e20Num) record('e', p, `tableSum*die ${s.tableSum * die} vs e20Num ${s.e20Num}`);
 
-        const view = VM.computeView(p);
+        const view = VM.statsView(p);
         const back = VM.fixed(Math.round(Number(view.perRoundText) * 200), 1);
         if (back !== view.e20Text) record('f', p, `perRound ${view.perRoundText} x 20 -> ${back} vs ${view.e20Text}`);
 
