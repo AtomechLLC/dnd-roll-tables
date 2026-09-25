@@ -362,6 +362,8 @@
       paint-order: stroke; stroke: var(--paper); stroke-width: 3px; stroke-linejoin: round;
     }
     .chart .cross { r: 7px; }
+    /* The label offsets (20 below, 12 above) fit the base 11.2-unit text and 7-unit ring. The
+       tiers grow both, so each tier nudges the label away from its ring by the growth. */
     /* Hover readout (D-13). Vertical swipes scroll the page, horizontal drags scrub the
        readout. The panel reserves its height so hovering never shifts the page. No motion. */
     .plot { touch-action: pan-y; }
@@ -377,17 +379,23 @@
       .chart text { font-size: 14px; }
       .chart .ndot { r: 6px; }
       .chart .cross { r: 8px; }
+      .chart .cross-label.below { transform: translateY(2px); }
+      .chart .cross-label.above { transform: translateY(-2px); }
     }
     @container chart (width < 35rem) {
       .chart text { font-size: 17.5px; }
       .chart .ndot { r: 7px; }
       .chart .cross { r: 9px; }
+      .chart .cross-label.below { transform: translateY(6px); }
+      .chart .cross-label.above { transform: translateY(-4px); }
       .readout { min-height: calc(3em + 18px); }
     }
     @container chart (width < 28rem) {
       .chart text { font-size: 24px; }
       .chart .ndot { r: 9px; }
       .chart .cross { r: 12px; }
+      .chart .cross-label.below { transform: translateY(13px); }
+      .chart .cross-label.above { transform: translateY(-8px); }
       .chart .direct { display: none; }
     }
 
@@ -1815,9 +1823,12 @@ function renderChart(view) {
     return ring;
   }));
   chart.crossLabels.replaceChildren(...rings.map(({ m, cx, cy }) => {
-    const ly = cy + 20 > 330 ? cy - 12 : cy + 20;
+    const below = cy + 20 <= 330;
+    const ly = below ? cy + 20 : cy - 12;
     const [lx, anchor] = cx >= PLOT_R - 40 ? [PLOT_R, 'end'] : cx <= PLOT_L + 40 ? [PLOT_L, 'start'] : [cx, 'middle'];
-    return svgEl('text', { class: 'cross-label', x: lx.toFixed(2), y: ly.toFixed(2), 'text-anchor': anchor }, m.label);
+    return svgEl('text', {
+      class: `cross-label ${below ? 'below' : 'above'}`, x: lx.toFixed(2), y: ly.toFixed(2), 'text-anchor': anchor,
+    }, m.label);
   }));
 
   chartCaptionEl.textContent = c.caption;
