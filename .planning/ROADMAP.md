@@ -30,7 +30,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The stat cards match the reference values: AC 15 / +5 shows 55% hit chance, AC 25 / +0 shows 5%, AC 15 / +0 / d8 shows 31.5 over 20 rounds, and AC 15 / +5 / d8 shows 54.0. The displayed per-round figure x 20 equals the displayed 20-round figure. The marginal readout shows what the next +1 to hit and the next +1 to damage are worth, with +1 to hit reading 0 when capped.
   4. Opening the page with `?test` shows a visible pass/fail panel with every reference assertion passing. A normal load logs the same results to the console.
   5. Typing a blank, non-numeric, or out-of-range value into any control clamps to a valid value. The table never breaks or compares numbers as strings.
-**Plans**: TBD
+**Plans:** 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Walking-skeleton page: DiceMath engine + VM + self-test + AC control driving a live table, plus dev check tools (Wave 1)
+- [ ] 01-02-PLAN.md — Install gh via winget; single human checkpoint for `gh auth login` (Wave 1, parallel)
+- [ ] 01-03-PLAN.md — Publish the skeleton: branch main, .nojekyll, README, public repo, Pages from main /, live verification (Wave 2)
+- [ ] 01-04-PLAN.md — Themed, readable table: parchment/candlelit tokens, heat ramp, labels, legend, crit footnote, d12 size tiers (Wave 3)
+- [ ] 01-05-PLAN.md — Die buttons, bonus steppers, six stat cards, next-+1 readout; re-ship and verify the live URL (Wave 4)
 **UI hint**: yes
 
 ### Phase 2: Bonus Comparison
@@ -81,7 +88,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Live Roll Table, Deployed | 0/TBD | Not started | - |
+| 1. Live Roll Table, Deployed | 0/5 | Planned | - |
 | 2. Bonus Comparison | 0/TBD | Not started | - |
 | 3. Roll-20-Rounds Simulation | 0/TBD | Not started | - |
 | 4. Designer Explanation & Final Ship | 0/TBD | Not started | - |
