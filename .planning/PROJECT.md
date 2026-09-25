@@ -41,7 +41,8 @@ A designer can see, in one glance at a live table and a curve, why attack bonuse
 - GitHub Pages hosting drives the constraint of static files only. A single `index.html` with inline CSS and JS is the whole deliverable, so no package.json, no bundler.
 - The line chart is hand-drawn SVG since no chart library is used. Two series, 21 points each, is small enough for this.
 - D&D 5e rules of note: attack hits if d20 + bonus >= AC; natural 20 auto-hits and is a critical hit (roll damage dice twice, add modifiers once); natural 1 auto-misses. Hit chance is therefore clamped between 5% and 95% regardless of bonus.
-- The core insight the page should deliver: with a d20, each +1 to hit adds a flat 5% hit chance (until the cap) times average damage, whereas each +1 to damage adds hit chance times 1. So attack bonus is worth more when average damage is high and hit chance is low; damage bonus wins when hit chance is already high. The crossover moves with AC and die size.
+- The core insight the page should deliver: with a d20, each +1 to hit adds a flat 5% hit chance (while unclamped) times (average die + damage bonus), whereas each +1 to damage adds P(any hit) times 1. So +1 to hit wins only while (avg + D) > 20 × P(hit), which at common settings (AC 15, d8) is never true: damage bonus leads at every N. A crossover appears only at high AC or with a big die (e.g. AC 25, d12). The page must treat zero, one, or two crossings as normal states.
+- Research (2026-09-24) lives in `.planning/research/`. Environment notes from it: gh CLI is not installed on this machine, the repo branch is `master` and must be renamed to `main`, GitHub Pages has no gh subcommand and is enabled via the REST API, and the repo must be public.
 - Expected damage per round formula (single die of size X, attack bonus A, damage bonus D, AC C):
   - P(crit) = 1/20
   - P(normal hit) = (count of d20 values r in 2..19 with r + A >= C) / 20
@@ -65,6 +66,10 @@ A designer can see, in one glance at a live table and a curve, why attack bonuse
 | Both exact expected values and a roll-it simulation | Exact math teaches the lesson; the simulation shows variance so designers do not over-trust averages | — Pending |
 | AC as a live slider, die as selectable d4–d12 | The crossover point between hit bonus and damage bonus moves with both; users need to see it move | — Pending |
 | Audience is game designers, formulas shown | Sets the tone: explain the why, not just the number | — Pending |
+| Crit row in the table shows 2 × face + damage bonus with a footnote; the simulator rolls two real dice | Easiest to read in a one-column-per-face table and keeps table average = expected value; the footnote and simulator keep the real rule honest | — Pending |
+| Classic inline `<script>` blocks, not ES modules | Blocks share globals for the self-test and the page works over file:// | — Pending |
+| Deploy a minimal skeleton to Pages at the end of Phase 1 | Front-loads gh CLI install, branch rename, and Pages API friction while the code is small | — Pending |
+| Crossover marker and copy handle 0, 1, or 2 crossings | Research showed the most common settings have no crossover; asserting one would be wrong | — Pending |
 
 ## Evolution
 
@@ -84,4 +89,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-24 after initialization*
+*Last updated: 2026-09-24 after research and requirements*
