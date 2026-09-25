@@ -64,9 +64,9 @@ Plans:
 **Requirements**: CTRL-04, CHART-01, CHART-02, CHART-03, CHART-04, CHART-05, CMP-01, CMP-02, CMP-03, CMP-04, CMP-05
 **Success Criteria** (what must be TRUE):
 
-  1. Moving the N slider updates three tables: baseline, +N to hit, and +N to damage. They share one color scale, so the damage increase shows up as a color shift. Each table shows its own hit-threshold rule and 20-round expected total. Rows that flipped from miss to hit are highlighted in the +N-to-hit table, and the +N-to-damage table marks its uniform per-cell increase.
+  1. Moving the N slider updates three tables: baseline, +N to hit, and +N to damage. They share one color scale, so the damage increase shows up as a color shift. Each table shows its own hit-threshold rule and 20-round expected total. The +N tables show the plain resulting damage in every cell with no diff highlighting (CMP-04 as amended 2026-09-25); the shift shows through the values, the shared color scale, each table's own threshold rule, and each table's 20-round total with its delta vs baseline.
   2. The SVG chart plots expected 20-round damage for N = 0..20 with two curves (bonus on attack, bonus on damage). The curves start at the same point at N = 0, and the chart has labeled axes, ticks, a legend, and a vertical marker that follows the current N.
-  3. At AC 15 / d8 / +0 / +0 the chart shows no crossover marker, and its caption says the damage bonus leads at every N. At AC 25 / d12 the crossing is marked. Every setting with zero, one, or two crossings renders without errors or false markers.
+  3. At AC 15 / d8 / +0 / +0 the chart shows no crossover marker, and its caption says the damage bonus leads at every N. At AC 25 / d12 the crossing is marked. Within N = 0..20 every setting has zero or one crossing (checked over all 70,980 settings), and both render without errors or false markers; the two-crossing code path stays generic and is tested with synthetic series.
   4. The flat stretches of the attack curve (95% cap reached, or only a nat 20 hits) are shaded and labeled on the chart.
   5. At about 1366 px wide with a d12, the three tables sit side by side. On a narrow screen they stack with no horizontal page scroll.
 
