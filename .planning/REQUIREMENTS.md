@@ -121,13 +121,59 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (filled by roadmap) | | |
+| RULES-01 | Phase 1 | Pending |
+| RULES-02 | Phase 1 | Pending |
+| RULES-03 | Phase 1 | Pending |
+| RULES-04 | Phase 1 | Pending |
+| RULES-05 | Phase 1 | Pending |
+| RULES-06 | Phase 1 | Pending |
+| RULES-07 | Phase 1 | Pending |
+| RULES-08 | Phase 1 | Pending |
+| CTRL-01 | Phase 1 | Pending |
+| CTRL-02 | Phase 1 | Pending |
+| CTRL-03 | Phase 1 | Pending |
+| CTRL-04 | Phase 2 | Pending |
+| CTRL-05 | Phase 1 | Pending |
+| TABLE-01 | Phase 1 | Pending |
+| TABLE-02 | Phase 1 | Pending |
+| TABLE-03 | Phase 1 | Pending |
+| TABLE-04 | Phase 1 | Pending |
+| TABLE-05 | Phase 1 | Pending |
+| TABLE-06 | Phase 1 | Pending |
+| STAT-01 | Phase 1 | Pending |
+| STAT-02 | Phase 1 | Pending |
+| STAT-03 | Phase 1 | Pending |
+| CHART-01 | Phase 2 | Pending |
+| CHART-02 | Phase 2 | Pending |
+| CHART-03 | Phase 2 | Pending |
+| CHART-04 | Phase 2 | Pending |
+| CHART-05 | Phase 2 | Pending |
+| CMP-01 | Phase 2 | Pending |
+| CMP-02 | Phase 2 | Pending |
+| CMP-03 | Phase 2 | Pending |
+| CMP-04 | Phase 2 | Pending |
+| CMP-05 | Phase 2 | Pending |
+| SIM-01 | Phase 3 | Pending |
+| SIM-02 | Phase 3 | Pending |
+| SIM-03 | Phase 3 | Pending |
+| SIM-04 | Phase 3 | Pending |
+| SIM-05 | Phase 3 | Pending |
+| SIM-06 | Phase 3 | Pending |
+| COPY-01 | Phase 4 | Pending |
+| COPY-02 | Phase 4 | Pending |
+| COPY-03 | Phase 4 | Pending |
+| COPY-04 | Phase 4 | Pending |
+| COPY-05 | Phase 4 | Pending |
+| DEPLOY-01 | Phase 1 | Pending |
+| DEPLOY-02 | Phase 1 | Pending |
+| DEPLOY-03 | Phase 1 | Pending |
+| DEPLOY-04 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 45 total
-- Mapped to phases: 0
-- Unmapped: 45
+- v1 requirements: 47 total (the initial count of 45 was a miscount; 8 RULES + 5 CTRL + 6 TABLE + 3 STAT + 5 CHART + 5 CMP + 6 SIM + 5 COPY + 4 DEPLOY = 47)
+- Mapped to phases: 47
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-09-24 after initial definition*
+*Last updated: 2026-09-24 after roadmap creation (traceability filled, 4 phases)*
