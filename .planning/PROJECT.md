@@ -12,19 +12,18 @@ A designer can see, in one glance at a live table and a curve, why attack bonuse
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Live controls: target AC (slider + number, 10 to 30), damage die (d4 to d12 buttons), attack bonus, damage bonus (-5 to +20) — Validated in Phase 1: Live Roll Table, Deployed
+- [x] 2D outcome table: rows = d20 result (1 to 20), columns = dX result (1 to X); cell shows damage dealt, 0 on a miss — Validated in Phase 1
+- [x] Rules modeled: natural 20 always hits and doubles damage dice (bonus not doubled); natural 1 always misses; otherwise d20 + attack bonus >= AC hits; damage never below 0 — Validated in Phase 1 (65-check self-test, 70,980-combination sweep)
+- [x] Exact math: hit chance, average damage per round, expected damage over 20 rounds, derived from the table (not Monte Carlo) — Validated in Phase 1 (code review WR-01: the displayed per-round figure is derived from the rounded 20-round total, so its third decimal can be off; fix pending)
 
 ### Active
 
-- [ ] Live controls: target AC (slider/input, roughly 10 to 25), damage die (d4, d6, d8, d10, d12), attack bonus, damage bonus
-- [ ] 2D outcome table: rows = d20 result (1 to 20), columns = dX result (1 to X); cell shows damage dealt, 0 on a miss
-- [ ] Rules modeled: natural 20 always hits and doubles damage dice (bonus not doubled); natural 1 always misses; otherwise d20 + attack bonus >= AC hits
-- [ ] Exact math: hit chance, average damage per round, expected damage over 20 rounds, derived from the table (not Monte Carlo)
 - [ ] Simulation: a "roll 20 rounds" button that actually rolls the dice and shows the realized total alongside the expected value
 - [ ] Line chart: x-axis bonus 0 to +20, two curves for expected 20-round damage when the bonus is on the attack roll vs on the damage roll, at the current AC and die
 - [ ] Side-by-side 2D tables: baseline (+0), with +N to hit, with +N to damage, so the shift is visible cell by cell
 - [ ] Explanatory text for game designers: formulas shown, why attack bonus plateaus, why damage bonus is linear, where the crossover sits
-- [ ] Deployed to GitHub Pages: repo created, site pushed, Pages enabled, public URL works
+- [ ] Deployed to GitHub Pages: repo created, site pushed, Pages enabled, public URL works — Deferred 2026-09-25: user chose local git only. Local prep is done (branch `main`, `.nojekyll`, README); gh CLI is installed but not authenticated.
 
 ### Out of Scope
 
@@ -60,15 +59,17 @@ A designer can see, in one glance at a live table and a curve, why attack bonuse
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Single index.html, vanilla JS, no build | GitHub Pages serves it directly; nothing to install or maintain | — Pending |
+| Single index.html, vanilla JS, no build | GitHub Pages serves it directly; nothing to install or maintain | ✓ Good (Phase 1: one file, CSP blocks outside requests, works from disk) |
 | Inline SVG for the line chart, no chart library | User chose no CDN deps; 2 series x 21 points is trivial to draw by hand | — Pending |
-| Model nat 20 crit (double dice) and nat 1 auto-miss | Matches 5e and produces the 5%–95% hit-chance clamp that makes the attack-bonus plateau visible | — Pending |
+| Model nat 20 crit (double dice) and nat 1 auto-miss | Matches 5e and produces the 5%–95% hit-chance clamp that makes the attack-bonus plateau visible | ✓ Good (Phase 1: stats use a true 2dX crit; table crit row shows 2 × face + D) |
 | Both exact expected values and a roll-it simulation | Exact math teaches the lesson; the simulation shows variance so designers do not over-trust averages | — Pending |
-| AC as a live slider, die as selectable d4–d12 | The crossover point between hit bonus and damage bonus moves with both; users need to see it move | — Pending |
+| AC as a live slider, die as selectable d4–d12 | The crossover point between hit bonus and damage bonus moves with both; users need to see it move | ✓ Good (Phase 1) |
 | Audience is game designers, formulas shown | Sets the tone: explain the why, not just the number | — Pending |
 | Crit row in the table shows 2 × face + damage bonus with a footnote; the simulator rolls two real dice | Easiest to read in a one-column-per-face table and keeps table average = expected value; the footnote and simulator keep the real rule honest | — Pending |
-| Classic inline `<script>` blocks, not ES modules | Blocks share globals for the self-test and the page works over file:// | — Pending |
-| Deploy a minimal skeleton to Pages at the end of Phase 1 | Front-loads gh CLI install, branch rename, and Pages API friction while the code is small | — Pending |
+| Classic inline `<script>` blocks, not ES modules | Blocks share globals for the self-test and the page works over file:// | ✓ Good (Phase 1: four blocks, engine → self-test → view-model → app) |
+| Deploy a minimal skeleton to Pages at the end of Phase 1 | Front-loads gh CLI install, branch rename, and Pages API friction while the code is small | ⚠ Revised (gh installed and branch renamed, but the user chose local git only at the auth checkpoint; publish deferred) |
+| Local git only for now; GitHub publish deferred (2026-09-25) | User declined the `gh auth login` step mid-Phase 1; nothing about the page depends on being published | — Pending (re-run plan 01-03 task 2 when ready to deploy) |
+| Tabletop theme: parchment/ink light, candlelit dark, blood-red heat ramp, serif prose, tabular numerals | Chosen in Phase 1 discussion; contrast kept at 4.5:1+ via a mid-ramp text flip | ✓ Good (Phase 1) |
 | Crossover marker and copy handle 0, 1, or 2 crossings | Research showed the most common settings have no crossover; asserting one would be wrong | — Pending |
 
 ## Evolution
@@ -89,4 +90,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-24 after research and requirements*
+*Last updated: 2026-09-25 after Phase 1 completion (local git only; publish deferred)*
