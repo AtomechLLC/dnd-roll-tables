@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Opening the page with `?test` shows a visible pass/fail panel with every reference assertion passing. A normal load logs the same results to the console.
   5. Typing a blank, non-numeric, or out-of-range value into any control clamps to a valid value. The table never breaks or compares numbers as strings.
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 **Wave 1**
@@ -48,7 +48,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 01-04-PLAN.md — Themed, readable table: parchment/candlelit tokens, heat ramp, labels, legend, crit footnote, d12 size tiers (Wave 3)
+- [x] 01-04-PLAN.md — Themed, readable table: parchment/candlelit tokens, heat ramp, labels, legend, crit footnote, d12 size tiers (Wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -113,7 +113,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Live Roll Table, Deployed | 3/5 | In Progress|  |
+| 1. Live Roll Table, Deployed | 4/5 | In Progress|  |
 | 2. Bonus Comparison | 0/TBD | Not started | - |
 | 3. Roll-20-Rounds Simulation | 0/TBD | Not started | - |
 | 4. Designer Explanation & Final Ship | 0/TBD | Not started | - |
