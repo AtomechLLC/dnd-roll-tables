@@ -54,7 +54,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **CMP-01**: Three outcome tables render side by side: baseline, baseline with +N to hit, baseline with +N to damage
 - [ ] **CMP-02**: All three tables share one color-scale domain (max computed across all three before rendering) so a cell shift is visible as a color shift
 - [ ] **CMP-03**: Each comparison table shows its own hit threshold rule and its own expected 20-round total under it
-- [ ] **CMP-04**: Rows that flipped from miss to hit in the +N-to-hit table are highlighted, and the +N-to-damage table marks its uniform per-cell increase
+- [ ] **CMP-04**: The +N-to-hit and +N-to-damage tables show the resulting damage in every cell with no diff highlighting (amended 2026-09-25 in the Phase 2 discussion); the shift is conveyed by the values, the shared color scale (CMP-02), each table's own threshold rule (CMP-03), and each caption's 20-round total with its delta vs baseline
 - [ ] **CMP-05**: The three tables sit side by side on a laptop-width viewport (about 1366 px) at d12 and stack vertically on narrow screens without horizontal page scroll
 
 ### Simulation
