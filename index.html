@@ -402,22 +402,128 @@ const SelfTest = (() => {
     try { fn(); return false; } catch (err) { return err instanceof TypeError; }
   };
 
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
   try {
     const S = (ac, atk, die, dmg) => DiceMath.stats({ ac, atk, die, dmg });
+    const T = (ac, atk, die, dmg) => DiceMath.outcomeTable({ ac, atk, die, dmg });
+    const M = (ac, atk, die, dmg) => DiceMath.marginals({ ac, atk, die, dmg });
+    const V = (ac, atk, die, dmg) => VM.computeView({ ac, atk, die, dmg });
 
+    // Hit chance by counting faces (RULES-01, RULES-02, RULES-06)
     check('AC15 +5: hit chance 55%', S(15, 5, 8, 0).pHit, 0.55);
     check('AC25 +0: hit chance 5% (nat 20 only)', S(25, 0, 8, 0).pHit, 0.05);
-    check('AC15 +0 d8 D+0: E20 = 31.5', S(15, 0, 8, 0).e20, 31.5);
-    check('AC15 +5 d8 D+0: E20 = 54.0', S(15, 5, 8, 0).e20, 54);
-
-    const sw = DiceMath.sweep({ ac: 15, atk: 0, die: 8, dmg: 0 });
-    check('sweep AC15 +0 d8 D+0: attack[0] === damage[0]', sw.attack[0], sw.damage[0]);
-
-    const e0 = S(15, 5, 8, 0), e1 = S(15, 5, 8, 1);
-    check('AC15 +5 d8: E(D+1) - E(D) per round = hit chance', e1.perRound - e0.perRound, e0.pHit);
-
+    check('AC10 +20: hit chance 95% (nat 1 still misses)', S(10, 20, 8, 0).pHit, 0.95);
+    check('AC15 +12: 18 hit faces', S(15, 12, 8, 0).hitFaces, 18);
+    check('AC15 +13: 19 hit faces (95% cap)', S(15, 13, 8, 0).hitFaces, 19);
+    check('AC25 +5: 1 hit face (nat 20 only)', S(25, 5, 8, 0).hitFaces, 1);
+    check('AC25 +6: 2 hit faces', S(25, 6, 8, 0).hitFaces, 2);
+    check('AC30 -5: hit chance 5%', S(30, -5, 8, 0).pHit, 0.05);
+    check('AC10 -5: hit chance 30%', S(10, -5, 8, 0).pHit, 0.30);
+    check('threshold AC15 +5 = 10', DiceMath.threshold({ ac: 15, atk: 5 }), 10);
+    check('threshold AC10 +20 = 2', DiceMath.threshold({ ac: 10, atk: 20 }), 2);
+    check('threshold AC25 +0 = 20', DiceMath.threshold({ ac: 25, atk: 0 }), 20);
     check('string AC "15" throws TypeError',
       throwsType(() => DiceMath.stats({ ac: '15', atk: 5, die: 8, dmg: 0 })), true);
+
+    // Outcome table (RULES-02..05)
+    const tFumble = T(10, 20, 8, 0);
+    check('AC10 +20 d8: row 1 kind fumble', tFumble[0].kind, 'fumble');
+    check('AC10 +20 d8: row 1 cells all 0', tFumble[0].cells.every((c) => c === 0), true);
+    const tFloor = T(25, 0, 8, 0);
+    check('AC25 +0 d8: row 20 cells = 2 x face', same(tFloor[19].cells, [2, 4, 6, 8, 10, 12, 14, 16]), true);
+    check('AC25 +0 d8: rows 2-19 all 0',
+      tFloor.slice(1, 19).every((r) => r.cells.every((c) => c === 0)), true);
+    check('AC15 +5 d8 D+3: crit cell face 5 = 13 (bonus once)', T(15, 5, 8, 3)[19].cells[4], 13);
+    check('every die: 20 rows x die cells',
+      DiceMath.DICE.every((X) => { const t = T(15, 5, X, 0); return t.length === 20 && t.every((r) => r.cells.length === X); }), true);
+    const tPen = T(15, 5, 4, -5);
+    check('AC15 +5 d4 D-5: min cell is 0 (damage floor)', Math.min(...tPen.flatMap((r) => r.cells)), 0);
+    check('AC15 +5 d4 D-5: row 10 face 1 is a hit dealing 0',
+      tPen[9].kind === 'hit' && tPen[9].cells[0] === 0, true);
+
+    // Expected damage (RULES-07)
+    check('AC15 +0 d8 D+0: E20 = 31.5', S(15, 0, 8, 0).e20, 31.5);
+    check('AC15 +5 d8 D+0: E20 = 54.0', S(15, 5, 8, 0).e20, 54);
+    check('AC15 +5 d8 D+3: E20 = 87', S(15, 5, 8, 3).e20, 87);
+    check('AC25 +0 d12 D+0: E20 = 13', S(25, 0, 12, 0).e20, 13);
+    check('AC18 +3 d6 D+2: E20 = 36.5', S(18, 3, 6, 2).e20, 36.5);
+    check('AC10 +20 d12 D+5: E20 = 225', S(10, 20, 12, 5).e20, 225);
+    check('AC25 +0 d4 D+0: E20 = 5', S(25, 0, 4, 0).e20, 5);
+    check('AC15 +5 d6 D-2: E20 = 65/3 (floor, not the closed form 20)', S(15, 5, 6, -2).e20, 65 / 3);
+    check('AC15 +5 d4 D-5: E20 = 0.625 (true 2d4 crit)', S(15, 5, 4, -5).e20, 0.625);
+    check('AC15 +5 d4 D-3: E20 = 4.5625 (true 2d4 crit)', S(15, 5, 4, -3).e20, 4.5625);
+
+    // Sweep and marginals (RULES-08, STAT-03)
+    const sw = DiceMath.sweep({ ac: 15, atk: 0, die: 8, dmg: 0 });
+    check('sweep AC15 +0 d8 D+0: attack[0] === damage[0]', sw.attack[0], sw.damage[0]);
+    const e0 = S(15, 5, 8, 0), e1 = S(15, 5, 8, 1);
+    check('AC15 +5 d8: E(D+1) - E(D) per round = hit chance', e1.perRound - e0.perRound, e0.pHit);
+    const mDef = M(15, 5, 8, 0);
+    check('AC15 +5 d8 D+0: +1 to hit adds 4.5 over 20', mDef.hitNum / mDef.den, 4.5);
+    check('AC15 +5 d8 D+0: +1 to damage adds 11 over 20', mDef.dmgNum / mDef.den, 11);
+    const mCap = M(15, 13, 8, 0);
+    check('AC15 +13: +1 to hit adds 0, reason cap', mCap.hitNum === 0 && mCap.reason === 'cap', true);
+    const mFloor = M(25, 4, 8, 0);
+    check('AC25 +4: +1 to hit adds 0, reason floor', mFloor.hitNum === 0 && mFloor.reason === 'floor', true);
+    const mEscape = M(25, 5, 8, 0);
+    check('AC25 +5: +1 to hit adds 4.5 over 20', mEscape.hitNum / mEscape.den, 4.5);
+    const mNoDmg = M(15, 5, 4, -5);
+    check('AC15 +5 d4 D-5: +1 to hit adds 0, reason nodmg',
+      mNoDmg.hitNum === 0 && mNoDmg.reason === 'nodmg', true);
+
+    // Formatting (STAT-01, STAT-02)
+    const vDef = V(15, 5, 8, 0);
+    check('view defaults: e20Text "54.0"', vDef.e20Text, '54.0');
+    check('view defaults: perRoundText "2.700"', vDef.perRoundText, '2.700');
+    check('view defaults: hitPct 55', vDef.hitPct, 55);
+    const vA = V(15, 0, 8, 0);
+    check('view AC15 +0 d8: "31.5" / "1.575"', vA.e20Text + ' / ' + vA.perRoundText, '31.5 / 1.575');
+    const vB = V(15, 5, 6, -2);
+    check('view AC15 +5 d6 D-2: "21.7" / "1.085"', vB.e20Text + ' / ' + vB.perRoundText, '21.7 / 1.085');
+
+    // Parser (CTRL-05)
+    const P = VM.parseControl;
+    check('parse ac "" keeps previous 15', P('ac', '', 15), 15);
+    check('parse ac "abc" keeps previous 15', P('ac', 'abc', 15), 15);
+    check('parse ac "99" clamps to 30', P('ac', '99', 15), 30);
+    check('parse atk "2.6" rounds to 3', P('atk', '2.6', 5), 3);
+    check('parse atk "1e1" is 10', P('atk', '1e1', 5), 10);
+    check('parse atk " 12 " is 12', P('atk', ' 12 ', 5), 12);
+    check('parse atk "-99" clamps to -5', P('atk', '-99', 5), -5);
+    check('parse die "7" keeps previous 8', P('die', '7', 8), 8);
+    check('parse die "12" is 12', P('die', '12', 8), 12);
+    check('parse returns a number', typeof P('ac', '20', 15), 'number');
+
+    // Coarse-grid invariants, one aggregated result each
+    const ACS = [10, 15, 20, 25, 30], ATKS = [-5, 0, 5, 13, 20], DMGS = [-5, -2, -1, 0, 3, 20];
+    let nAll = 0, nCf = 0, nMarg = 0, nSum = 0;
+    let badClamp = 0, badCf = 0, badMarg = 0, badSum = 0, badFmt = 0;
+    for (const ac of ACS) for (const die of DiceMath.DICE) for (const atk of ATKS) for (const dmg of DMGS) {
+      const p = { ac, atk, die, dmg };
+      const s = DiceMath.stats(p);
+      nAll++;
+      if (!(s.pHit >= 0.05 && s.pHit <= 0.95)) badClamp++;
+      if (dmg >= -1) {
+        nCf++;
+        if (!(Math.abs(s.perRound - DiceMath.closedFormPerRound(p)) < 1e-9)) badCf++;
+        nMarg++;
+        const up = DiceMath.stats({ ...p, dmg: dmg + 1 });
+        if (!(Math.abs(up.perRound - s.perRound - s.pHit) < 1e-9)) badMarg++;
+      }
+      if (dmg >= -2) {
+        nSum++;
+        if (s.tableSum * die !== s.e20Num) badSum++;
+      }
+      // STAT-02: the displayed per-round value x 20 must give the displayed 20-round value
+      const { e20Text, perRoundText } = VM.computeView(p);
+      if (VM.fixed(Math.round(Number(perRoundText) * 200), 1) !== e20Text) badFmt++;
+    }
+    check(`grid: 5% <= hit chance <= 95% (${nAll} combos)`, badClamp, 0);
+    check(`grid: table E = closed form for D >= -1 (${nCf} combos)`, badCf, 0);
+    check(`grid: E(D+1) - E(D) = hit chance for D >= -1 (${nMarg} combos)`, badMarg, 0);
+    check(`grid: displayed crit row = true 2dX for D >= -2 (${nSum} combos)`, badSum, 0);
+    check(`grid: per round x 20 = 20-round figure (${nAll} combos)`, badFmt, 0);
   } catch (err) {
     results.push({ name: 'self-test crashed: ' + (err && err.message), ok: false });
   }
@@ -437,7 +543,9 @@ const tableEl = document.getElementById('outcome');
 const statHitEl = document.getElementById('stat-hit');
 const statE20El = document.getElementById('stat-e20');
 
-const state = { ...VM.DEFAULT_STATE };
+// Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
+// cannot crash this block before the error banner is shown.
+const state = {};
 const RENDERERS = [renderControls, renderStats, renderTable];
 
 let pending = false;
@@ -529,18 +637,19 @@ function checkLine(r) {
   return li;
 }
 
-function showSelfTestPanel(st) {
+function showSelfTestPanel(st, ui = { results: [], ms: 0 }) {
   const panel = document.getElementById('selftest');
-  const all = st.results;
+  const all = st.results.concat(ui.results);
   const failed = all.filter((r) => !r.ok).length;
   const n = all.length;
+  const ms = (Number(st.ms) + ui.ms).toFixed(1);
   panel.replaceChildren();
 
   const summary = document.createElement('p');
   summary.className = 'summary ' + (failed ? 'fail' : 'pass');
   summary.textContent = failed
-    ? `Self-test FAILED: ${failed} of ${n} checks failed (${st.ms} ms). The numbers on this page may be wrong.`
-    : `Self-test passed: ${n} of ${n} checks (${st.ms} ms)`;
+    ? `Self-test FAILED: ${failed} of ${n} checks failed (${ms} ms). The numbers on this page may be wrong.`
+    : `Self-test passed: ${n} of ${n} checks (${ms} ms)`;
 
   const why = document.createElement('p');
   why.className = 'why';
@@ -551,14 +660,123 @@ function showSelfTestPanel(st) {
   const sum = document.createElement('summary');
   sum.textContent = `Show all ${n} checks`;
   const list = document.createElement('ol');
-  for (const r of all) list.append(checkLine(r));
+  for (const r of st.results) list.append(checkLine(r));
+  if (ui.results.length) {
+    const head = document.createElement('li');
+    head.textContent = 'UI ' + 'checks';   // split so a DOM dump shows it only when the smoke ran
+    list.append(head);
+    for (const r of ui.results) list.append(checkLine(r));
+  }
   details.append(sum, list);
 
   panel.append(summary, why, details);
   panel.hidden = false;
 }
 
+// ?test only: drive the real delegated handler with synthetic events, then restore defaults.
+function runUiSmoke() {
+  const t0 = performance.now();
+  const results = [];
+  const check = (name, actual, expected) => results.push({ name, ok: Object.is(actual, expected), actual, expected });
+  const acNum = document.getElementById('ac-num');
+  const acRange = document.getElementById('ac-range');
+  const send = (el, value) => {
+    el.value = value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  try {
+    Object.assign(state, VM.DEFAULT_STATE);
+    render();
+
+    send(acNum, '');
+    render();
+    check('AC box "" keeps AC 15', state.ac, 15);
+
+    // A number box cannot hold "abc" (the browser empties it and logs a warning), so feed
+    // the same handler through a temporary text input carrying data-key="ac".
+    const proxy = document.createElement('input');
+    proxy.type = 'text';
+    proxy.dataset.key = 'ac';
+    form.append(proxy);
+    send(proxy, 'abc');
+    proxy.remove();
+    render();
+    check('AC text "abc" keeps AC 15', state.ac, 15);
+
+    send(acNum, '99');
+    render();
+    check('AC box "99" clamps AC to 30', state.ac, 30);
+    acNum.dispatchEvent(new Event('change', { bubbles: true }));
+    check('AC box normalizes to "30" on change', acNum.value, '30');
+
+    send(acNum, '-99');
+    render();
+    check('AC box "-99" clamps AC to 10', state.ac, 10);
+
+    acNum.focus();
+    send(acNum, '2');
+    render();
+    check('focused AC box keeps "2" while typing', acNum.value, '2');
+    send(acNum, '25');
+    render();
+    check('AC box "25" (typed through "2") gives AC 25', state.ac, 25);
+    acNum.blur();
+
+    send(acRange, '22');
+    render();
+    check('AC slider 22 gives AC 22', state.ac, 22);
+    check('AC box mirrors the slider ("22")', acNum.value, '22');
+
+    const bodyRows = tableEl.tBodies[0].rows;
+    check('table body has 20 rows', bodyRows.length, 20);
+    check('every row has 8 hit or miss cells',
+      Array.from(bodyRows).every((tr) => tr.querySelectorAll('td.h, td.m').length === 8), true);
+  } catch (err) {
+    results.push({ name: 'UI smoke crashed: ' + (err && err.message), ok: false });
+  }
+
+  Object.assign(state, VM.DEFAULT_STATE);
+  renderControls();
+  render();
+
+  for (const r of results.filter((x) => !x.ok)) {
+    console.error(`SELFTEST FAIL: UI ${r.name}`, '| got', r.actual, '| expected', r.expected);
+  }
+  return { results, ms: performance.now() - t0 };
+}
+
+// True only when all three pure blocks loaded and the self-test itself did not crash.
+// try/catch: a block that throws before its const initializes leaves the name in the
+// temporal dead zone, where even typeof throws.
+function engineLoaded() {
+  try {
+    return typeof DiceMath !== 'undefined' && typeof VM !== 'undefined' &&
+      typeof SelfTest !== 'undefined' &&
+      !SelfTest.results.some((r) => r.name.startsWith('self-test crashed'));
+  } catch {
+    return false;
+  }
+}
+
+function selfTestIfLoaded() {
+  try { return typeof SelfTest !== 'undefined' ? SelfTest : null; } catch { return null; }
+}
+
 function init() {
+  const testMode = new URLSearchParams(location.search).has('test');
+  if (!engineLoaded()) {
+    const banner = document.getElementById('engine-error');
+    // Split literal: the banner sentence then appears in a DOM dump only when the banner is shown.
+    banner.textContent = 'The dice math failed ' + 'to load, so the table and numbers are not shown. ' +
+      'Reload the page. If it keeps happening, add ?test to the address to see which check failed.';
+    banner.hidden = false;
+    const st = selfTestIfLoaded();
+    if (testMode && st) showSelfTestPanel(st);
+    return;
+  }
+
+  Object.assign(state, VM.DEFAULT_STATE);
   renderControls();                        // D-04: state -> controls, never the reverse
   form.addEventListener('submit', (e) => e.preventDefault());
   form.addEventListener('input', onControl);
@@ -569,7 +787,7 @@ function init() {
     }
   });
   render();
-  if (new URLSearchParams(location.search).has('test')) showSelfTestPanel(SelfTest);
+  if (testMode) showSelfTestPanel(SelfTest, runUiSmoke());
 }
 
 init();
