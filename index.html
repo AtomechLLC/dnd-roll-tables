@@ -348,6 +348,17 @@
     .chart .direct-hit { fill: var(--series-hit); }
     .chart .direct-dmg { fill: var(--series-dmg); }
     .chart .ndot { r: 5px; }
+    /* Hover readout (D-13). Vertical swipes scroll the page, horizontal drags scrub the
+       readout. The panel reserves its height so hovering never shifts the page. No motion. */
+    .plot { touch-action: pan-y; }
+    .chart .hit { cursor: crosshair; }
+    .readout {
+      margin: var(--sp-2) 0 0; padding: var(--sp-2) var(--sp-3);
+      background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+      font-family: var(--font-num); font-variant-numeric: tabular-nums;
+      font-size: 1rem; line-height: 1.5; color: var(--ink);
+      min-height: calc(1.5em + 18px);
+    }
     @container chart (width < 43rem) {
       .chart text { font-size: 14px; }
       .chart .ndot { r: 6px; }
@@ -355,6 +366,7 @@
     @container chart (width < 35rem) {
       .chart text { font-size: 17.5px; }
       .chart .ndot { r: 7px; }
+      .readout { min-height: calc(3em + 18px); }
     }
     @container chart (width < 28rem) {
       .chart text { font-size: 24px; }
@@ -811,7 +823,15 @@ const VM = (() => {
   // Sweep chart block (CHART-01, CHART-02, D-10, D-11, D-13): both exact series for
   // N = 0..maxN, nice y ticks, precomputed readout lines, and the generated caption.
   // Readout gaps are the difference of the displayed tenths (RESEARCH Pitfall 7).
+  // Everything but n depends only on (ac, atk, die, dmg), so a one-entry memo keeps a slider
+  // drag from recomputing the sweep (RESEARCH Anti-Patterns). Callers never mutate the arrays.
+  let chartMemo = { key: null, base: null };
   function chartView(p, n) {
+    const key = `${p.ac},${p.atk},${p.die},${p.dmg}`;
+    if (chartMemo.key !== key) chartMemo = { key, base: chartBase(p) };
+    return { n, ...chartMemo.base };
+  }
+  function chartBase(p) {
     const maxN = CONTROL_SPEC.n.max;
     const { attack, damage, den } = DiceMath.sweep(p, CONTROL_SPEC.n.max);
     const aT = attack.map((v) => tenths(v, den));
@@ -828,7 +848,7 @@ const VM = (() => {
     const caption = `Expected damage over 20 rounds at AC ${p.ac}, d${p.die}, attack ${signed(p.atk)}, ` +
       `damage ${signed(p.dmg)}. Both curves start at ${attackText[0]} with no extra bonus.` +
       ' ' + captionOrder(attack, damage);
-    return { n, maxN, den, attack, damage, attackText, damageText, ticks, readout, caption };
+    return { maxN, den, attack, damage, attackText, damageText, ticks, readout, caption };
   }
 
   // The page view (D-08, D-16): stats view plus the compare and chart blocks. The big table and
@@ -1155,6 +1175,7 @@ const SelfTest = (() => {
     check('chart: view defaults caption opens with setup and order', cv.caption.startsWith(
       'Expected damage over 20 rounds at AC 15, d8, attack +5, damage +0. ' +
       'Both curves start at 54.0 with no extra bonus. +N to damage leads at every N from +1 to +20.'), true);
+    check('chart: page view chart block n 5', VM.computeView({ ...VM.DEFAULT_STATE }).chart.n, 5);
     const cf = VM.chartView({ ac: 25, atk: 0, die: 8, dmg: 0 }, 5);
     check('chart: view AC25 +0 d8 readout at n 7', cf.readout[7],
       'At +7: to hit 18.0 · to damage 16.0 · to hit ahead by 2.0');
@@ -1179,7 +1200,6 @@ const SelfTest = (() => {
     check('chart: order synthetic all equal', VM.captionOrder(zeros, zeros),
       'The two are even at every N from +1 to +20.');
 
-    check('chart: page view chart block n 5', VM.computeView({ ...VM.DEFAULT_STATE }).chart.n, 5);
   });
 
   const failed = results.filter((r) => !r.ok);
@@ -1213,6 +1233,7 @@ const cmpEls = Object.fromEntries(CMP_KEYS.map((k) => [k, {
 // Sweep chart (Phase 2): an inline SVG skeleton built once by chartInit(), updated in place.
 const sweepEl = document.getElementById('sweep');
 const chartCaptionEl = document.getElementById('chart-caption');
+const chartReadoutEl = document.getElementById('chart-readout');
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
@@ -1233,6 +1254,8 @@ function scheduleRender() {
 function render() {
   const view = VM.computeView(state);
   for (const r of RENDERERS) r(view);
+  lastView = view;
+  paintReadout();
 }
 
 // Signed display value (VM.signed), looked up lazily so a broken VM block cannot
@@ -1387,6 +1410,30 @@ const SVGNS = 'http://www.w3.org/2000/svg';
 const VB_W = 640, PLOT_L = 64, PLOT_R = 544, PLOT_T = 32, PLOT_B = 336;
 const chart = {};        // element references, filled by chartInit()
 let xScale = null;
+// Hover readout (D-13, RESEARCH Pattern 6). The hovered N lives here, never in state: hover
+// never calls setState / scheduleRender / render, and nothing on the chart sets N.
+let lastView = null, hoverN = null, hoverPending = false;
+
+// clientX -> nearest integer N, rounded and clamped to the N domain (T-02-06). The svg keeps
+// its aspect ratio (height: auto), so one x factor maps screen px to viewBox units.
+function nFromPointer(e) {
+  const r = sweepEl.getBoundingClientRect();
+  const ux = (e.clientX - r.left) * (VB_W / r.width);
+  return Math.min(VM.CONTROL_SPEC.n.max, Math.max(VM.CONTROL_SPEC.n.min, Math.round(xScale.invert(ux))));
+}
+
+// Swaps one precomputed readout line and moves the dotted guide; no math, no render.
+function paintReadout() {
+  if (!lastView || !xScale) return;
+  const n = hoverN ?? state.n;
+  chartReadoutEl.textContent = lastView.chart.readout[n];
+  chart.hoverGuide.toggleAttribute('hidden', hoverN === null);
+  if (hoverN !== null) {
+    const x = xScale(n).toFixed(2);
+    chart.hoverGuide.setAttribute('x1', x);
+    chart.hoverGuide.setAttribute('x2', x);
+  }
+}
 
 function svgEl(tag, attrs = {}, text) {
   const e = document.createElementNS(SVGNS, tag);
@@ -1445,6 +1492,20 @@ function chartInit() {
   }
   chart.markerLabel = add(xLabels, 'text', { class: 'tick marker-label', y: 344, dy: '0.8em', 'text-anchor': 'middle' });
   add(s, 'text', { class: 'axis-title', x: 304, y: 390, 'text-anchor': 'middle' }, 'Extra bonus +N');
+
+  // Pointer and touch scrubbing (D-13): rAF-coalesced, early return when N is unchanged
+  // (T-02-07). Leaving, lifting a finger, or a cancelled gesture returns to the slider N.
+  s.addEventListener('pointermove', (e) => {
+    const n = nFromPointer(e);
+    if (n === hoverN) return;
+    hoverN = n;
+    if (hoverPending) return;
+    hoverPending = true;
+    requestAnimationFrame(() => { hoverPending = false; paintReadout(); });
+  });
+  const clearHover = () => { hoverN = null; paintReadout(); };
+  s.addEventListener('pointerleave', clearHover);
+  s.addEventListener('pointercancel', clearHover);
 }
 
 // Updates the skeleton in place: never rebuilds the svg, never uses innerHTML (D-09).
