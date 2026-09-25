@@ -19,6 +19,13 @@
 //      (k) every combo: the damage series strictly increases, the attack series never falls
 //      (l) a 1-in-50 sample of VM.chartView: y ticks cover the larger curve with at most 1.5x
 //          headroom, 4 to 6 ticks, one readout line per N
+//      and the crossing and band rules (plan 02-03):
+//      (m) every combo: DiceMath.crossings finds at most one crossing, the same count as an
+//          independent sign-change walk, every marker lies between lastLeadN and flipN, and a
+//          1-in-50 sample of VM.chartView draws one marker per crossing plus one per end tie
+//      (n) every combo: a flat attack step lies inside DiceMath.attackBands (floor or cap) or
+//          comes from a d4 whose normal hits deal 0 (die + dmg <= 0), and nothing else is flat
+//      It also prints the crossing distribution (informational, not pass/fail).
 //      Stats are cached per (ac, die), keyed by (atk, dmg), so the +N lookups reuse
 //      neighbouring combos.
 // Exit 0 only when everything passes.
@@ -77,12 +84,17 @@ const names = {
   j: '(j) CHART-01/02: sampled DiceMath.sweep equals the cached series, both start equal',
   k: '(k) sweep series: damage strictly increasing, attack non-decreasing',
   l: '(l) sampled VM.chartView: ticks cover max with <= 1.5x headroom, 4..6 ticks, maxN + 1 readouts',
+  m: '(m) CHART-03: <= 1 crossing, count = independent sign walk, lastLeadN <= x <= flipN, sampled markers',
+  n: '(n) CHART-04: attack[n + 1] === attack[n] exactly inside a floor/cap band or when die + dmg <= 0',
 };
 const NS = [0, 5, 20];
 const MAXN = (VM.CONTROL_SPEC && VM.CONTROL_SPEC.n && VM.CONTROL_SPEC.n.max) || 20;
 const counts = Object.fromEntries(Object.keys(names).map((k) => [k, 0]));
 const firstFailures = [];
 let combos = 0;
+const dist = { damageAll: 0, hitAll: 0, hitThenDamage: 0, damageThenHit: 0, tieCross: 0, endTie: 0 };
+const hasCross = typeof DiceMath.crossings === 'function';
+const hasBands = typeof DiceMath.attackBands === 'function';
 
 function record(key, p, detail) {
   counts[key]++;
@@ -204,6 +216,52 @@ for (let ac = 10; ac <= 30; ac++) {
             if (c.readout.length !== MAXN + 1) record('l', p, `${c.readout.length} readout lines`);
           }
         }
+
+        // Crossings (m): engine result vs an independent walk over the last non-zero sign
+        if (!hasCross) {
+          record('m', p, 'DiceMath.crossings missing');
+        } else {
+          const c = DiceMath.crossings(a, d);
+          let lastSign = 0, flips = 0;
+          for (let n = 1; n <= MAXN; n++) {
+            const sg = Math.sign(a[n] - d[n]);
+            if (sg === 0) continue;
+            if (lastSign !== 0 && sg !== lastSign) flips++;
+            lastSign = sg;
+          }
+          if (c.list.length > 1) record('m', p, `${c.list.length} crossings`);
+          if (c.list.length !== flips) record('m', p, `${c.list.length} crossings vs ${flips} sign changes`);
+          for (const e of c.list) {
+            if (!(e.lastLeadN <= e.x && e.x <= e.flipN)) record('m', p, `x ${e.x} outside [${e.lastLeadN}, ${e.flipN}]`);
+          }
+          if (combos % 50 === 0) {
+            const markers = (VM.chartView(p, 5).markers || []).length;
+            const want = c.list.length + (c.endTieN !== null ? 1 : 0);
+            if (markers !== want) record('m', p, `${markers} markers vs ${want}`);
+          }
+          if (c.list.length === 0) {
+            if (c.first === 'damage') dist.damageAll++;
+            else if (c.first === 'attack') dist.hitAll++;
+          } else if (c.list.length === 1) {
+            if (c.list[0].to === 'damage') dist.hitThenDamage++;
+            else dist.damageThenHit++;
+          }
+          for (const e of c.list) if (e.tieN !== null) dist.tieCross++;
+          if (c.endTieN !== null) dist.endTie++;
+        }
+
+        // Bands (n): flat attack steps are exactly the cap / floor bands, plus the d4 no-damage line
+        if (!hasBands) {
+          record('n', p, 'DiceMath.attackBands missing');
+        } else {
+          const b = DiceMath.attackBands(p, MAXN);
+          const nodmg = die + dmg <= 0;
+          for (let n = 0; n < MAXN; n++) {
+            const flat = a[n + 1] === a[n];
+            const banded = (b.floor !== null && n + 1 <= b.floor[1]) || (b.cap !== null && n >= b.cap[0]) || nodmg;
+            if (flat !== banded) { record('n', p, `N ${n} -> ${n + 1}: flat ${flat}, banded ${banded}`); break; }
+          }
+        }
       }
     }
   }
@@ -218,6 +276,8 @@ for (const r of SelfTest.results.filter((x) => !x.ok)) {
   console.log(`  selftest FAIL ${r.name}: got ${JSON.stringify(r.actual)}, expected ${JSON.stringify(r.expected)}`);
 }
 console.log(`sweep ${combos} combos in ${sweepMs} ms`);
+console.log(`crossings: damage-all ${dist.damageAll}, hit-all ${dist.hitAll}, hit-then-damage ${dist.hitThenDamage}, ` +
+  `damage-then-hit ${dist.damageThenHit}, tie crossings ${dist.tieCross}, end ties ${dist.endTie}`);
 
 const invariantFailures = Object.values(counts).reduce((a, b) => a + b, 0);
 if (SelfTest.failed === 0 && n > 0 && invariantFailures === 0 && combos === TOTAL_COMBOS) {

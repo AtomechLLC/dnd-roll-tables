@@ -1128,9 +1128,18 @@ const SelfTest = (() => {
     check(`cmp: grid delta = displayed variant tenths - displayed base tenths (${nCmp} views)`, badDelta, 0);
   });
 
+  // One sweep per distinct setting, shared by the chart and cross sections (a d12 sweep is
+  // about 2 ms, and the page self-test has a 200 ms budget).
+  const sweepMemo = new Map();
+  const SW = (ac, atk, die, dmg) => {
+    const k = [ac, atk, die, dmg].join(',');
+    if (!sweepMemo.has(k)) sweepMemo.set(k, DiceMath.sweep({ ac, atk, die, dmg }, VM.CONTROL_SPEC.n.max));
+    return sweepMemo.get(k);
+  };
+
   // Sweep chart (CHART-01, CHART-02, CHART-05, D-10, D-11, D-13). Cost-bounded: each distinct
-  // sweep is computed once here (a d12 sweep is about 2 ms); exhaustive checks live in
-  // tools/check-engine.mjs (j)..(l).
+  // sweep is computed once (a d12 sweep is about 2 ms); exhaustive checks live in
+  // tools/check-engine.mjs (j)..(n).
   section('chart', () => {
     const NT = VM.niceTicks;
     check('chart: niceTicks(274) ticks', NT(274).ticks.join(','), '0,100,200,300');
@@ -1140,12 +1149,6 @@ const SelfTest = (() => {
     check('chart: niceTicks(890) top', NT(890).top, 1000);
     check('chart: niceTicks(0) top 1 and ticks 0,1', NT(0).top + ' ' + NT(0).ticks.join(','), '1 0,1');
 
-    const memo = new Map();
-    const SW = (ac, atk, die, dmg) => {
-      const k = [ac, atk, die, dmg].join(',');
-      if (!memo.has(k)) memo.set(k, DiceMath.sweep({ ac, atk, die, dmg }, VM.CONTROL_SPEC.n.max));
-      return memo.get(k);
-    };
     const seq = (f) => Array.from({ length: 21 }, (_, n) => f(n)).join(',');
     const cases = [
       ['AC15 +5 d8 D+0', [15, 5, 8, 0], (n) => 3456 + 288 * Math.min(n, 8), (n) => 3456 + 704 * n],
@@ -1200,6 +1203,128 @@ const SelfTest = (() => {
     check('chart: order synthetic all equal', VM.captionOrder(zeros, zeros),
       'The two are even at every N from +1 to +20.');
 
+  });
+
+  // Crossings and flat bands (CHART-03, CHART-04, D-14, D-15, D-18). Real series reuse the
+  // sweeps the chart section already computed; the generic paths (two crossings, touch, tie,
+  // end tie, leading tie, all equal) use short synthetic arrays. The chartView calls are
+  // ordered so the first one hits the view's one-entry memo. Whole-domain invariants live in
+  // tools/check-engine.mjs (m) and (n).
+  section('cross', () => {
+    const CR = DiceMath.crossings;
+    const one = (c, f) => (c.list.length === 1 ? f(c.list[0]) : `${c.list.length} crossings`);
+
+    // Synthetic series: the generic loop (D-14)
+    let c = CR([0, 1, 4, 7, 8, 9], [0, 2, 3, 4, 9, 10]);
+    check('cross: synthetic two flips, count', c.list.length, 2);
+    check('cross: synthetic two flips, x / flipN / to',
+      c.list.map((e) => `${e.x}/${e.flipN}/${e.to}`).join(' '), '1.5/2/attack 3.75/4/damage');
+    c = CR([0, 1, 3, 3], [0, 2, 3, 4]);
+    check('cross: synthetic touch is no crossing (count, first, ties, end tie)',
+      `${c.list.length} ${c.first} ${c.ties.join(',')} ${c.endTieN}`, '0 damage 2 null');
+    c = CR([0, 2, 3, 3], [0, 1, 3, 5]);
+    check('cross: synthetic tie crossing (x, tieN, flipN, lastLeadN)',
+      one(c, (e) => `${e.x} ${e.tieN} ${e.flipN} ${e.lastLeadN}`), '2 2 3 1');
+    c = CR([0, 1, 3], [0, 2, 3]);
+    check('cross: synthetic end tie (count, end tie)', `${c.list.length} ${c.endTieN}`, '0 2');
+    c = CR([0, 1, 3], [0, 1, 2]);
+    check('cross: synthetic leading tie (first, count, ties)', `${c.first} ${c.list.length} ${c.ties.join(',')}`, 'attack 0 1');
+    c = CR([0, 1, 2], [0, 1, 2]);
+    check('cross: synthetic all equal (first, count, end tie)', `${c.first} ${c.list.length} ${c.endTieN}`, 'none 0 null');
+
+    // Real series (D-14 reference cases, RESEARCH Pattern 3)
+    const RC = (ac, atk, die, dmg) => { const s = SW(ac, atk, die, dmg); return { s, c: CR(s.attack, s.damage) }; };
+    check('cross: AC15 +0 d8 D+0 has no crossing', RC(15, 0, 8, 0).c.list.length, 0);
+    check('cross: AC15 +5 d8 D+0 has no crossing', RC(15, 5, 8, 0).c.list.length, 0);
+    let r = RC(25, 0, 8, 0);
+    check('cross: AC25 +0 d8 one crossing (flipN, lastLeadN)', one(r.c, (e) => `${e.flipN} ${e.lastLeadN}`), '7 6');
+    check('cross: AC25 +0 d8 marker x = 45/7', (r.c.list[0] || {}).x, 45 / 7);
+    check('cross: AC25 +0 d8 marker y = 108/7', (r.c.list[0] || { yNum: NaN }).yNum / r.s.den, 108 / 7);
+    r = RC(15, 0, 12, 0);
+    check('cross: AC15 +0 d12 one crossing (flipN, lastLeadN)', one(r.c, (e) => `${e.flipN} ${e.lastLeadN}`), '15 14');
+    check('cross: AC15 +0 d12 marker x = 169/12', (r.c.list[0] || {}).x, 169 / 12);
+    r = RC(25, 0, 12, 0);
+    check('cross: AC25 +0 d12 one crossing (flipN)', one(r.c, (e) => e.flipN), 6);
+    check('cross: AC25 +0 d12 marker x = 65/11', (r.c.list[0] || {}).x, 65 / 11);
+    r = RC(10, 0, 4, 14);
+    check('cross: AC10 +0 d4 D+14 tie crossing (tieN, flipN, lastLeadN)',
+      one(r.c, (e) => `${e.tieN} ${e.flipN} ${e.lastLeadN}`), '12 13 11');
+    r = RC(27, -5, 4, 0);
+    check('cross: AC27 -5 d4 D+0 end tie, no crossing', `${r.c.list.length} ${r.c.endTieN}`, '0 20');
+    r = RC(20, 5, 12, 3);
+    check('cross: AC20 +5 d12 D+3 no crossing, attack first', `${r.c.list.length} ${r.c.first}`, '0 attack');
+
+    // Flat bands (D-15, D-18)
+    const AB = (ac, atk) => JSON.stringify(DiceMath.attackBands({ ac, atk }));
+    check('cross: bands AC15 +5 cap [8,20] only', AB(15, 5), '{"floor":null,"cap":[8,20]}');
+    check('cross: bands AC25 +0 floor [0,5] only', AB(25, 0), '{"floor":[0,5],"cap":null}');
+    check('cross: bands AC16 -5 floor [0,1] and cap [19,20]', AB(16, -5), '{"floor":[0,1],"cap":[19,20]}');
+    check('cross: bands AC10 +8 cap covers [0,20]', AB(10, 8), '{"floor":null,"cap":[0,20]}');
+    check('cross: bands AC15 +0 cap [13,20]', AB(15, 0), '{"floor":null,"cap":[13,20]}');
+    check('cross: bands AC30 -5 floor [0,15] only', AB(30, -5), '{"floor":[0,15],"cap":null}');
+
+    // Caption sentences 3 and 4 (UI-SPEC Copywriting)
+    const CC = (ac, atk, die, dmg) => VM.captionCross(RC(ac, atk, die, dmg).c);
+    const two = [[0, 1, 4, 7, 8, 9], [0, 2, 3, 4, 9, 10]];
+    check('cross: sentence 3, no crossing', CC(15, 0, 8, 0), 'The curves never cross.');
+    check('cross: sentence 3, end tie', CC(27, -5, 4, 0), 'The curves meet at +20 but do not cross.');
+    check('cross: sentence 3, one crossing', CC(25, 0, 8, 0), 'The curves cross once.');
+    check('cross: sentence 3, tie crossing', CC(10, 0, 4, 14), 'The curves cross once, at +12.');
+    check('cross: sentence 3, two crossings', VM.captionCross(CR(...two)), 'The curves cross twice.');
+    check('cross: sentence 3, all equal', VM.captionCross(CR([0, 1, 2], [0, 1, 2])), 'The curves never cross.');
+    const CB = (ac, atk) => VM.captionBands(DiceMath.attackBands({ ac, atk }));
+    const capS = 'Shaded from +8 to +20: the 95% cap, where more to-hit adds nothing.';
+    check('cross: sentence 4, cap only', CB(15, 5), capS);
+    check('cross: sentence 4, floor only', CB(25, 0), 'Shaded from +0 to +5: only a nat 20 hits, so more to-hit adds nothing yet.');
+    check('cross: sentence 4, floor then cap', CB(16, -5),
+      'Shaded from +0 to +1: only a nat 20 hits, so more to-hit adds nothing yet. ' +
+      'Shaded from +19 to +20: the 95% cap, where more to-hit adds nothing.');
+    check('cross: sentence 4, no band', VM.captionBands({ floor: null, cap: null }), '');
+    const zeros = new Array(21).fill(0);
+    check('cross: synthetic two-crossing sentences 2 + 3', VM.captionOrder(...two) + ' ' + VM.captionCross(CR(...two)),
+      '+N to damage leads at +1, then +N to hit leads from +2 to +3, then +N to damage leads from +4 to +5. ' +
+      'The curves cross twice.');
+    check('cross: synthetic all-equal sentences 2 + 3', VM.captionOrder(zeros, zeros) + ' ' + VM.captionCross(CR(zeros, zeros)),
+      'The two are even at every N from +1 to +20. The curves never cross.');
+
+    // Full captions and markers through chartView (one sweep per setting; AC25 +0 d8 first,
+    // because the chart section's last chartView call left it in the memo).
+    const CV = (ac, atk, die, dmg) => VM.chartView({ ac, atk, die, dmg }, 5);
+    const has = (cv, text) => (cv.caption.includes(text) ? text : cv.caption);
+    const mk = (cv) => cv.markers.map((m) => `${m.label} | ${m.title}`).join(' ; ');
+    let cv = CV(25, 0, 8, 0);
+    const s23 = '+N to damage leads from +1 to +6, then +N to hit leads from +7 to +20. The curves cross once.';
+    check('cross: caption AC25 +0 d8 sentences 2 + 3', has(cv, s23), s23);
+    check('cross: markers AC25 +0 d8', mk(cv), 'flips at +7 | The curves cross between +6 and +7.');
+    cv = CV(15, 5, 8, 0);
+    check('cross: caption defaults, all four sentences', cv.caption,
+      'Expected damage over 20 rounds at AC 15, d8, attack +5, damage +0. Both curves start at 54.0 with no ' +
+      'extra bonus. +N to damage leads at every N from +1 to +20. The curves never cross. ' + capS);
+    check('cross: markers defaults none', cv.markers.length, 0);
+    const refs = [
+      [[15, 0, 8, 0], '+N to damage leads at every N from +1 to +20. The curves never cross.'],
+      [[20, 5, 12, 3], '+N to hit leads at every N from +1 to +20. The curves never cross.'],
+      [[15, 0, 12, 0], '+N to hit leads from +1 to +14, then +N to damage leads from +15 to +20. The curves cross once.'],
+      [[25, 0, 12, 0], '+N to damage leads from +1 to +5, then +N to hit leads from +6 to +20. The curves cross once.'],
+    ];
+    for (const [args, text] of refs) {
+      check(`cross: caption AC${args[0]} ${args[1]} d${args[2]} D${args[3]} sentences 2 + 3`, has(CV(...args), text), text);
+    }
+    cv = CV(10, 0, 4, 14);
+    const tieS = '+N to hit leads from +1 to +11, then the two are even at +12, then +N to damage leads from +13 ' +
+      'to +20. The curves cross once, at +12.';
+    check('cross: caption AC10 +0 d4 D+14 sentences 2 + 3', has(cv, tieS), tieS);
+    check('cross: markers AC10 +0 d4 D+14', mk(cv), 'tie at +12 | The curves tie at +12.');
+    cv = CV(27, -5, 4, 0);
+    const endS = '+N to damage leads from +1 to +19, then the two are even at +20. The curves meet at +20 but do not cross.';
+    check('cross: caption AC27 -5 d4 D+0 sentences 2 + 3', has(cv, endS), endS);
+    check('cross: markers AC27 -5 d4 D+0 end tie', mk(cv), 'tie at +20 | The curves meet at +20.');
+    check('cross: end tie marker sits at x 20', cv.markers.length === 1 ? cv.markers[0].x : NaN, 20);
+
+    // No-damage flat line (RESEARCH Pitfall 8): the formula band only, no extra band
+    cv = CV(15, 5, 4, -5);
+    check('cross: d4 D-5 attack curve is flat', cv.attack.every((v) => v === cv.attack[0]), true);
+    check('cross: d4 D-5 bands are the formula cap only', JSON.stringify(cv.bands), '{"floor":null,"cap":[8,20]}');
   });
 
   const failed = results.filter((r) => !r.ok);
@@ -2042,6 +2167,77 @@ function runUiSmoke() {
     check('readout ui: leave hides the hover guide', q('line.hover-guide').hasAttribute('hidden'), true);
   } catch (err) {
     results.push({ name: 'chart ui smoke crashed: ' + (err && err.message), ok: false });
+  }
+
+  // Crossing markers, flat bands, the full caption, and the five-item legend (CHART-03,
+  // CHART-04, D-14, D-15). Geometry assumes x(n) = 64 + 24n. Names avoid the displayed
+  // strings, and expected display strings are split (IN-06).
+  try {
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); render(); };
+    const svg = document.getElementById('sweep');
+    const all = (sel) => Array.from(svg.querySelectorAll(sel));
+    const rings = () => all('g.crossings circle.cross');
+    const bandRects = () => all('g.bands rect.band');
+    const ringLabels = () => all('g.cross-labels text.cross-label');
+    const bandLabels = () => all('g.band-labels text.band-label');
+    const at = (el, ...names) => names.map((k) => el.getAttribute(k)).join(' ');
+    const only = (els, f) => (els.length === 1 ? f(els[0]) : `${els.length} elements`);
+    const titleOf = (el) => { const t = el.querySelector('title'); return t ? t.textContent : null; };
+
+    show({});
+    check('cross ui: defaults draw no ring', rings().length, 0);
+    check('cross ui: defaults one band rect (x, width, y, height)',
+      only(bandRects(), (b) => at(b, 'x', 'width', 'y', 'height')), '256.00 288.00 4 332');
+    check('cross ui: defaults band label text and x',
+      only(bandLabels(), (t) => t.textContent + ' @' + t.getAttribute('x')), '95% ' + 'cap @260.00');
+    check('cross ui: caption equals the page view', document.getElementById('chart-caption').textContent,
+      VM.computeView(state).chart.caption);
+
+    show({ ac: 25, atk: 0 });
+    check('cross ui: AC25 d8 one ring (cx, cy)', only(rings(), (c) => at(c, 'cx', 'cy')), '218.29 277.37');
+    check('cross ui: AC25 d8 ring label text, 20 units below',
+      only(ringLabels(), (t) => t.textContent + ' @' + t.getAttribute('y')), 'flips at ' + '+7 @297.37');
+
+    show({ ac: 25, atk: 0, die: 12 });
+    check('cross ui: AC25 d12 one ring cx', only(rings(), (c) => c.getAttribute('cx')), '205.82');
+    check('cross ui: AC25 d12 ring label text', only(ringLabels(), (t) => t.textContent), 'flips at ' + '+6');
+    check('cross ui: AC25 d12 ring title', only(rings(), titleOf), 'The curves cross ' + 'between +5 and +6.');
+    check('cross ui: AC25 d12 floor band rect (x, width)', only(bandRects(), (b) => at(b, 'x', 'width')), '64.00 120.00');
+    check('cross ui: AC25 d12 floor band label', only(bandLabels(), (t) => t.textContent), 'only a nat ' + '20 hits');
+
+    show({ ac: 15, atk: 0, die: 12 });
+    check('cross ui: AC15 d12 one ring (cx, cy)', only(rings(), (c) => at(c, 'cx', 'cy')), '402.00 138.40');
+    check('cross ui: AC15 d12 ring label text', only(ringLabels(), (t) => t.textContent), 'flips at ' + '+15');
+
+    show({ ac: 15, atk: 0 });
+    check('cross ui: AC15 d8 no ring', rings().length, 0);
+    check('cross ui: AC15 d8 one band rect (x, width)', only(bandRects(), (b) => at(b, 'x', 'width')), '376.00 168.00');
+
+    show({ ac: 10, atk: 0, die: 4, dmg: 14 });
+    check('cross ui: AC10 d4 D14 tie ring cx', only(rings(), (c) => c.getAttribute('cx')), '352.00');
+    check('cross ui: AC10 d4 D14 tie ring label text', only(ringLabels(), (t) => t.textContent), 'tie at ' + '+12');
+
+    show({ ac: 27, atk: -5, die: 4, dmg: 0 });
+    check('cross ui: end tie ring cx', only(rings(), (c) => c.getAttribute('cx')), '544.00');
+    check('cross ui: end tie label text, right-anchored at the plot edge',
+      only(ringLabels(), (t) => t.textContent + ' @' + at(t, 'text-anchor', 'x')), 'tie at ' + '+20 @end 544.00');
+
+    show({ ac: 16, atk: -5, die: 4, dmg: 0 });
+    check('cross ui: AC16 -5 d4 two band rects (x, width)',
+      bandRects().map((b) => at(b, 'x', 'width')).join(' | '), '64.00 24.00 | 520.00 24.00');
+    check('cross ui: AC16 -5 d4 one ring label', only(ringLabels(), (t) => t.textContent), 'flips at ' + '+2');
+
+    show({ ac: 15, atk: 5, die: 4, dmg: -5 });
+    check('cross ui: d4 D-5 flat line gets only the formula band',
+      bandRects().map((b) => b.getAttribute('x')).join(' '), '256.00');
+
+    show({});
+    const items = Array.from(document.querySelectorAll('.chart-legend .legend-item')).map((e) => e.textContent);
+    const want = ['to hit (added', 'to damage (added', 'Shaded' + ':', 'Current ' + '+N', 'Where the ' + 'curves cross'];
+    check('cross ui: legend has five items in order',
+      items.length === 5 && want.every((w, i) => items[i].includes(w)), true);
+  } catch (err) {
+    results.push({ name: 'cross ui smoke crashed: ' + (err && err.message), ok: false });
   }
 
   Object.assign(state, VM.DEFAULT_STATE);
