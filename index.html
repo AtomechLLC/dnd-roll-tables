@@ -399,6 +399,66 @@
       .chart .direct { display: none; }
     }
 
+    /* Roll-20-rounds section (Phase 3 UI-SPEC Layout Contract). A named container, so the
+       unnamed table-tier queries never resolve against it. One column; the result and the
+       log side by side at >= 54rem (512 + 32 + 296 + slack). Existing tokens only: no new
+       colors, no see-through dimming, no transitions (D-03, D-16). */
+    #sim { container: sim / inline-size; }
+    .sim-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+    @container sim (width >= 54rem) {
+      .sim-body { grid-template-columns: minmax(0, 32rem) auto; column-gap: var(--sp-5); align-items: start; }
+    }
+    /* minmax(0, 1fr): a definite column, so the pair's auto-fit sizes against it and stacks on
+       phones (an implicit auto column would take the pair's two-card min-content, 400px). */
+    .sim-result { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+    /* Exact vs simulated never share styling (D-03), and no cue is color: wording, a solid
+       surface card with the focal ink top rule vs a dashed paper card, one decimal with a
+       spread vs a whole number. Subgrid rows line the labels, values and third rows up. */
+    .sim-pair {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+      gap: var(--sp-3); max-width: 32rem;
+    }
+    .fig {
+      grid-row: span 3; grid-template-rows: subgrid;
+      display: grid; gap: var(--sp-2); padding: var(--sp-3); border-radius: 8px; align-content: start;
+    }
+    .fig-exact { background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--ink); }
+    .fig-sim { background: var(--paper); border: 1px dashed var(--ink-muted); }
+    .fig .label { font-size: 0.875rem; line-height: 1.4; color: var(--ink-muted); }
+    .fig .value {
+      font-family: var(--font-num); font-variant-numeric: tabular-nums;
+      font-size: 1.75rem; font-weight: 700; line-height: 1.2; color: var(--ink);
+    }
+    /* Per part, so '± 14.2' may drop to its own line on a phone. */
+    .fig .value .num, .fig .value .sd { white-space: nowrap; }
+    .fig .sd {
+      font-family: var(--font-num); font-variant-numeric: tabular-nums;
+      font-size: 1rem; font-weight: 400; color: var(--ink-muted);
+    }
+    /* 'Not rolled yet' sits inside the 28px value line box, so the row height never changes. */
+    .fig .value .empty {
+      font-family: var(--font-prose); font-style: italic; font-weight: 400;
+      font-size: 1rem; color: var(--ink-muted);
+    }
+    .fig .foot { margin: 0; font-size: 0.75rem; line-height: 1.4; color: var(--ink-muted); }
+    .sim-line { margin: 0; max-width: 72ch; font-size: 1rem; line-height: 1.5; color: var(--ink); }
+    .sim-pair + .sim-line { margin-top: var(--sp-2); }
+    .sim-line .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; }
+    /* The page's first button: the checked-die-segment token pair (accent item 6). Focus uses
+       the global :focus-visible ring. Disabled only when the engine failed (WR-01). */
+    .btn-roll {
+      background: var(--accent); color: var(--paper);
+      border: 1px solid var(--accent); border-radius: 4px;
+      font: 700 1rem/1.5 var(--font-prose);
+      min-height: 40px; padding: 0 var(--sp-4); width: fit-content; justify-self: start;
+      cursor: pointer; touch-action: manipulation;
+    }
+    .btn-roll:hover:not(:disabled) { background: color-mix(in oklch, var(--accent) 85%, var(--ink)); }
+    .btn-roll:active:not(:disabled) { background: color-mix(in oklch, var(--accent) 70%, var(--ink)); }
+    .btn-roll:disabled {
+      background: var(--surface); color: var(--ink-muted); border-color: var(--line); cursor: not-allowed;
+    }
+
     /* Self-test panel and engine-error banner (UI-SPEC Self-test Panel, States) */
     #selftest, #engine-error {
       padding: var(--sp-3); border-radius: 8px;

@@ -11,7 +11,8 @@
 //   (4) test mode: the visible self-test panel passed; plain mode: the panel is hidden
 //   (5) every --expect string appears in the visible page text: the self-test panel is
 //       removed first (its check names could echo UI strings, 01-REVIEW IN-06) and the
-//       &amp; &lt; &gt; &quot; entities are decoded
+//       &amp; &lt; &gt; &quot; entities are decoded. A string may match the markup or the
+//       tag-free text, so a sentence whose numbers sit in <b class="num"> still matches
 //   (6) the engine-error banner is still hidden after init
 //   (7) the Roll button is enabled after init (it ships disabled; init enables it last)
 //   (8) the sim section body is shown after init (it ships hidden)
@@ -108,9 +109,11 @@ const rendered = dom
   .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
 // --expect matches only the visible page: drop the self-test panel, decode entities
 // (&amp; last so an encoded "&lt;" is not decoded twice).
-const visible = rendered
-  .replace(/<section id="selftest"[^>]*>[\s\S]*?<\/section>/i, '')
-  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+const decode = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+const visibleMarkup = rendered.replace(/<section id="selftest"[^>]*>[\s\S]*?<\/section>/i, '');
+const visible = decode(visibleMarkup);
+// Tags are dropped before decoding, so an encoded "&lt;" can never form a tag.
+const visibleText = decode(visibleMarkup.replace(/<[^>]*>/g, ''));
 const consoleLines = consoleText.split(/\r?\n/).filter((l) => /CONSOLE/.test(l));
 const results = [];
 const check = (name, ok, detail = '') => results.push({ name, ok, detail });
@@ -137,7 +140,9 @@ if (testMode) {
   check('self-test panel stays hidden', /<section id="selftest"[^>]*hidden/.test(rendered));
 }
 
-for (const text of expects) check(`page shows ${JSON.stringify(text)}`, visible.includes(text));
+for (const text of expects) {
+  check(`page shows ${JSON.stringify(text)}`, visible.includes(text) || visibleText.includes(text));
+}
 
 console.log(`url: ${url} (${testMode ? 'test' : 'plain'} mode, ${width}px, ${path.basename(browser)})`);
 console.log(`console lines: ${consoleLines.length}`);
