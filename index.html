@@ -561,6 +561,49 @@
         <p id="chart-caption" class="chart-caption"></p>
       </div>
     </section>
+
+    <section id="sim" aria-labelledby="sim-h">
+      <h2 id="sim-h">20 rounds, rolled for real</h2>
+      <p class="section-intro">The numbers above are exact averages. This rolls a real d20 and real damage dice for 20 rounds at the settings above (two damage dice on a crit), so you can see how far one fight lands from the average. Nothing rolls until you click, and changing a setting never re-rolls.</p>
+      <div class="sim-body" hidden>
+        <div class="sim-result">
+          <p id="sim-note" class="sim-note" hidden></p>
+          <div class="sim-pair">
+            <div class="fig fig-exact">
+              <span class="label">Expected (exact)</span>
+              <span class="value"><span class="num" id="sim-e"></span> <span class="sd" id="sim-sd"></span></span>
+              <p class="foot">± is one standard deviation, worked out exactly from the one-round spread.</p>
+            </div>
+            <div class="fig fig-sim">
+              <span class="label">This run (simulated)</span>
+              <span class="value" id="sim-total"></span>
+              <button type="button" id="roll" class="btn-roll" disabled>Roll 20 rounds</button>
+            </div>
+          </div>
+          <p id="sim-spread" class="sim-line"></p>
+          <p id="sim-place" class="sim-line"></p>
+          <p id="sim-now" class="sim-line" hidden></p>
+          <p id="sim-tally" class="sim-line" hidden></p>
+          <p id="sim-status" class="vh" role="status"></p>
+        </div>
+        <div class="sim-log-wrap" hidden>
+          <table id="sim-log" class="sim-log" aria-describedby="sim-note">
+            <caption></caption>
+            <thead>
+              <tr>
+                <th scope="col"><span aria-hidden="true">Rnd</span><span class="vh">Round</span></th>
+                <th scope="col">d20</th>
+                <th scope="col">Result</th>
+                <th scope="col"><span aria-hidden="true">Dice</span><span class="vh">Damage dice</span></th>
+                <th scope="col"><span aria-hidden="true">Dmg</span><span class="vh">Damage</span></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer>
@@ -733,17 +776,104 @@ const DiceMath = (() => {
     };
   }
 
+  // SIM-05, D-05: exact spread of the 20-round total. One-round moments over den1 = 20 * X^2
+  // (weight X per normal-hit cell, 1 per true 2dX crit pair), all through damageFor (RULES-05).
+  // Var(20 rounds) = 20 * Var(1) = (den1 * s2 - s1^2) / (20 * X^4), and s1 === stats(p).e20Num.
+  // Kept apart from stats(), which the sweeps and the self-test grid call thousands of times.
+  function spread(p) {
+    assertParams(p);
+    const X = p.die;
+    let s1 = 0, s2 = 0;
+    for (let r = 2; r <= 20; r++) {                 // r = 1 always deals 0
+      const kind = outcome(r, p.atk, p.ac);
+      if (kind === 'hit') {
+        for (let k = 1; k <= X; k++) { const d = damageFor(r, [k], p); s1 += X * d; s2 += X * d * d; }
+      } else if (kind === 'crit') {
+        for (let a = 1; a <= X; a++) for (let b = 1; b <= X; b++) {
+          const d = damageFor(20, [a, b], p); s1 += d; s2 += d * d;
+        }
+      }
+    }
+    const den1 = 20 * X * X;
+    return { s1, s2, den1, var20Num: den1 * s2 - s1 * s1, var20Den: 20 * X ** 4 };
+  }
+
   return Object.freeze({
     DICE, avg, assertParams, outcome, isHit, damageFor, threshold,
     outcomeTable, stats, closedFormPerRound, marginals, hitAverages, sweep, crossings, attackBands,
+    spread,
   });
+})();
+  </script>
+
+  <script id="dice-sim">
+// The only code that rolls dice. Pure given rng: no DOM, and it never picks its own random
+// source (the app injects it; the self-test and tools/check-engine.mjs pass a seeded one).
+const Sim = (() => {
+  'use strict';
+  // mulberry32 (bryc, public domain; github.com/bryc/code, jshash/PRNGs.md): a seeded 32-bit
+  // PRNG for the self-test and dev checks. Copied verbatim; pinned by mulberry32(1) outputs.
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // SIM-01, D-14: a face in 1..sides from rng() in [0, 1).
+  const rollDie = (sides, rng) => 1 + Math.floor(rng() * sides);
+  const RESULT = Object.freeze({ fumble: 'miss', miss: 'miss', hit: 'hit', crit: 'crit' });
+
+  // Draw order is a contract that the pinned seeded totals depend on (RESEARCH Pitfall 8):
+  // the d20 first, then one damage die on a hit, two on a crit, none on a miss or nat 1.
+  // Every round's damage comes from DiceMath.damageFor (RULES-05), so it is floored at 0.
+  function simulate(p, rounds, rng) {
+    DiceMath.assertParams(p);
+    if (typeof rng !== 'function') throw new TypeError('Sim.simulate: rng must be a function');
+    const params = Object.freeze({ ac: p.ac, die: p.die, atk: p.atk, dmg: p.dmg });
+    const list = [];
+    let total = 0;
+    for (let i = 1; i <= rounds; i++) {
+      const d20 = rollDie(20, rng);
+      const kind = DiceMath.outcome(d20, p.atk, p.ac);
+      const dice = kind === 'crit' ? [rollDie(p.die, rng), rollDie(p.die, rng)]
+        : kind === 'hit' ? [rollDie(p.die, rng)] : [];
+      const damage = DiceMath.damageFor(d20, dice, p);
+      total += damage;
+      list.push(Object.freeze({ round: i, d20, kind, result: RESULT[kind], dice: Object.freeze(dice), damage }));
+    }
+    return Object.freeze({ params, rounds: Object.freeze(list), total });
+  }
+
+  // SIM-04: "changing the attack" means ac, die, atk or dmg. The compare N never counts.
+  const sameAttack = (a, b) => a.ac === b.ac && a.die === b.die && a.atk === b.atk && a.dmg === b.dmg;
+
+  // D-11, D-12, UI-SPEC A2: normal hits count per 'd20,face' cell; crits, misses and nat 1s
+  // count per d20 row (no single cell equals a real two-dice crit, and a miss rolls no die).
+  function runMarks(run) {
+    const cells = new Map(), rows = new Map();
+    for (const r of run.rounds) {
+      if (r.kind === 'hit') {
+        const k = r.d20 + ',' + r.dice[0];
+        cells.set(k, (cells.get(k) || 0) + 1);
+      } else {
+        rows.set(r.d20, (rows.get(r.d20) || 0) + 1);
+      }
+    }
+    return { cells, rows };
+  }
+
+  return Object.freeze({ mulberry32, rollDie, simulate, sameAttack, runMarks });
 })();
   </script>
 
   <script id="view-model">
 // Pure view-model: control spec, the one parser, exact fixed-point formatting, and the views:
 // statsView (Phase 1 stats only), compareView (three compact tables), chartView (the sweep
-// chart), computeView (the page).
+// chart), simExact and the roll copy (Phase 3), computeView (the page).
 const VM = (() => {
   'use strict';
   const CONTROL_SPEC = Object.freeze({
@@ -974,15 +1104,58 @@ const VM = (() => {
   // The page view (D-08, D-16): stats view plus the compare and chart blocks. The big table and
   // the one legend use the shared compare domain, so the same number is the same color everywhere.
   // statsView stays chart-free: the grids call it per combo (RESEARCH Pitfall 4).
+  // ---- Roll-20-rounds copy (Phase 3) ----------------------------------------------------
+  // Settings in control order, Phase 2 naming: 'AC 15, d8, +5 to hit, +0 damage'.
+  const settingsText = (p) => `AC ${p.ac}, d${p.die}, ${signed(p.atk)} to hit, ${signed(p.dmg)} damage`;
+
+  // SIM-02, SIM-05, D-04, D-05: the exact figure and its spread, all in displayed tenths
+  // (UI-SPEC A8), so a reader can add them up by hand. eT uses the stat card's tenths (STAT-02).
+  // lopsided: E - SD < 0, or only a nat 20 hits. The second trigger departs from the UI-SPEC
+  // rule on purpose: there 35.8% of runs total 0 and "about 2 in 3" would be false (RESEARCH
+  // Pitfall 1); tools/check-engine.mjs (p) guards both wordings against the exact distribution.
+  function simExact(p) {
+    const s = DiceMath.stats(p), v = DiceMath.spread(p);
+    const eT = tenths(s.e20Num, s.e20Den);
+    const sdT = Math.round(10 * Math.sqrt(v.var20Num / v.var20Den));
+    const lopsided = eT - sdT < 0 || s.hitFaces === 1;
+    const loT = lopsided ? 0 : eT - sdT, hiT = eT + sdT;
+    const loText = fixed(loT, 1), hiText = fixed(hiT, 1);
+    return {
+      eT, sdT, loT, hiT, lopsided,
+      eText: fixed(eT, 1), sdText: fixed(sdT, 1), loText, hiText,
+      spreadText: lopsided
+        ? `Most runs land between ${loText} and ${hiText} (damage cannot go below 0, so the spread is lopsided).`
+        : `About 2 runs in 3 land between ${loText} and ${hiText}.`,
+    };
+  }
+
+  // D-04: where one run lands, from displayed tenths: diff = 10 x total - eT, SD multiple
+  // = |diff| / sdT rounded half-up to tenths (integer operands, so Math.round is exact).
+  function simPlacement(total, ex) {
+    const diffT = 10 * total - ex.eT;
+    if (diffT === 0) return 'This run is exactly on expected.';
+    const mult = fixed(Math.round((10 * Math.abs(diffT)) / ex.sdT), 1);
+    return `This run is ${fixed(Math.abs(diffT), 1)} ${diffT > 0 ? 'above' : 'below'} expected (${mult} SD).`;
+  }
+
+  // The one announcement per click (UI-SPEC Accessibility): written only by the click handler.
+  const simStatus = (total, ex) =>
+    `Rolled 20 rounds: ${total} damage. Expected ${ex.eText} ± ${ex.sdText}. ` + simPlacement(total, ex);
+
   function computeView(state) {
     const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
     const compare = compareView(p, state.n);
-    return { ...statsView(state), heatMax: compare.heatMax, compare, chart: chartView(p, state.n) };
+    // simExact is page-view only: statsView stays sim-free for the per-combo callers.
+    return {
+      ...statsView(state), heatMax: compare.heatMax, compare, chart: chartView(p, state.n),
+      simExact: simExact(p),
+    };
   }
 
   return Object.freeze({
     CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, compareView,
     niceTicks, captionOrder, captionCross, captionBands, chartView, computeView,
+    settingsText, simExact, simPlacement, simStatus,
   });
 })();
   </script>
@@ -1569,12 +1742,41 @@ const cmpEls = Object.fromEntries(CMP_KEYS.map((k) => [k, {
 const sweepEl = document.getElementById('sweep');
 const chartCaptionEl = document.getElementById('chart-caption');
 const chartReadoutEl = document.getElementById('chart-readout');
+// Roll-20-rounds section (Phase 3). The note, Now, tally and log slots are filled in plan 03-02.
+const simEl = document.getElementById('sim');
+const simBodyEl = simEl.querySelector('.sim-body');
+const rollBtn = document.getElementById('roll');
+const simEEl = document.getElementById('sim-e');
+const simSdEl = document.getElementById('sim-sd');
+const simTotalEl = document.getElementById('sim-total');
+const simSpreadEl = document.getElementById('sim-spread');
+const simPlaceEl = document.getElementById('sim-place');
+const simStatusEl = document.getElementById('sim-status');
+const simNoteEl = document.getElementById('sim-note');
+const simNowEl = document.getElementById('sim-now');
+const simTallyEl = document.getElementById('sim-tally');
+const simLogWrapEl = simEl.querySelector('.sim-log-wrap');
+const simLogEl = document.getElementById('sim-log');
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
 const state = {};
 const RENDERERS = [renderControls, renderStats, renderTable, renderLegend, renderFootnote, renderCompare,
-  renderChart];
+  renderChart, renderSim];
+
+// The last run lives here, never in state (RESEARCH Pattern 2, Pitfall 2): a run is an event,
+// not a derivation. init() and the UI smoke do Object.assign(state, DEFAULT_STATE), which would
+// not clear it, and renderControls walks [data-key]. Only rollWith / handleRoll / resetSim write
+// it; render() only reads it. shownRunId is renderSim's cache: it rebuilds a run once per id.
+const sim = { run: null, exact: null, tally: [], seq: 0, rollError: false };
+let shownRunId = 0;
+function resetSim() {
+  sim.run = null;
+  sim.exact = null;
+  sim.tally = [];
+  sim.rollError = false;
+  shownRunId = 0;
+}
 
 let pending = false;
 function setState(patch) {
@@ -1588,7 +1790,12 @@ function scheduleRender() {
 }
 function render() {
   const view = VM.computeView(state);
-  for (const r of RENDERERS) r(view);
+  // Derived once per frame (D-08, D-09, D-13): staleness is a comparison of the rolled-at attack
+  // with the current one, never a flag, so returning to the rolled-at settings un-stales the run.
+  const stale = sim.run !== null && !Sim.sameAttack(sim.run.params, view.params);
+  const marks = sim.run !== null && !stale ? Sim.runMarks(sim.run) : null;
+  const simCtx = { stale, marks };
+  for (const r of RENDERERS) r(view, simCtx);
   lastView = view;
   paintReadout();
 }
@@ -1718,14 +1925,16 @@ function renderTable(view) {
 
 // CMP-01..04: three compact tables on the shared scale, each with its stats line
 // (rule · total over 20 rounds · delta vs baseline), built with createElement/textContent.
+// A number inside a prose line: <b class="num"> (tabular numerals, 700), text only.
+function num(text) {
+  const b = document.createElement('b');
+  b.className = 'num';
+  b.textContent = text;
+  return b;
+}
+
 function renderCompare(view) {
   const { heatMax, tables } = view.compare;
-  const num = (text) => {
-    const b = document.createElement('b');
-    b.className = 'num';
-    b.textContent = text;
-    return b;
-  };
   for (const key of CMP_KEYS) {
     const t = tables[key];
     renderOutcomeTable(cmpEls[key].table, {
@@ -1735,6 +1944,83 @@ function renderCompare(view) {
     const parts = [t.ruleText + ' · ', num(t.totalText), ' over 20 rounds'];
     if (t.deltaText !== null) parts.push(' · ', num(t.deltaText), ' vs baseline');
     cmpEls[key].stats.replaceChildren(...parts);
+  }
+}
+
+// ---- Roll 20 rounds (SIM-01, SIM-02, SIM-05, D-01..D-05, D-07) ---------------------------
+const SIM_PROMPT = 'Click Roll 20 rounds to roll the dice and see where one fight of 20 rounds lands.';
+const ROLL_ERROR_TEXT = 'The roll failed, so no result is shown. ' +
+  'Reload the page. If it keeps happening, add ?test to the address to see which check failed.';
+
+// Shared by the click and the ?test smoke (which passes a seeded rng). The params are a copy
+// of the four attack keys (never n); Sim.simulate freezes them into the run.
+function rollWith(rng) {
+  const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
+  const run = Sim.simulate(p, 20, rng);
+  // D-10: the tally keeps up to five totals of the same attack, newest first (shown in 03-02)
+  sim.tally = sim.run && Sim.sameAttack(sim.run.params, run.params)
+    ? [run.total, ...sim.tally].slice(0, 5) : [run.total];
+  sim.run = Object.freeze({ ...run, id: ++sim.seq });
+  sim.exact = VM.simExact(run.params);    // rolled-at figures, kept with the run (D-08)
+  sim.rollError = false;
+  return sim.run;
+}
+
+// One activation, one run. The status region is written here and never by render(): clear it,
+// then write in the next frame so an identical sentence is announced again.
+function handleRoll(rng) {
+  let msg;
+  try {
+    const run = rollWith(rng);
+    msg = VM.simStatus(run.total, sim.exact);
+  } catch (err) {
+    console.error('roll failed:', err);
+    sim.run = null;
+    sim.exact = null;
+    sim.tally = [];
+    sim.rollError = true;
+    msg = ROLL_ERROR_TEXT;
+  }
+  scheduleRender();
+  simStatusEl.textContent = '';
+  requestAnimationFrame(() => { simStatusEl.textContent = msg; });
+}
+
+// The page's live dice: the one place a random source is chosen (SIM-06, D-15).
+const onRoll = () => handleRoll(Math.random);
+
+// A VM sentence as text with every decimal number in <b class="num"> (UI-SPEC Typography).
+// The copy stays in VM; the renderer only adds number styling.
+const numberedParts = (sentence) =>
+  sentence.split(/(\d+\.\d+)/).map((s, i) => (i % 2 ? num(s) : s)).filter((x) => x !== '');
+
+// Text-only writes to the figure spans and the line paragraphs. Never replaceChildren or
+// innerHTML on .fig-sim or any ancestor of #roll, so the button keeps focus (Pitfall 5).
+function renderSim(view, simCtx) {
+  const run = sim.run;
+  if (run === null) {
+    // Before a roll the exact figure and spread follow the controls live (D-02).
+    const ex = view.simExact;
+    simEEl.textContent = ex.eText;
+    simSdEl.textContent = '± ' + ex.sdText;
+    if (shownRunId !== 0 || simTotalEl.firstElementChild === null) {
+      const empty = document.createElement('span');
+      empty.className = 'empty';
+      empty.textContent = 'Not rolled yet';
+      simTotalEl.replaceChildren(empty);
+    }
+    simSpreadEl.replaceChildren(...numberedParts(ex.spreadText));
+    simPlaceEl.textContent = sim.rollError ? ROLL_ERROR_TEXT : SIM_PROMPT;
+    shownRunId = 0;
+  } else if (run.id !== shownRunId) {
+    // A new run: the pair shows the rolled-at expected, so both figures describe one attack (D-08).
+    const ex = sim.exact;
+    simEEl.textContent = ex.eText;
+    simSdEl.textContent = '± ' + ex.sdText;
+    simTotalEl.textContent = String(run.total);
+    simSpreadEl.replaceChildren(...numberedParts(ex.spreadText));
+    simPlaceEl.replaceChildren(...numberedParts(VM.simPlacement(run.total, ex)));
+    shownRunId = run.id;
   }
 }
 
@@ -2563,12 +2849,12 @@ function runUiSmoke() {
   return { results, ms: performance.now() - t0 };
 }
 
-// True only when all three pure blocks loaded and the self-test itself did not crash.
+// True only when all four pure blocks loaded and the self-test itself did not crash.
 // try/catch: a block that throws before its const initializes leaves the name in the
 // temporal dead zone, where even typeof throws.
 function engineLoaded() {
   try {
-    return typeof DiceMath !== 'undefined' && typeof VM !== 'undefined' &&
+    return typeof DiceMath !== 'undefined' && typeof Sim !== 'undefined' && typeof VM !== 'undefined' &&
       typeof SelfTest !== 'undefined' &&
       !SelfTest.results.some((r) => r.name.startsWith('self-test crashed'));
   } catch {
@@ -2580,31 +2866,49 @@ function selfTestIfLoaded() {
   try { return typeof SelfTest !== 'undefined' ? SelfTest : null; } catch { return null; }
 }
 
+function showEngineError() {
+  const banner = document.getElementById('engine-error');
+  // Split literal: the banner sentence then appears in a DOM dump only when the banner is shown.
+  banner.textContent = 'The dice math failed ' + 'to load, so the table and numbers are not shown. ' +
+    'Reload the page. If it keeps happening, add ?test to the address to see which check failed.';
+  banner.hidden = false;
+}
+
 function init() {
   const testMode = new URLSearchParams(location.search).has('test');
   if (!engineLoaded()) {
-    const banner = document.getElementById('engine-error');
-    // Split literal: the banner sentence then appears in a DOM dump only when the banner is shown.
-    banner.textContent = 'The dice math failed ' + 'to load, so the table and numbers are not shown. ' +
-      'Reload the page. If it keeps happening, add ?test to the address to see which check failed.';
-    banner.hidden = false;
+    showEngineError();
     const st = selfTestIfLoaded();
     if (testMode && st) showSelfTestPanel(st);
     return;
   }
 
-  // The N slider's range comes only from CONTROL_SPEC.n (IN-04: no second copy in the markup).
-  nRangeEl.min = String(VM.CONTROL_SPEC.n.min);
-  nRangeEl.max = String(VM.CONTROL_SPEC.n.max);
-  chartInit();                             // SVG skeleton once, before the first render (D-09)
-  Object.assign(state, VM.DEFAULT_STATE);
-  renderControls();                        // D-04: state -> controls, never the reverse
-  for (const root of [form, compareForm]) {   // two control roots, one handler (Pattern 1)
-    root.addEventListener('submit', (e) => e.preventDefault());
-    root.addEventListener('input', onControl);
-    root.addEventListener('change', onChange);
+  // WR-01 (02-REVIEW): the first render is guarded, so a view-model or DOM throw shows the
+  // banner instead of a blank page. The Roll button ships disabled and the sim body hidden;
+  // both go live only as the last steps of a render that succeeded.
+  try {
+    // The N slider's range comes only from CONTROL_SPEC.n (IN-04: no second copy in the markup).
+    nRangeEl.min = String(VM.CONTROL_SPEC.n.min);
+    nRangeEl.max = String(VM.CONTROL_SPEC.n.max);
+    chartInit();                             // SVG skeleton once, before the first render (D-09)
+    Object.assign(state, VM.DEFAULT_STATE);
+    renderControls();                        // D-04: state -> controls, never the reverse
+    for (const root of [form, compareForm]) {   // two control roots, one handler (Pattern 1)
+      root.addEventListener('submit', (e) => e.preventDefault());
+      root.addEventListener('input', onControl);
+      root.addEventListener('change', onChange);
+    }
+    rollBtn.addEventListener('click', onRoll);
+    render();
+    simBodyEl.hidden = false;
+    rollBtn.disabled = false;
+  } catch (err) {
+    console.error('render failed:', err);
+    showEngineError();
+    const st = selfTestIfLoaded();
+    if (testMode && st) showSelfTestPanel(st);
+    return;
   }
-  render();
   if (testMode) showSelfTestPanel(SelfTest, runUiSmoke());
 }
 
