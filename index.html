@@ -458,6 +458,54 @@
     .btn-roll:disabled {
       background: var(--surface); color: var(--ink-muted); border-color: var(--line); cursor: not-allowed;
     }
+    /* Only the newest tally total is bold; older totals are span.num at 400 (UI-SPEC A4). */
+    .sim-line span.num { font-weight: 400; }
+    /* The rolled-at note (D-08). Shown in both states, so the pair never jumps down when a
+       setting changes. Wherever the result column is under 40rem (phones, and the 32rem column
+       beside the log) the stale sentence wraps, so two lines are reserved up front. */
+    .sim-note { margin: 0; font-size: 0.875rem; line-height: 1.4; color: var(--ink); }
+    .sim-note b { font-weight: 700; }
+    @container sim (width < 40rem) or (width >= 54rem) {
+      .sim-note { min-height: calc(2 * 1.4em); }
+    }
+    /* Per-round log (SIM-03, D-06): 296px, 24px rows, tabular numbers. Not .outcome, so none of
+       the outcome-table tiers or heat rules apply. */
+    .sim-log { border-collapse: collapse; table-layout: fixed; width: 296px; background: var(--paper); }
+    /* Two lines reserved: the stale suffix always wraps at 296px, and the rows must not move
+       when a setting changes (D-09). Beside the result, this lines the header up with the pair. */
+    .sim-log caption {
+      caption-side: top; text-align: left; font-size: 0.875rem; font-weight: 700; line-height: 1.4;
+      color: var(--ink); padding-bottom: var(--sp-2); min-height: calc(2 * 1.4em + var(--sp-2));
+    }
+    .sim-log th, .sim-log td {
+      height: 24px; line-height: 24px; padding: 0 var(--sp-2); border-bottom: 1px solid var(--line);
+      font-size: 0.875rem; font-family: var(--font-num); font-variant-numeric: tabular-nums;
+      font-weight: 400; text-align: right;
+    }
+    .sim-log thead th { background: var(--surface); font-weight: 700; color: var(--ink); }
+    .sim-log thead th:nth-child(1) { width: 48px; }
+    .sim-log thead th:nth-child(2) { width: 48px; }
+    .sim-log thead th:nth-child(3) { width: 64px; }
+    .sim-log thead th:nth-child(4) { width: 80px; }
+    .sim-log thead th:nth-child(5) { width: 56px; }
+    /* Column 3 is the Result word: left-aligned prose. Accent only on crit (accent item 7). */
+    .sim-log th:nth-child(3), .sim-log td:nth-child(3) { text-align: left; }
+    .sim-log td:nth-child(3) { font-family: var(--font-prose); }
+    .sim-log .res-hit { color: var(--ink); }
+    .sim-log .res-miss { color: var(--ink-muted); }
+    .sim-log .res-crit { font-weight: 700; color: var(--accent); }
+    .sim-log tbody th[scope="row"] { font-weight: 400; background: none; }
+    .sim-log tfoot tr { border-top: 2px solid var(--ink); }
+    .sim-log tfoot th { text-align: left; font-weight: 700; }
+    .sim-log tfoot td { font-weight: 700; }
+    /* Stale run (SIM-04, D-08, UI-SPEC A7): text to --ink-muted and frames to --line, never
+       see-through dimming, so stale text stays above 4.5:1. The note, the Now: line and the
+       log caption keep --ink: they carry the stale cue in words. */
+    #sim.is-stale .fig .value, #sim.is-stale .fig .sd, #sim.is-stale #sim-spread, #sim.is-stale #sim-place,
+    #sim.is-stale .sim-log, #sim.is-stale .sim-log .res-crit,
+    #sim.is-stale .sim-log th, #sim.is-stale .sim-log td { color: var(--ink-muted); }
+    #sim.is-stale .fig { border-color: var(--line); }
+    #sim.is-stale .fig-exact { border-top-color: var(--line); }
 
     /* Self-test panel and engine-error banner (UI-SPEC Self-test Panel, States) */
     #selftest, #engine-error {
@@ -627,7 +675,7 @@
       <p class="section-intro">The numbers above are exact averages. This rolls a real d20 and real damage dice for 20 rounds at the settings above (two damage dice on a crit), so you can see how far one fight lands from the average. Nothing rolls until you click, and changing a setting never re-rolls.</p>
       <div class="sim-body" hidden>
         <div class="sim-result">
-          <p id="sim-note" class="sim-note" hidden></p>
+          <p id="sim-note" class="sim-note" hidden><span class="note-base"></span><b class="note-stale" hidden> Settings changed. Roll again to compare.</b></p>
           <div class="sim-pair">
             <div class="fig fig-exact">
               <span class="label">Expected (exact)</span>
@@ -1802,7 +1850,7 @@ const cmpEls = Object.fromEntries(CMP_KEYS.map((k) => [k, {
 const sweepEl = document.getElementById('sweep');
 const chartCaptionEl = document.getElementById('chart-caption');
 const chartReadoutEl = document.getElementById('chart-readout');
-// Roll-20-rounds section (Phase 3). The note, Now, tally and log slots are filled in plan 03-02.
+// Roll-20-rounds section (Phase 3): figures, lines, rolled-at note, Now:, tally and the log.
 const simEl = document.getElementById('sim');
 const simBodyEl = simEl.querySelector('.sim-body');
 const rollBtn = document.getElementById('roll');
@@ -1817,6 +1865,8 @@ const simNowEl = document.getElementById('sim-now');
 const simTallyEl = document.getElementById('sim-tally');
 const simLogWrapEl = simEl.querySelector('.sim-log-wrap');
 const simLogEl = document.getElementById('sim-log');
+const simNoteBaseEl = simNoteEl.querySelector('.note-base');
+const simNoteStaleEl = simNoteEl.querySelector('.note-stale');
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
@@ -2054,8 +2104,34 @@ const onRoll = () => handleRoll(Math.random);
 const numberedParts = (sentence) =>
   sentence.split(/(\d+\.\d+)/).map((s, i) => (i % 2 ? num(s) : s)).filter((x) => x !== '');
 
+// Log rows (SIM-03, D-06). innerHTML carries only integers coerced with | 0 and fixed words from
+// this table, never raw run data (T-03-07). A nat 1 is already 'miss' in r.result.
+const LOG_RESULT_CELL = Object.freeze({
+  hit: '<td class="res-hit">hit</td>',
+  miss: '<td class="res-miss">miss</td>',
+  crit: '<td class="res-crit">crit</td>',
+});
+const LOG_CAPTION = 'Round by round';
+function logBodyHtml(run) {
+  return run.rounds.map((r) => {
+    const cell = Object.hasOwn(LOG_RESULT_CELL, r.result) ? LOG_RESULT_CELL[r.result] : '<td></td>';
+    const dice = r.dice.length ? r.dice.map((d) => d | 0).join(' + ') : '\u2014';
+    // scope="row" stays the first attribute: check-page counts the literal '<th scope="row"'.
+    return `<tr><th scope="row">${r.round | 0}</th><td>${r.d20 | 0}</td>${cell}` +
+      `<td>${dice}</td><td>${r.damage | 0}</td></tr>`;
+  }).join('');
+}
+
+// Writes only when the text differs, so a frame that changes nothing touches nothing.
+function setText(el, text) {
+  if (el.textContent !== text) el.textContent = text;
+}
+
 // Text-only writes to the figure spans and the line paragraphs. Never replaceChildren or
 // innerHTML on .fig-sim or any ancestor of #roll, so the button keeps focus (Pitfall 5).
+// RESEARCH Pattern 3: the figures, placement, log rows, total and note base are rebuilt only
+// when the run id changes; every other frame only toggles is-stale and hidden flags and sets
+// the Now:, tally and caption text, so dragging a slider never rebuilds the log (D-09, SC3).
 function renderSim(view, simCtx) {
   const run = sim.run;
   if (run === null) {
@@ -2071,8 +2147,19 @@ function renderSim(view, simCtx) {
     }
     simSpreadEl.replaceChildren(...numberedParts(ex.spreadText));
     simPlaceEl.textContent = sim.rollError ? ROLL_ERROR_TEXT : SIM_PROMPT;
+    // No run: the log is empty again, so the DOM is back to 80 row headers (Pitfall 3).
+    simLogEl.tBodies[0].replaceChildren();
+    simLogEl.tFoot.replaceChildren();
+    setText(simLogEl.caption, '');
+    simLogWrapEl.hidden = true;
+    simNoteEl.hidden = true;
+    simNowEl.hidden = true;
+    simTallyEl.hidden = true;
+    simEl.classList.remove('is-stale');
     shownRunId = 0;
-  } else if (run.id !== shownRunId) {
+    return;
+  }
+  if (run.id !== shownRunId) {
     // A new run: the pair shows the rolled-at expected, so both figures describe one attack (D-08).
     const ex = sim.exact;
     simEEl.textContent = ex.eText;
@@ -2080,7 +2167,53 @@ function renderSim(view, simCtx) {
     simTotalEl.textContent = String(run.total);
     simSpreadEl.replaceChildren(...numberedParts(ex.spreadText));
     simPlaceEl.replaceChildren(...numberedParts(VM.simPlacement(run.total, ex)));
+    // All 20 rows and the total in one frame (D-07); the Total equals the figure (SC2).
+    simLogEl.tBodies[0].innerHTML = logBodyHtml(run);
+    simLogEl.tFoot.innerHTML = `<tr><th scope="row" colspan="4">Total</th><td>${run.total | 0}</td></tr>`;
+    simNoteBaseEl.textContent = 'Rolled at ' + VM.settingsText(run.params) + '.';
+    simLogWrapEl.hidden = false;
+    simNoteEl.hidden = false;
     shownRunId = run.id;
+  }
+
+  // Every frame: cheap toggles only (D-08, D-09, D-13).
+  const stale = simCtx.stale;
+  simEl.classList.toggle('is-stale', stale);
+  simNoteStaleEl.hidden = !stale;
+  setText(simLogEl.caption, stale
+    ? LOG_CAPTION + ' (rolled at ' + VM.settingsText(run.params) + ')'
+    : LOG_CAPTION);
+
+  simNowEl.hidden = !stale;
+  if (stale) {
+    const now = view.simExact;
+    const at = ' at ' + VM.settingsText(view.params) + '.';
+    if (simNowEl.textContent !== 'Now: expected ' + now.eText + ' ± ' + now.sdText + at) {
+      const b = document.createElement('b');
+      b.textContent = 'Now:';
+      simNowEl.replaceChildren(b, ' expected ', num(now.eText), ' ± ', num(now.sdText), at);
+    }
+  }
+
+  // Tally (D-10, UI-SPEC A4): only while fresh and with two or more runs; rollWith owns the
+  // reset rule, so a stale run just hides it (D-13) and returning shows it again (A3).
+  const k = sim.tally.length;
+  simTallyEl.hidden = stale || k < 2;
+  if (!simTallyEl.hidden) {
+    const lead = 'Last ' + k + ' runs at these settings, newest first: ';
+    const want = lead + sim.tally.join(' · ') + ' (expected ' + sim.exact.eText + ')';
+    if (simTallyEl.textContent !== want) {
+      const plain = (text) => {
+        const s = document.createElement('span');
+        s.className = 'num';
+        s.textContent = text;
+        return s;
+      };
+      const parts = [lead, num(String(sim.tally[0] | 0))];
+      for (const t of sim.tally.slice(1)) parts.push(' · ', plain(String(t | 0)));
+      parts.push(' (expected ', plain(sim.exact.eText), ')');
+      simTallyEl.replaceChildren(...parts);
+    }
   }
 }
 

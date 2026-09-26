@@ -6,8 +6,8 @@
 // the final DOM (--dump-dom) and the console (--enable-logging), then checks:
 //   (1) the console contains SELFTEST PASSED
 //   (2) the console has no Uncaught / SELFTEST FAIL / CSP / parse / load errors
-//   (3) the DOM has exactly 80 row headers (<th scope="row"): 4 tables x 20 rows at
-//       load; the sim log adds 21 only after a roll, and the ?test smoke clears its run
+//   (3) the DOM has exactly 80 row headers (<th scope="row">) at load: 4 tables x 20 rows;
+//       the sim log adds 21 only after a roll (the ?test smoke resets its run at the end)
 //   (4) test mode: the visible self-test panel passed; plain mode: the panel is hidden
 //   (5) every --expect string appears in the visible page text: the self-test panel is
 //       removed first (its check names could echo UI strings, 01-REVIEW IN-06) and the
