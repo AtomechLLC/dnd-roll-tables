@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Live Roll Table, Deployed** - Self-tested 5e rules engine driving a live baseline outcome table and stat cards, published to a public GitHub Pages URL (completed 2026-09-25)
 - [x] **Phase 2: Bonus Comparison** - N slider, three side-by-side tables (baseline / +N hit / +N damage), and the SVG sweep chart with crossover and plateau marking (completed 2026-09-25)
-- [ ] **Phase 3: Roll-20-Rounds Simulation** - Real dice rolls with a per-round log, realized vs expected (with standard deviation), and stale-result handling
+- [x] **Phase 3: Roll-20-Rounds Simulation** - Real dice rolls with a per-round log, realized vs expected (with standard deviation), and stale-result handling (completed 2026-09-26)
 - [ ] **Phase 4: Designer Explanation & Final Ship** - Live-substituted formulas, generated crossover/plateau copy, suggested explorations, accessibility pass, final public deploy
 
 ## Phase Details
@@ -99,7 +99,7 @@ Plans:
   3. Changing any control after a roll marks the previous result as stale and shows the parameters it was rolled at. The simulation never re-rolls on its own, and dragging a slider causes no flicker.
   4. The `?test` panel includes seeded-RNG simulation checks, and they pass the same way on every load.
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -112,7 +112,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-03-PLAN.md — Rings, badges, and row-label counts on the #outcome table, legend item, phase verification with state screenshots (Wave 3)
+- [x] 03-03-PLAN.md — Rings, badges, and row-label counts on the #outcome table, legend item, phase verification with state screenshots (Wave 3)
 **UI hint**: yes
 
 ### Phase 4: Designer Explanation & Final Ship
@@ -141,5 +141,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 |-------|----------------|--------|-----------|
 | 1. Live Roll Table, Deployed | 5/5 | Complete    | 2026-09-25 |
 | 2. Bonus Comparison | 3/3 | Complete   | 2026-09-25 |
-| 3. Roll-20-Rounds Simulation | 2/3 | In Progress|  |
+| 3. Roll-20-Rounds Simulation | 3/3 | Complete   | 2026-09-26 |
 | 4. Designer Explanation & Final Ship | 0/TBD | Not started | - |
