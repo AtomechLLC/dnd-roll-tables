@@ -3184,6 +3184,99 @@ function runUiSmoke() {
   } finally {
     try { resetSim(); } catch { /* resetSim missing: the crash above is already reported */ }
   }
+
+  // Phase 3 table marks (D-11..D-13): rings and ×N badges on #outcome only, counted d20
+  // labels for crits / misses / nat 1s, the caption suffix, and the static legend item.
+  // Seed 6 at the defaults: 8 distinct hit cells ((11, 1) twice) and 7 counted rows.
+  // Names avoid displayed strings; visible copy is split (IN-06). Resets in finally.
+  try {
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); renderControls(); render(); };
+    const body = tableEl.tBodies[0];
+    const rolls = () => tableEl.querySelectorAll('.roll').length;
+    const capVh = () => tableEl.caption.querySelector('.vh');
+    const hasRoll = (el) => (el ? el.classList.contains('roll') : null);
+    const dataN = (el) => (el ? el.getAttribute('data-n') : null);
+
+    // 1. No run: no marks, caption has no suffix (D-13 baseline)
+    resetSim();
+    show({});
+    check('sim marks ui: no marks before a roll', rolls(), 0);
+    check('sim marks ui: no caption suffix before a roll', capVh(), null);
+
+    // 2. Fresh seed-6 run (D-11, D-12)
+    rollWith(Sim.mulberry32(6));
+    render();
+    check('sim marks ui: seed 6 marked elements', rolls(), 15);
+    check('sim marks ui: seed 6 badged elements', tableEl.querySelectorAll('[data-n]').length, 8);
+    const c11 = body.rows[10].cells[1];
+    check('sim marks ui: cell 11,1 is marked', hasRoll(c11), true);
+    check('sim marks ui: cell 11,1 count', dataN(c11), '2');
+    const h20 = body.rows[19].cells[0];
+    check('sim marks ui: row 20 label is marked', hasRoll(h20), true);
+    check('sim marks ui: row 20 label count', dataN(h20), '3');
+    check('sim marks ui: row 1 label count', dataN(body.rows[0].cells[0]), '2');
+    check('sim marks ui: no crit-row cell is marked', body.rows[19].querySelectorAll('td.roll').length, 0);
+    check('sim marks ui: no miss cell is marked', tableEl.querySelectorAll('td.m.roll').length, 0);
+    check('sim marks ui: marked labels keep scope row',
+      Array.from(body.querySelectorAll('th.roll')).every((th) => th.getAttribute('scope') === 'row'), true);
+    check('sim marks ui: marked label markup keeps scope first',
+      body.innerHTML.split('<th scope="row" class="roll"').length - 1, 7);
+    const mk = Sim.runMarks(sim.run);
+    check('sim marks ui: unbadged marked cells were rolled once',
+      Array.from(body.querySelectorAll('td.roll:not([data-n])')).every((td) =>
+        mk.cells.get(td.parentElement.cells[0].textContent + ',' + td.cellIndex) === 1), true);
+    check('sim marks ui: compact tables carry no marks', document.querySelectorAll('#compare .roll').length, 0);
+    check('sim marks ui: caption suffix text', capVh() ? capVh().textContent : null,
+      ' Outlined cells and d20 labels ' + 'show your last roll of 20 rounds; ' +
+      'the round-by-round log is in the section below the chart.');
+    const cap0 = 'Damage dealt for every d20 roll ' + '(rows) and d8 face (columns). AC 15, attack +5, damage +0.';
+    const first = tableEl.caption.firstChild;
+    check('sim marks ui: caption sentence unchanged with marks', first ? first.nodeValue : null, cap0);
+
+    // 3. The attack changes: marks and suffix clear, the dimmed run and log stay (D-13)
+    send(acRange, '16');
+    render();
+    check('sim marks ui: stale run shows no marks', rolls(), 0);
+    check('sim marks ui: stale run has no caption suffix', capVh(), null);
+    check('sim marks ui: stale run keeps the section dimmed',
+      document.getElementById('sim').classList.contains('is-stale'), true);
+    check('sim marks ui: stale run keeps its log rows', document.getElementById('sim-log').tBodies[0].rows.length, 20);
+
+    // 4. Back to the rolled-at settings restores the marks (D-09); +N never clears them
+    send(acRange, '15');
+    render();
+    check('sim marks ui: marks return at the rolled-at settings', rolls(), 15);
+    send(document.getElementById('n-range'), '12');
+    render();
+    check('sim marks ui: N slider keeps the marks', rolls(), 15);
+    check('sim marks ui: N slider leaves compact tables unmarked', document.querySelectorAll('#compare .roll').length, 0);
+    show({});
+
+    // 5. The static legend item (always present, drawn with the real classes)
+    const items = () => document.querySelectorAll('#legend .legend-item');
+    check('sim marks ui: legend item count', items().length, 5);
+    const fifth = items()[4];
+    check('sim marks ui: fifth legend item text',
+      fifth ? fifth.lastElementChild.textContent.startsWith('Outlined: rolled in your last ' + '20 rounds') : null, true);
+    const sw = fifth ? fifth.querySelector('.swatch') : null;
+    check('sim marks ui: fifth legend swatch classes',
+      sw ? ['swatch', 'h', 'roll'].every((c) => sw.classList.contains(c)) : null, true);
+    check('sim marks ui: fifth legend swatch count', dataN(sw), '2');
+    check('sim marks ui: ramp still has five swatches', document.querySelectorAll('#legend .ramp .swatch.h').length, 5);
+    resetSim();
+    render();
+    check('sim marks ui: legend item present with no run', items().length, 5);
+
+    // 6. Reset: no marks, 80 row headers (Pitfall 3)
+    resetSim();
+    show({});
+    check('sim marks ui: no marks after reset', rolls(), 0);
+    check('sim marks ui: page row headers after reset', document.querySelectorAll('th[scope="row"]').length, 80);
+  } catch (err) {
+    results.push({ name: 'sim marks ui smoke crashed: ' + (err && err.message), ok: false });
+  } finally {
+    try { resetSim(); } catch { /* resetSim missing: the crash above is already reported */ }
+  }
   // The click above queued its announcement for the next frame. rAF callbacks run in
   // registration order, so this clears it afterwards and the DOM dump never carries it.
   requestAnimationFrame(() => { document.getElementById('sim-status').textContent = ''; });
