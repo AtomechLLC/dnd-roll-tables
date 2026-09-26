@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 3 UI-SPEC approved
-last_updated: "2026-09-26T17:46:05.188Z"
-last_activity: 2026-09-26 -- Phase 3 planning complete
+last_updated: "2026-09-26T18:07:03.328Z"
+last_activity: 2026-09-26
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 11
-  completed_plans: 8
+  completed_plans: 9
   percent: 50
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** A designer can see, in one glance at a live table and a curve, why attack bonuses saturate (hit chance caps at 95%) while damage bonuses scale linearly, and why the crossover depends on AC and the damage die.
-**Current focus:** Phase 3 — roll 20 rounds simulation
+**Current focus:** Phase 03 — roll-20-rounds-simulation
 
 ## Current Position
 
-Phase: 3
-Plan: Not started
+Phase: 03 (roll-20-rounds-simulation) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-09-26 -- Phase 3 planning complete
+Last activity: 2026-09-26
 
-Progress: [██████████] 100%
+Progress: [████████░░] 82%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100%
 | Phase 02 P01 | 8 min | 3 tasks | 3 files |
 | Phase 02 P02 | 10 min | 3 tasks | 2 files |
 | Phase 02 P03 | 39 min | 3 tasks | 3 files |
+| Phase 03 P01 | 13min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,9 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-03: Crossing labels carry a below/above class; each chart tier nudges them by the growth in text size and ring radius, so phone-tier labels never overlap their ring (UI-SPEC attributes unchanged)
 - [Phase 02]: 02-03: Self-test shares one IIFE-level sweep memo across the chart and cross sections; Node self-test 178-197 ms against the 200 ms budget
 - [Phase 02]: 02-03: ROADMAP Phase 2 SC1/SC3 reworded to amended CMP-04 (plain values) and zero-or-one crossing in N = 0..20 (70,980 settings checked)
+- [Phase 03]: Spread line is lopsided when E - SD < 0 OR only a nat 20 hits (honest band wording; guarded by check-engine (p))
+- [Phase 03]: Randomness is injected: Sim.simulate requires rng; Math.random appears once, in the Roll click handler
+- [Phase 03]: WR-01 closed: first render guarded; Roll button ships disabled and is enabled as the last step of a successful render
 
 ### Pending Todos
 
@@ -99,6 +103,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-26T15:15:10.164Z
+Last session: 2026-09-26T18:07:03.319Z
 Stopped at: Phase 3 UI-SPEC approved
-Resume file: .planning/phases/03-roll-20-rounds-simulation/03-UI-SPEC.md
+Resume file: None

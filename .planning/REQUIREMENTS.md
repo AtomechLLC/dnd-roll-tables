@@ -59,12 +59,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Simulation
 
-- [ ] **SIM-01**: A "Roll 20 rounds" button rolls a real d20 and real damage dice for each of 20 rounds (two damage dice on a crit) using `1 + floor(random * sides)` and shows the realized total
-- [ ] **SIM-02**: The realized total is displayed next to, and visually distinct from, the exact expected total, labeled "This run (simulated)" vs "Expected (exact)"
+- [x] **SIM-01**: A "Roll 20 rounds" button rolls a real d20 and real damage dice for each of 20 rounds (two damage dice on a crit) using `1 + floor(random * sides)` and shows the realized total
+- [x] **SIM-02**: The realized total is displayed next to, and visually distinct from, the exact expected total, labeled "This run (simulated)" vs "Expected (exact)"
 - [ ] **SIM-03**: A per-round log shows the d20 result, hit/miss/crit, the damage dice, and the damage dealt for each round
 - [ ] **SIM-04**: The simulation rolls only on click; when any control changes, the previous result is marked stale with the parameters it was rolled at, not silently re-rolled
-- [ ] **SIM-05**: The expected total is shown with its standard deviation (exact, from the one-round distribution) so the gap between realized and expected has context
-- [ ] **SIM-06**: The dice function accepts an injectable random source so the self-test can run it with a seeded generator
+- [x] **SIM-05**: The expected total is shown with its standard deviation (exact, from the one-round distribution) so the gap between realized and expected has context
+- [x] **SIM-06**: The dice function accepts an injectable random source so the self-test can run it with a seeded generator
 
 ### Explanation
 
@@ -153,12 +153,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CMP-03 | Phase 2 | Complete |
 | CMP-04 | Phase 2 | Complete |
 | CMP-05 | Phase 2 | Complete |
-| SIM-01 | Phase 3 | Pending |
-| SIM-02 | Phase 3 | Pending |
+| SIM-01 | Phase 3 | Complete |
+| SIM-02 | Phase 3 | Complete |
 | SIM-03 | Phase 3 | Pending |
 | SIM-04 | Phase 3 | Pending |
-| SIM-05 | Phase 3 | Pending |
-| SIM-06 | Phase 3 | Pending |
+| SIM-05 | Phase 3 | Complete |
+| SIM-06 | Phase 3 | Complete |
 | COPY-01 | Phase 4 | Pending |
 | COPY-02 | Phase 4 | Pending |
 | COPY-03 | Phase 4 | Pending |

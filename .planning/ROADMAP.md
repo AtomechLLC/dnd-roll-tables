@@ -99,12 +99,12 @@ Plans:
   3. Changing any control after a roll marks the previous result as stale and shows the parameters it was rolled at. The simulation never re-rolls on its own, and dragging a slider causes no flicker.
   4. The `?test` panel includes seeded-RNG simulation checks, and they pass the same way on every load.
 
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Roll it and compare: exact spread (DiceMath.spread), seeded dice-sim block, "Expected (exact) ± SD" vs "This run (simulated)" with spread and placement lines, WR-01 guarded init, seeded self-test and check-engine (o)/(p)/(q) (Wave 1)
+- [x] 03-01-PLAN.md — Roll it and compare: exact spread (DiceMath.spread), seeded dice-sim block, "Expected (exact) ± SD" vs "This run (simulated)" with spread and placement lines, WR-01 guarded init, seeded self-test and check-engine (o)/(p)/(q) (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -141,5 +141,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 |-------|----------------|--------|-----------|
 | 1. Live Roll Table, Deployed | 5/5 | Complete    | 2026-09-25 |
 | 2. Bonus Comparison | 3/3 | Complete   | 2026-09-25 |
-| 3. Roll-20-Rounds Simulation | 0/3 | Planned | - |
+| 3. Roll-20-Rounds Simulation | 1/3 | In Progress|  |
 | 4. Designer Explanation & Final Ship | 0/TBD | Not started | - |
