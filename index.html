@@ -2895,6 +2895,162 @@ function runUiSmoke() {
   } finally {
     try { resetSim(); } catch { /* resetSim missing: the crash above is already reported */ }
   }
+
+  // Phase 3 per-round log, staleness, no-flicker and tally (SIM-03, SIM-04, D-06..D-10, D-13).
+  // Runs after the 'sim ui' block and resets in finally, so the DOM dump is back to 80 row
+  // headers (RESEARCH Pitfall 3). Names avoid displayed strings; visible copy is split (IN-06).
+  try {
+    const $ = (sel) => document.querySelector(sel);
+    const txt = (el) => (el ? el.textContent : null);
+    const hid = (el) => (el ? el.hidden : null);
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); renderControls(); render(); };
+    const logEl = document.getElementById('sim-log');
+    const body = () => logEl.tBodies[0];
+    const cellsAt = (i) => Array.from(body().rows, (row) => row.cells[i].textContent);
+    const isStale = () => document.getElementById('sim').classList.contains('is-stale');
+    const staleB = () => $('#sim-note .note-stale');
+    const cap = () => (logEl.caption ? logEl.caption.textContent : null);
+    const DASH = '—';
+    const at0 = VM.settingsText(VM.DEFAULT_STATE);
+
+    // 1. The log (SIM-03, D-06, D-07): seed 6 at the defaults totals 71
+    resetSim();
+    show({});
+    rollWith(Sim.mulberry32(6));
+    render();
+    check('sim log ui: log wrapper shown after a roll', hid($('#sim .sim-log-wrap')), false);
+    check('sim log ui: 20 body rows', body().rows.length, 20);
+    check('sim log ui: one foot row', logEl.tFoot.rows.length, 1);
+    check('sim log ui: 21 row headers in the log', logEl.querySelectorAll('th[scope="row"]').length, 21);
+    const footCells = logEl.tFoot.rows.length ? logEl.tFoot.rows[0].cells : [];
+    const footTotal = footCells.length ? footCells[footCells.length - 1].textContent : null;
+    check('sim log ui: seed 6 foot total', footTotal, '71');
+    check('sim log ui: foot total equals the simulated figure', footTotal, txt($('#sim-total')));
+    const dmgs = body().rows.length ? cellsAt(4) : [];
+    check('sim log ui: damage cells sum to 71', dmgs.reduce((a, d) => a + Number(d), 0), 71);
+    const words = body().rows.length ? cellsAt(2) : [];
+    const count = (w) => words.filter((x) => x === w).length;
+    check('sim log ui: seed 6 result counts (hit, miss, crit)',
+      [count('hit'), count('miss'), count('crit')].join(','), '9,8,3');
+    const d20s = body().rows.length ? cellsAt(1) : [];
+    const dice = body().rows.length ? cellsAt(3) : [];
+    const nat1 = d20s.map((d, i) => i).filter((i) => d20s[i] === '1');
+    check('sim log ui: seed 6 has two nat 1 rows', nat1.length, 2);
+    check('sim log ui: every nat 1 row is a miss with no dice and 0 damage',
+      nat1.every((i) => words[i] === 'miss' && dice[i] === DASH && dmgs[i] === '0'), true);
+    const critDice = dice.filter((d, i) => words[i] === 'crit');
+    const wantCrit = sim.run.rounds.filter((r) => r.result === 'crit').map((r) => r.dice.join(' + '));
+    check('sim log ui: crit rows show both real dice in order', critDice.join('|'), wantCrit.join('|'));
+    check('sim log ui: every crit dice cell is two numbers',
+      critDice.length === 3 && critDice.every((d) => /^\d+ \+ \d+$/.test(d)), true);
+    check('sim log ui: every dice cell matches its round',
+      dice.length === 20 && sim.run.rounds.every((r, i) =>
+        dice[i] === (r.dice.length ? r.dice.join(' + ') : DASH)), true);
+    check('sim log ui: fresh caption', cap(), 'Round by ' + 'round');
+    check('sim log ui: note shown with a run', hid($('#sim-note')), false);
+    check('sim log ui: note base names the rolled-at settings',
+      txt($('#sim-note .note-base')), 'Rolled ' + 'at ' + at0 + '.');
+    check('sim log ui: stale sentence hidden when fresh', hid(staleB()), true);
+    check('sim log ui: now line hidden when fresh', hid($('#sim-now')), true);
+    check('sim log ui: tally hidden after one run', hid($('#sim-tally')), true);
+    check('sim log ui: fresh run is not stale', isStale(), false);
+    check('sim log ui: page row headers with a run', document.querySelectorAll('th[scope="row"]').length, 101);
+
+    // 2. No flicker (D-09, SC3): later frames reuse the rows and the button
+    const row0 = body().rows[0];
+    const btn = document.getElementById('roll');
+    render();
+    render();
+    check('sim log ui: rows are not rebuilt by later renders', body().rows[0] === row0, true);
+    check('sim log ui: the button node survives later renders', document.getElementById('roll') === btn, true);
+
+    // 3. Stale (SIM-04, D-08): AC 16 after a roll at AC 15
+    send(acRange, '16');
+    render();
+    check('sim log ui: AC change stales the run', isStale(), true);
+    check('sim log ui: stale sentence shown', hid(staleB()), false);
+    check('sim log ui: stale sentence text', staleB() ? staleB().textContent.trim() : null,
+      'Settings changed. ' + 'Roll again to compare.');
+    check('sim log ui: stale exact figure stays rolled-at', txt($('#sim-e')), '54.0');
+    check('sim log ui: stale exact SD stays rolled-at', txt($('#sim-sd')), '± 14.2');
+    check('sim log ui: stale simulated figure unchanged', txt($('#sim-total')), '71');
+    check('sim log ui: now line shown when stale', hid($('#sim-now')), false);
+    check('sim log ui: now line text', txt($('#sim-now')),
+      'Now: ' + 'expected 49.5 ± 14.1 at ' + VM.settingsText({ ...VM.DEFAULT_STATE, ac: 16 }) + '.');
+    check('sim log ui: stale caption carries the rolled-at suffix', cap(),
+      'Round by ' + 'round (rolled at ' + at0 + ')');
+    check('sim log ui: stale rows are not rebuilt', body().rows[0] === row0, true);
+    check('sim log ui: tally hidden when stale', hid($('#sim-tally')), true);
+    check('sim log ui: nothing re-rolls when stale', sim.run.total, 71);
+
+    // 4. Back to the rolled-at settings un-stales (D-09); the N slider never stales
+    send(acRange, '15');
+    render();
+    check('sim log ui: returning to AC 15 un-stales', isStale(), false);
+    check('sim log ui: now line hidden again', hid($('#sim-now')), true);
+    check('sim log ui: caption back to fresh', cap(), 'Round by ' + 'round');
+    check('sim log ui: stale sentence hidden again', hid(staleB()), true);
+    send(document.getElementById('n-range'), '9');
+    render();
+    check('sim log ui: N slider keeps the run fresh', isStale(), false);
+    show({});
+
+    // 5. Every other attack control stales, and returning un-stales
+    for (const patch of [{ die: 10 }, { atk: 6 }, { dmg: 1 }]) {
+      const k = Object.keys(patch)[0];
+      show(patch);
+      check('sim log ui: ' + k + ' change stales the run', isStale(), true);
+      show({});
+      check('sim log ui: ' + k + ' back un-stales the run', isStale(), false);
+    }
+
+    // 6. Tally (D-10): seeds 1, 5, 6 at the defaults total 47, 54, 71
+    resetSim();
+    show({});
+    rollWith(Sim.mulberry32(1));
+    rollWith(Sim.mulberry32(5));
+    rollWith(Sim.mulberry32(6));
+    render();
+    const tallyWant = 'Last 3 runs ' + 'at these settings, newest first: 71 · 54 · 47 (expected 54.0)';
+    check('sim log ui: tally shown after three runs', hid($('#sim-tally')), false);
+    check('sim log ui: tally text', txt($('#sim-tally')), tallyWant);
+    check('sim log ui: newest tally total is bold', txt($('#sim-tally b.num')), '71');
+    show({ ac: 16 });
+    check('sim log ui: tally hidden at other settings', hid($('#sim-tally')), true);
+    show({});
+    check('sim log ui: tally back at the rolled-at settings', hid($('#sim-tally')), false);
+    check('sim log ui: tally text restored', txt($('#sim-tally')), tallyWant);
+
+    // 7. Roll while stale: a fresh run at the new settings, tally reset to one total
+    show({ ac: 16 });
+    rollWith(Sim.mulberry32(1));
+    render();
+    check('sim log ui: roll while stale gives a fresh run', isStale(), false);
+    check('sim log ui: roll at new settings resets the tally', sim.tally.length, 1);
+    check('sim log ui: one-run tally hidden', hid($('#sim-tally')), true);
+    check('sim log ui: new run exact figure', txt($('#sim-e')), '49.5');
+
+    // 8. The tally keeps five totals
+    show({});
+    for (let seed = 1; seed <= 6; seed++) rollWith(Sim.mulberry32(seed));
+    render();
+    check('sim log ui: tally capped at five', sim.tally.length, 5);
+    check('sim log ui: five-run tally lead-in',
+      (txt($('#sim-tally')) || '').startsWith('Last 5 runs ' + 'at these settings, newest first: '), true);
+
+    // 9. Reset empties the log, so the load count of 80 row headers holds (Pitfall 3)
+    resetSim();
+    show({});
+    check('sim log ui: log wrapper hidden after reset', hid($('#sim .sim-log-wrap')), true);
+    check('sim log ui: body emptied after reset', body().rows.length, 0);
+    check('sim log ui: foot emptied after reset', logEl.tFoot.rows.length, 0);
+    check('sim log ui: note hidden after reset', hid($('#sim-note')), true);
+    check('sim log ui: page row headers after reset', document.querySelectorAll('th[scope="row"]').length, 80);
+  } catch (err) {
+    results.push({ name: 'sim log ui smoke crashed: ' + (err && err.message), ok: false });
+  } finally {
+    try { resetSim(); } catch { /* resetSim missing: the crash above is already reported */ }
+  }
   // The click above queued its announcement for the next frame. rAF callbacks run in
   // registration order, so this clears it afterwards and the DOM dump never carries it.
   requestAnimationFrame(() => { document.getElementById('sim-status').textContent = ''; });
