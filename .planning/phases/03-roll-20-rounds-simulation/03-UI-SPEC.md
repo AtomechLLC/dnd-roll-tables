@@ -1,10 +1,11 @@
 ---
 phase: 3
 slug: roll-20-rounds-simulation
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-09-26
+reviewed_at: 2026-09-26
 ---
 
 # Phase 3 — UI Design Contract
