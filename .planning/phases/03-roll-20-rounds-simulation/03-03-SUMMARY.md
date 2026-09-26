@@ -207,3 +207,7 @@ None.
 - Phase 3 is complete: SC1-SC4, D-01..D-16, and SIM-01..SIM-06 are all backed by passing checks or recorded screenshots.
 - The Node self-test runs at 187-196 ms of its 200 ms budget. Phase 4 should add page checks as UI smoke or check-engine work, not self-test loops.
 - The deferred crit swatch shrink (`deferred-items.md`) fits the Phase 4 accessibility and polish pass.
+
+## Self-Check: PASSED
+- FOUND: index.html, .planning/phases/03-roll-20-rounds-simulation/03-03-SUMMARY.md, .planning/phases/03-roll-20-rounds-simulation/deferred-items.md
+- FOUND commits: 0c1fb8d, dbc049b, 39cf1e7, 4b50308
