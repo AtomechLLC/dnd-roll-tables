@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 UI-SPEC approved
-last_updated: "2026-09-26T18:07:03.328Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-09-26T18:17:34.846Z"
 last_activity: 2026-09-26
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
   percent: 50
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 03 (roll-20-rounds-simulation) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-09-26
 
-Progress: [████████░░] 82%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [████████░░] 82%
 | Phase 02 P02 | 10 min | 3 tasks | 2 files |
 | Phase 02 P03 | 39 min | 3 tasks | 3 files |
 | Phase 03 P01 | 13min | 3 tasks | 3 files |
+| Phase 03 P02 | 9min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,8 @@ Recent decisions affecting current work:
 - [Phase 03]: Spread line is lopsided when E - SD < 0 OR only a nat 20 hits (honest band wording; guarded by check-engine (p))
 - [Phase 03]: Randomness is injected: Sim.simulate requires rng; Math.random appears once, in the Roll click handler
 - [Phase 03]: WR-01 closed: first render guarded; Roll button ships disabled and is enabled as the last step of a successful render
+- [Phase 03]: Rolled-at note and log caption reserve two lines (note also in the 32rem side-by-side column) so stale never moves the pair or the log rows
+- [Phase 03]: Stale is pure CSS off one #sim.is-stale toggle; dimming covers every log th/td, caption/note/Now: stay ink as word cues
 
 ### Pending Todos
 
@@ -103,6 +106,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-26T18:07:03.319Z
-Stopped at: Phase 3 UI-SPEC approved
+Last session: 2026-09-26T18:17:34.835Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
