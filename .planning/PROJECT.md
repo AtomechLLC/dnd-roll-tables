@@ -18,10 +18,10 @@ A designer can see, in one glance at a live table and a curve, why attack bonuse
 - [x] Exact math: hit chance, average damage per round, expected damage over 20 rounds, derived from the table (not Monte Carlo) — Validated in Phase 1 (code review WR-01: the displayed per-round figure is derived from the rounded 20-round total, so its third decimal can be off; fix pending)
 - [x] Line chart: x-axis bonus 0 to +20, two curves for expected 20-round damage when the bonus is on the attack roll vs on the damage roll, at the current AC and die. Crossings are marked, and the flat 95%-cap and nat-20-only stretches are shaded and labeled. Validated in Phase 2: Bonus Comparison.
 - [x] Side-by-side 2D tables: baseline (+0), with +N to hit, with +N to damage, on one shared color scale, driven by a "Compare at +N" slider. Validated in Phase 2 (code review 02-REVIEW.md: 3 warnings open, including a first-render crash path that bypasses the engine-error banner).
+- [x] Simulation: a "roll 20 rounds" button that actually rolls the dice and shows the realized total alongside the exact expected value and its standard deviation, with a per-round log, stale marking, a tally of recent runs, and rolled cells marked on the outcome table. Validated in Phase 3: Roll-20-Rounds Simulation (code review 03-REVIEW.md: 4 warnings open).
 
 ### Active
 
-- [ ] Simulation: a "roll 20 rounds" button that actually rolls the dice and shows the realized total alongside the expected value
 - [ ] Explanatory text for game designers: formulas shown, why attack bonus plateaus, why damage bonus is linear, where the crossover sits
 - [ ] Deployed to GitHub Pages: repo created, site pushed, Pages enabled, public URL works — Deferred 2026-09-25: user chose local git only. Local prep is done (branch `main`, `.nojekyll`, README); gh CLI is installed but not authenticated.
 
@@ -90,4 +90,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-25 after Phase 2 completion (local git only; publish deferred)*
+*Last updated: 2026-09-26 after Phase 3 completion (local git only; publish deferred)*
