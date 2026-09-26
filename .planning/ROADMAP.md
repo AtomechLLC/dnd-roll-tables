@@ -99,7 +99,20 @@ Plans:
   3. Changing any control after a roll marks the previous result as stale and shows the parameters it was rolled at. The simulation never re-rolls on its own, and dragging a slider causes no flicker.
   4. The `?test` panel includes seeded-RNG simulation checks, and they pass the same way on every load.
 
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Roll it and compare: exact spread (DiceMath.spread), seeded dice-sim block, "Expected (exact) ± SD" vs "This run (simulated)" with spread and placement lines, WR-01 guarded init, seeded self-test and check-engine (o)/(p)/(q) (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — Per-round log with Total, rolled-at note, stale dimming, Now: line, tally, no-flicker rebuild on run id (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-03-PLAN.md — Rings, badges, and row-label counts on the #outcome table, legend item, phase verification with state screenshots (Wave 3)
 **UI hint**: yes
 
 ### Phase 4: Designer Explanation & Final Ship
@@ -128,5 +141,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 |-------|----------------|--------|-----------|
 | 1. Live Roll Table, Deployed | 5/5 | Complete    | 2026-09-25 |
 | 2. Bonus Comparison | 3/3 | Complete   | 2026-09-25 |
-| 3. Roll-20-Rounds Simulation | 0/TBD | Not started | - |
+| 3. Roll-20-Rounds Simulation | 0/3 | Planned | - |
 | 4. Designer Explanation & Final Ship | 0/TBD | Not started | - |
