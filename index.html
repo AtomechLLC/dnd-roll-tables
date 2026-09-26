@@ -260,6 +260,7 @@
        log carry the run for assistive tech); the first content line is the fallback for
        engines without alt-text syntax. Kept after the heat and rule styles so order never loses. */
     .outcome .roll, .swatch.roll { position: relative; }
+    .swatch.roll { flex-shrink: 0; }   /* keeps its 40px beside the long legend text */
     .outcome .roll::before, .swatch.roll::before {
       content: ""; position: absolute; inset: 0; pointer-events: none;
       border: 2px solid var(--ink); box-shadow: inset 0 0 0 1px var(--paper);
@@ -273,7 +274,8 @@
       font: 700 12px/12px var(--font-num); font-variant-numeric: tabular-nums;
       text-align: center; white-space: nowrap;
     }
-    .outcome tbody tr:first-child .roll[data-n]::after { top: auto; bottom: -6px; }
+    .outcome tbody tr:first-child .roll[data-n]::after,
+    .outcome th.roll[data-down]::after { top: auto; bottom: -6px; }
 
     /* Legend (TABLE-05): one wrapping row between the h2 and the table */
     .legend {
@@ -2025,6 +2027,11 @@ function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captio
   const head = `<tr><th scope="col" class="corner">d20<span class="cd"> \\ d${X}</span></th>` +
     Array.from({ length: X }, (_, i) => `<th scope="col">${i + 1}</th>`).join('') +
     '<th scope="col" class="note"><span class="vh">Notes</span></th></tr>';
+  // Label badges straddle the top edge, but row 1's drops to its bottom edge (clear of the
+  // header), so a label directly below a marked row 1 would meet it on the same line. While
+  // the marked labels run unbroken from row 1, each drops too (data-down); the first unmarked
+  // label ends the run, so no two label badges ever share an edge. Row 20 always stays up.
+  let chain = true;
   const body = rows.map((row) => {
     const cls = [row.kind, row.d20 === threshold ? 'threshold' : ''].join(' ').trim();
     const cells = row.cells.map((d, i) => {
@@ -2038,7 +2045,8 @@ function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captio
     }).join('');
     // scope="row" stays the first attribute: check-page counts the literal '<th scope="row"'
     const rn = marks ? (marks.rows.get(row.d20) | 0) : 0;
-    const th = rn > 0 ? `<th scope="row" class="roll" data-n="${rn | 0}">` : '<th scope="row">';
+    chain = chain && rn > 0 && row.d20 !== 20;
+    const th = rn > 0 ? `<th scope="row" class="roll" data-n="${rn | 0}"${chain ? ' data-down' : ''}>` : '<th scope="row">';
     return `<tr class="${cls}">${th}${row.d20}</th>${cells}<td class="note">${noteFor(row, threshold)}</td></tr>`;
   }).join('');
   el.style.setProperty('--cols', String(X));
@@ -3256,6 +3264,9 @@ function runUiSmoke() {
     check('sim marks ui: row 20 label is marked', hasRoll(h20), true);
     check('sim marks ui: row 20 label count', dataN(h20), '3');
     check('sim marks ui: row 1 label count', dataN(body.rows[0].cells[0]), '2');
+    check('sim marks ui: labels in an unbroken run from row 1 drop their badges',
+      [0, 1, 3, 4, 19].map((i) => body.rows[i].cells[0].hasAttribute('data-down')).join(' '),
+      'true true false false false');
     check('sim marks ui: no crit-row cell is marked', body.rows[19].querySelectorAll('td.roll').length, 0);
     check('sim marks ui: no miss cell is marked', tableEl.querySelectorAll('td.m.roll').length, 0);
     check('sim marks ui: marked labels keep scope row',
