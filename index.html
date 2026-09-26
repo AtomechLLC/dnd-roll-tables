@@ -252,6 +252,28 @@
     tr.threshold > *, .swatch.threshold { box-shadow: inset 0 3px 0 0 var(--rule); }
     tr.crit > *, .swatch.crit { box-shadow: inset 0 -2px 0 0 var(--accent); }
     tr.threshold.crit > * { box-shadow: inset 0 3px 0 0 var(--rule), inset 0 -2px 0 0 var(--accent); }
+    /* Run marks (D-11, D-12), #outcome only, plus the legend swatch that explains them.
+       A two-tone ring (2px ink, 1px paper halo) drawn by a pseudo-element, so it never
+       touches the threshold / crit box-shadows and shifts no layout; it reads on every heat
+       color and without color. The x-N badge straddles the top edge (the bottom edge in the
+       first body row, clear of the header). Its alt text is "" (the caption suffix and the
+       log carry the run for assistive tech); the first content line is the fallback for
+       engines without alt-text syntax. Kept after the heat and rule styles so order never loses. */
+    .outcome .roll, .swatch.roll { position: relative; }
+    .outcome .roll::before, .swatch.roll::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      border: 2px solid var(--ink); box-shadow: inset 0 0 0 1px var(--paper);
+    }
+    .outcome .roll[data-n]::after, .swatch.roll[data-n]::after {
+      content: "×" attr(data-n);
+      content: "×" attr(data-n) / "";
+      position: absolute; top: -6px; left: 50%; translate: -50% 0; z-index: 1;
+      height: 12px; min-width: 16px; padding: 0 4px; border-radius: 4px; box-sizing: border-box;
+      background: var(--ink); color: var(--paper);
+      font: 700 12px/12px var(--font-num); font-variant-numeric: tabular-nums;
+      text-align: center; white-space: nowrap;
+    }
+    .outcome tbody tr:first-child .roll[data-n]::after { top: auto; bottom: -6px; }
 
     /* Legend (TABLE-05): one wrapping row between the h2 and the table */
     .legend {
@@ -1995,20 +2017,29 @@ function noteFor(row, threshold) {
 
 // One renderer for all four tables (D-17). Only numbers and fixed label strings reach
 // innerHTML (T-01-01, T-02-01); captions use textContent, and the optional hidden caption
-// suffix is a .vh span built with createElement.
-function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captionHidden }) {
+// suffix is a .vh span built with createElement. marks (D-11, D-12; #outcome only) is
+// Sim.runMarks output: hit cells get class roll (data-n from 2 up), and crit / miss / nat 1
+// rows count on their row header. Counts are integers coerced with | 0 (T-03-11).
+function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captionHidden, marks }) {
   const X = Number(die) | 0;
   const head = `<tr><th scope="col" class="corner">d20<span class="cd"> \\ d${X}</span></th>` +
     Array.from({ length: X }, (_, i) => `<th scope="col">${i + 1}</th>`).join('') +
     '<th scope="col" class="note"><span class="vh">Notes</span></th></tr>';
   const body = rows.map((row) => {
     const cls = [row.kind, row.d20 === threshold ? 'threshold' : ''].join(' ').trim();
-    const cells = row.cells.map((d) => {
+    const cells = row.cells.map((d, i) => {
       if (row.kind === 'miss' || row.kind === 'fumble') return '<td class="m">0</td>';
       const t = Math.min(1, d / heatMax);
-      return `<td class="h${t >= 0.5 ? ' hi' : ''}" style="--t:${t.toFixed(3)}">${d}</td>`;
+      // Crit-row cells are never marked: no cell equals a real two-dice crit (D-12)
+      const n = marks && row.kind === 'hit' ? (marks.cells.get(row.d20 + ',' + (i + 1)) | 0) : 0;
+      const roll = n > 0 ? ' roll' : '';
+      const badge = n >= 2 ? ` data-n="${n | 0}"` : '';
+      return `<td class="h${t >= 0.5 ? ' hi' : ''}${roll}"${badge} style="--t:${t.toFixed(3)}">${d}</td>`;
     }).join('');
-    return `<tr class="${cls}"><th scope="row">${row.d20}</th>${cells}<td class="note">${noteFor(row, threshold)}</td></tr>`;
+    // scope="row" stays the first attribute: check-page counts the literal '<th scope="row"'
+    const rn = marks ? (marks.rows.get(row.d20) | 0) : 0;
+    const th = rn > 0 ? `<th scope="row" class="roll" data-n="${rn | 0}">` : '<th scope="row">';
+    return `<tr class="${cls}">${th}${row.d20}</th>${cells}<td class="note">${noteFor(row, threshold)}</td></tr>`;
   }).join('');
   el.style.setProperty('--cols', String(X));
   el.tHead.innerHTML = head;
@@ -2024,12 +2055,17 @@ function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captio
 }
 
 // The Phase 1 study table: same caption as before (D-01), shared heat domain (D-08).
-function renderTable(view) {
+// A fresh run's marks (D-11..D-13) arrive in simCtx; with none, the caption is unchanged.
+function renderTable(view, simCtx) {
   const p = view.params;
+  const marked = Boolean(simCtx && simCtx.marks);
   renderOutcomeTable(tableEl, {
     rows: view.rows, die: p.die, threshold: view.threshold, heatMax: view.heatMax,
     caption: `Damage dealt for every d20 roll (rows) and d${p.die} face (columns). ` +
       `AC ${p.ac}, attack ${signed(p.atk)}, damage ${signed(p.dmg)}.`,
+    captionHidden: marked ? ' Outlined cells and d20 labels show your last roll of 20 rounds; ' +
+      'the round-by-round log is in the section below the chart.' : undefined,
+    marks: simCtx ? simCtx.marks : null,
   });
 }
 
@@ -2428,11 +2464,16 @@ function renderLegend(view) {
   for (const t of [0, 0.25, 0.5, 0.75, 1]) {
     ramp.append(swatch(t >= 0.5 ? 'h hi' : 'h', String(Math.round(t * view.heatMax)), t));
   }
+  // Static, always present (never reflows on roll or clear); drawn by the real mark classes
+  const rollSwatch = swatch('h roll', String(Math.round(0.25 * view.heatMax)), 0.25);
+  rollSwatch.setAttribute('data-n', '2');
   legendEl.replaceChildren(
     legendItem(ramp, 'Hit damage, low to high (one scale for every table on the page)'),
     legendItem(swatch('m', '0'), 'Miss: always 0, whatever the die shows'),
     legendItem(swatch('h hi crit', '', 1), 'Natural 20: crit, shown as 2 × face + damage bonus*'),
     legendItem(swatch('threshold', ''), 'Rule: first d20 roll that hits'),
+    legendItem(rollSwatch,
+      'Outlined: rolled in your last 20 rounds (×2 = rolled twice). Misses and crits are counted on the d20 label.'),
   );
 }
 
