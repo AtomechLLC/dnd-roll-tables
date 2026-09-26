@@ -6,11 +6,17 @@
 // the final DOM (--dump-dom) and the console (--enable-logging), then checks:
 //   (1) the console contains SELFTEST PASSED
 //   (2) the console has no Uncaught / SELFTEST FAIL / CSP / parse / load errors
-//   (3) the DOM has exactly 80 row headers (<th scope="row"): 4 tables x 20 rows
+//   (3) the DOM has exactly 80 row headers (<th scope="row"): 4 tables x 20 rows at
+//       load; the sim log adds 21 only after a roll, and the ?test smoke clears its run
 //   (4) test mode: the visible self-test panel passed; plain mode: the panel is hidden
 //   (5) every --expect string appears in the visible page text: the self-test panel is
 //       removed first (its check names could echo UI strings, 01-REVIEW IN-06) and the
 //       &amp; &lt; &gt; &quot; entities are decoded
+//   (6) the engine-error banner is still hidden after init
+//   (7) the Roll button is enabled after init (it ships disabled; init enables it last)
+//   (8) the sim section body is shown after init (it ships hidden)
+//   (6)-(8) guard 02-REVIEW WR-01: a caught first-render throw logs console.error('render
+//   failed'), which the console check does not match, so these are its only guard.
 //
 // Default url: file:// URL of ../index.html plus ?test (--plain drops ?test).
 // For an explicit url, test mode is on exactly when the url contains ?test.
@@ -117,6 +123,12 @@ check('console has no errors', badLines.length === 0, badLines.slice(0, 5).join(
 
 const rowHeads = rendered.split('<th scope="row"').length - 1;
 check('DOM has 80 <th scope="row"> headers', rowHeads === 80, `found ${rowHeads}`);
+
+check('engine-error banner stays hidden', /<div id="engine-error" role="alert" hidden/.test(rendered));
+check('Roll button enabled after init',
+  /<button[^>]*id="roll"[^>]*>/.test(rendered) && !/<button[^>]*id="roll"[^>]*\bdisabled\b/.test(rendered));
+check('sim section body shown after init',
+  /<div class="sim-body"/.test(rendered) && !/<div class="sim-body"[^>]*\bhidden\b/.test(rendered));
 
 if (testMode) {
   check('self-test panel shows "Self-test passed"',

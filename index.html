@@ -1447,6 +1447,96 @@ const SelfTest = (() => {
     check('cross: d4 D-5 bands are the formula cap only', JSON.stringify(cv.bands), '{"floor":null,"cap":[8,20]}');
   });
 
+  // Roll-20-rounds simulation (SIM-01, SIM-02, SIM-05, SIM-06, D-04, D-05, D-14, D-15).
+  // O(1) work only (200 ms budget): exact spread figures, a few seeded mulberry32 runs, and
+  // stub rngs. Large samples and full-domain checks live in tools/check-engine.mjs (o)..(q).
+  section('sim', () => {
+    const DEF = { ac: 15, atk: 5, die: 8, dmg: 0 };
+    const pair = (e) => e.eText + ' ± ' + e.sdText;
+    const sp = DiceMath.spread(DEF);
+    check('sim: defaults Var(one round) is 10.035', sp.var20Num / sp.var20Den / 20, 10.035);
+    check('sim: defaults spread s1 equals stats e20Num', sp.s1, DiceMath.stats(DEF).e20Num);
+    check('sim: defaults var20Num is 16441344', sp.var20Num, 16441344, 0);
+    check('sim: defaults var20Den is 81920', sp.var20Den, 81920, 0);
+
+    const ex = VM.simExact(DEF);
+    check('sim: defaults expected and SD', pair(ex), '54.0 ± 14.2');
+    check('sim: defaults spread is not lopsided', ex.lopsided, false);
+    check('sim: defaults spread sentence', ex.spreadText, 'About 2 runs in 3 land between 39.8 and 68.2.');
+    check('sim: exact figure equals the 20-round stat card (STAT-02)', ex.eText,
+      VM.statsView({ ...DEF, n: 5 }).e20Text);
+    check('sim: AC 16 expected and SD', pair(VM.simExact({ ...DEF, ac: 16 })), '49.5 ± 14.1');
+    check('sim: +0 to hit expected and SD', pair(VM.simExact({ ...DEF, atk: 0 })), '31.5 ± 13.0');
+    check('sim: AC 30 -5 d4 -5 uses the lopsided sentence', VM.simExact({ ac: 30, atk: -5, die: 4, dmg: -5 }).spreadText,
+      'Most runs land between 0.0 and 1.7 (damage cannot go below 0, so the spread is lopsided).');
+    // Nat-20-only rule (RESEARCH Pitfall 1): lopsided even though E - SD >= 0
+    const n20 = VM.simExact({ ac: 15, atk: -5, die: 4, dmg: 4 });
+    check('sim: nat-20-only AC 15 -5 d4 +4 is lopsided', n20.lopsided, true);
+    check('sim: nat-20-only AC 15 -5 d4 +4 figures (E, SD, lo, hi)',
+      [n20.eText, n20.sdText, n20.loText, n20.hiText].join(' '), '9.0 8.9 0.0 17.9');
+    const n25 = VM.simExact({ ac: 25, atk: 0, die: 12, dmg: 0 });
+    check('sim: AC 25 +0 d12 expected and SD', pair(n25), '13.0 ± 13.6');
+    check('sim: AC 25 +0 d12 is lopsided from 0.0', n25.lopsided + ' ' + n25.loText, 'true 0.0');
+
+    check('sim: settingsText at the defaults', VM.settingsText(DEF), 'AC 15, d8, +5 to hit, +0 damage');
+    check('sim: settingsText uses U+2212 minus', VM.settingsText({ ac: 30, die: 4, atk: -5, dmg: -5 }),
+      'AC 30, d4, −5 to hit, −5 damage');
+
+    const m = Sim.mulberry32(1);
+    check('sim: mulberry32(1) output 1', m(), 0.6270739405881613, 0);
+    check('sim: mulberry32(1) output 2', m(), 0.002735721180215478, 0);
+    check('sim: mulberry32(1) output 3', m(), 0.5274470399599522, 0);
+
+    // Pinned seeded runs (SIM-06, ROADMAP SC4). The draw order is a contract (RESEARCH Pitfall 8).
+    const r1 = Sim.simulate(DEF, 20, Sim.mulberry32(1));
+    const r5 = Sim.simulate(DEF, 20, Sim.mulberry32(5));
+    const r6 = Sim.simulate(DEF, 20, Sim.mulberry32(6));
+    check('sim: seed 1 at AC 15, d8, +5, +0 totals 47', r1.total, 47);
+    check('sim: seed 5 at AC 15, d8, +5, +0 totals 54', r5.total, 54);
+    check('sim: seed 6 at AC 15, d8, +5, +0 totals 71', r6.total, 71);
+    check('sim: same seed, same run', JSON.stringify(Sim.simulate(DEF, 20, Sim.mulberry32(1))), JSON.stringify(r1));
+    check('sim: log damage sums to the total', r6.rounds.reduce((a, r) => a + r.damage, 0), r6.total);
+    check('sim: every crit rolls two dice',
+      r6.rounds.every((r) => r.dice.length === (r.kind === 'crit' ? 2 : r.kind === 'hit' ? 1 : 0)), true);
+    check('sim: seed 6 has a crit with odd damage (two real dice, not 2 x face)',
+      r6.rounds.some((r) => r.kind === 'crit' && r.damage % 2 === 1), true);
+    check('sim: every round damage comes from damageFor (RULES-05)',
+      [...r1.rounds, ...r6.rounds].every((r) => r.damage === DiceMath.damageFor(r.d20, r.dice, DEF)), true);
+    check('sim: every result is hit, miss or crit',
+      [...r1.rounds, ...r6.rounds].every((r) => r.result === 'hit' || r.result === 'miss' || r.result === 'crit'), true);
+    check('sim: a nat 1 maps to miss',
+      r6.rounds.filter((r) => r.d20 === 1).map((r) => r.kind + ':' + r.result).join(' '), 'fumble:miss fumble:miss');
+    check('sim: run params are the four attack keys', Object.keys(r1.params).join(','), 'ac,die,atk,dmg');
+    check('sim: run params are frozen', Object.isFrozen(r1.params), true);
+
+    const mk = Sim.runMarks(r6);
+    check('sim: seed 6 marks cover 20 rounds', [...mk.cells.values(), ...mk.rows.values()].reduce((a, b) => a + b, 0), 20);
+    check('sim: seed 6 cell (11, 1) rolled twice', mk.cells.get('11,1'), 2);
+    check('sim: seed 6 three crits on row 20', mk.rows.get(20), 3);
+
+    check('sim: seed 1 placement (below)', VM.simPlacement(r1.total, ex), 'This run is 7.0 below expected (0.5 SD).');
+    check('sim: seed 5 placement (exactly on)', VM.simPlacement(r5.total, ex), 'This run is exactly on expected.');
+    check('sim: seed 6 placement (above)', VM.simPlacement(r6.total, ex), 'This run is 17.0 above expected (1.2 SD).');
+    check('sim: seed 1 status sentence', VM.simStatus(r1.total, ex),
+      'Rolled 20 rounds: 47 damage. Expected 54.0 ± 14.2. This run is 7.0 below expected (0.5 SD).');
+
+    check('sim: damage never below 0 on a real crit (seed 1, AC 30 -5 d4 -5 totals 1)',
+      Sim.simulate({ ac: 30, atk: -5, die: 4, dmg: -5 }, 20, Sim.mulberry32(1)).total, 1);
+
+    // Stub rngs pin the face range of 1 + floor(rng * sides) (SIM-01, D-14)
+    const lo = Sim.simulate(DEF, 20, () => 0);
+    check('sim: rng 0 gives every d20 a 1 and total 0', lo.total + ' ' + lo.rounds.every((r) => r.d20 === 1), '0 true');
+    const hi = Sim.simulate(DEF, 20, () => 0.9999999);
+    check('sim: rng near 1 gives 8 + 8 crits, total 320',
+      hi.total + ' ' + hi.rounds.every((r) => r.d20 === 20 && r.dice.join(',') === '8,8'), '320 true');
+    check('sim: rng 1 - 2^-53 gives d20 20, never 21', Sim.simulate(DEF, 1, () => 1 - 2 ** -53).rounds[0].d20, 20);
+    check('sim: rollDie(20, rng 0) is 1', Sim.rollDie(20, () => 0), 1);
+
+    check('sim: sameAttack ignores n', Sim.sameAttack({ ...DEF, n: 1 }, { ...DEF, n: 9 }), true);
+    check('sim: sameAttack sees a damage change', Sim.sameAttack(DEF, { ...DEF, dmg: 1 }), false);
+    check('sim: simulate without an rng throws TypeError', throwsType(() => Sim.simulate(DEF, 20)), true);
+  });
+
   const failed = results.filter((r) => !r.ok);
   for (const f of failed) console.error('SELFTEST FAIL:', f.name, '| got', f.actual, '| expected', f.expected);
   const ms = (now() - t0).toFixed(1);
@@ -2391,6 +2481,77 @@ function runUiSmoke() {
   } catch (err) {
     results.push({ name: 'cross ui smoke crashed: ' + (err && err.message), ok: false });
   }
+
+  // Phase 3 roll section (SIM-01, SIM-02, SIM-05, D-01, D-02, WR-01). Runs last and clears the
+  // run in finally, so the DOM dump always ends in the no-run state (RESEARCH Pitfalls 3, 4).
+  // Check names avoid the displayed strings, and visible copy in expected values is split (IN-06).
+  try {
+    const text = (id) => document.getElementById(id).textContent;
+    resetSim();
+    Object.assign(state, VM.DEFAULT_STATE);
+    render();
+    const ex0 = VM.simExact(VM.DEFAULT_STATE);
+    check('sim ui: simulated slot before the first roll', text('sim-total'), 'Not rolled ' + 'yet');
+    check('sim ui: exact figure at the defaults', text('sim-e'), '54.0');
+    check('sim ui: exact SD at the defaults', text('sim-sd'), '± 14.2');
+    check('sim ui: spread line equals VM.simExact', text('sim-spread'), ex0.spreadText);
+    check('sim ui: placement slot shows the click prompt', text('sim-place'),
+      'Click Roll 20 rounds to roll the dice ' + 'and see where one fight of 20 rounds lands.');
+    check('sim ui: section body shown after init', document.querySelector('#sim .sim-body').hidden, false);
+    const btn = document.getElementById('roll');
+    check('sim ui: button enabled after init', btn.disabled, false);
+    check('sim ui: button label', btn.textContent, 'Roll 20 ' + 'rounds');
+    const secs = Array.from(document.querySelector('main').children).filter((e) => e.tagName === 'SECTION');
+    check('sim ui: section is last in main, right after the chart',
+      secs[secs.length - 1].id + ' after ' + document.getElementById('sim').previousElementSibling.id, 'sim after chart');
+
+    // Before any roll the exact figure follows the controls live (D-02)
+    send(acRange, '16');
+    render();
+    check('sim ui: AC 16 exact figure before a roll', text('sim-e'), '49.5');
+    check('sim ui: AC 16 exact SD before a roll', text('sim-sd'), '± 14.1');
+    Object.assign(state, VM.DEFAULT_STATE);
+    renderControls();
+    render();
+
+    // A seeded roll through the same path as the click
+    rollWith(Sim.mulberry32(1));
+    render();
+    check('sim ui: seed 1 figure', text('sim-total'), '47');
+    check('sim ui: seed 1 exact figure', text('sim-e'), '54.0');
+    check('sim ui: seed 1 placement', text('sim-place'), VM.simPlacement(47, ex0));
+    check('sim ui: the button node is never replaced', document.getElementById('roll') === btn, true);
+    check('sim ui: run id is the roll sequence number', sim.run.id, sim.seq);
+
+    // Click wiring: one click is exactly one new run
+    const before = sim.seq;
+    btn.click();
+    check('sim ui: a click rolls exactly once', sim.seq, before + 1);
+    const t = sim.run.total;
+    check('sim ui: clicked total is a whole number in 0..320', Number.isInteger(t) && t >= 0 && t <= 320, true);
+    check('sim ui: clicked rounds sum to the total', sim.run.rounds.reduce((a, r) => a + r.damage, 0), t);
+    render();
+    check('sim ui: clicked figure shows the total', text('sim-total'), String(t));
+
+    // Roll-error branch (defensive)
+    resetSim();
+    sim.rollError = true;
+    render();
+    check('sim ui: error sentence in the placement slot', text('sim-place'),
+      'The roll failed, so no result is shown. ' +
+      'Reload the page. If it keeps happening, add ?test to the address to see which check failed.');
+    check('sim ui: error leaves the simulated slot empty', text('sim-total'), 'Not rolled ' + 'yet');
+
+    const root = document.documentElement;
+    check('sim ui: no horizontal page scroll', root.scrollWidth <= root.clientWidth, true);
+  } catch (err) {
+    results.push({ name: 'sim ui smoke crashed: ' + (err && err.message), ok: false });
+  } finally {
+    try { resetSim(); } catch { /* resetSim missing: the crash above is already reported */ }
+  }
+  // The click above queued its announcement for the next frame. rAF callbacks run in
+  // registration order, so this clears it afterwards and the DOM dump never carries it.
+  requestAnimationFrame(() => { document.getElementById('sim-status').textContent = ''; });
 
   Object.assign(state, VM.DEFAULT_STATE);
   renderControls();
