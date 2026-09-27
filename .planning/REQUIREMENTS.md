@@ -70,9 +70,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **COPY-01**: The page explains the two-roll structure (d20 to hit, dX for damage) and how the 2D table is the joint outcome space, in language for game designers
 - [x] **COPY-02**: Formulas for hit chance, expected damage per round, and the value of +1 to hit vs +1 to damage are displayed with the current control values substituted live
-- [ ] **COPY-03**: The crossover explanation is generated from the computed crossing list, with distinct text for no crossing, one crossing, and two crossings, and never asserts a crossover that does not exist at the current settings
-- [ ] **COPY-04**: The page explains why the attack curve plateaus (5% to 95% clamp) and why the damage curve is linear, tied to the shaded chart regions
-- [ ] **COPY-05**: A short suggested-exploration section points at settings that show a crossover (for example AC 25 with a d12) and settings where damage bonus always wins (AC 15 with a d8)
+- [x] **COPY-03**: The crossover explanation is generated from the computed crossing list, with distinct text for no crossing, one crossing, and two crossings, and never asserts a crossover that does not exist at the current settings
+- [x] **COPY-04**: The page explains why the attack curve plateaus (5% to 95% clamp) and why the damage curve is linear, tied to the shaded chart regions
+- [x] **COPY-05**: A short suggested-exploration section points at settings that show a crossover (for example AC 25 with a d12) and settings where damage bonus always wins (AC 15 with a d8)
 
 ### Deployment
 
@@ -161,9 +161,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SIM-06 | Phase 3 | Complete |
 | COPY-01 | Phase 4 | Complete |
 | COPY-02 | Phase 4 | Complete |
-| COPY-03 | Phase 4 | Pending |
-| COPY-04 | Phase 4 | Pending |
-| COPY-05 | Phase 4 | Pending |
+| COPY-03 | Phase 4 | Complete |
+| COPY-04 | Phase 4 | Complete |
+| COPY-05 | Phase 4 | Complete |
 | DEPLOY-01 | Phase 1 | Complete |
 | DEPLOY-02 | Phase 1 | Partial (main branch, .nojekyll, README done locally; public repo deferred 2026-09-25, user chose local git) |
 | DEPLOY-03 | Phase 1 | Deferred (user chose local git only on 2026-09-25; gh installed, not authenticated) |

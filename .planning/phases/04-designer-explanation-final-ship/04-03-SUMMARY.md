@@ -192,3 +192,8 @@ None. No push, gh or Pages work (publishing is plan 04-05).
 
 - RED: `test(04-03)` da153fd. check-engine failed only on (u)(v)(w)(x) and the two `explain:` pins. check-page failed only on the `explain:` / `explore ui:` / renamed page-order self-test checks and `Roll and preset buttons enabled after init`, plus the derived console / panel / budget-line failures.
 - GREEN: `feat(04-03)` ba3c698 (only (x) and the preset check still failing, as planned), then `feat(04-03)` d59497f (everything passes).
+
+## Self-Check: PASSED
+
+- Files: index.html, tools/check-engine.mjs, tools/check-page.mjs, 04-03-SUMMARY.md all present.
+- Commits: da153fd, ba3c698, d59497f, 9f2bcdc all in the log.

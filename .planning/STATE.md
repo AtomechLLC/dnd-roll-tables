@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-09-27T06:46:14.453Z"
+stopped_at: Completed 04-03-PLAN.md
+last_updated: "2026-09-27T07:03:31.539Z"
 last_activity: 2026-09-27
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 16
-  completed_plans: 13
+  completed_plans: 14
   percent: 75
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 04 (designer-explanation-final-ship) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-09-27
 
-Progress: [████████░░] 81%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [████████░░] 81%
 | Phase 03 P03 | 14min | 3 tasks | 2 files |
 | Phase 04 P01 | 10min | 2 tasks | 4 files |
 | Phase 04 P02 | 14min | 3 tasks | 2 files |
+| Phase 04 P03 | 13min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,9 @@ Recent decisions affecting current work:
 - [Phase 04]: Which wins uses the inequality only when both +1 lines are rule branch; the 80 nat-20-only D = -2 settings compare displayed values (UI-SPEC deviation) — The inequality would print 2.5 where the real value is 2.625 (RESEARCH Pitfall 1)
 - [Phase 04]: copy branches are exact integer comparisons with statsView.exact; check-engine pins the counts (rule 60,740 / table 10,240; 36,850 / 28,100 / 5,950 / 80) — D-04: a formula never prints a number that disagrees with a card
 - [Phase 04]: NBSP is written as String.fromCharCode(0xa0) in index.html and tools — The Edit tool and Git Bash sed mangle backslash escapes
+- [Phase 04]: 04-03: three Try-this presets (cross / dmg / cap) that also set N (6 / 5 / 15); a click neither scrolls nor moves focus, and static jump links go to #chart / #controls
+- [Phase 04]: 04-03: chart explanations are built by VM.explainChart inside chartBase from the same crossings and bands that draw the rings; the singular bent dashed-line sentence reads ': one for the 1 hit you expect in 20 rounds.'
+- [Phase 04]: 04-03: the solid-line math group (d8 + 0 = 4.5) uses U+00A0 like the formula cards so it never wraps mid-expression
 
 ### Pending Todos
 
@@ -118,6 +122,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-27T06:46:14.444Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-09-27T07:03:31.526Z
+Stopped at: Completed 04-03-PLAN.md
 Resume file: None
