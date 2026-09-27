@@ -15,9 +15,9 @@ Every control is a native form element with a visible label and can be reached w
 
 ## Live page
 
-`https://<owner>.github.io/DnD-CombatRollSimulator/`
+https://atomechllc.github.io/dnd-roll-tables/
 
-The real address is filled in here when the repository is published to GitHub Pages.
+Source: https://github.com/AtomechLLC/dnd-roll-tables (published from the `main` branch root with GitHub Pages).
 
 ## Self-test
 
