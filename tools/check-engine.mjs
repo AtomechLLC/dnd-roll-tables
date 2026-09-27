@@ -65,7 +65,11 @@
 //          k = 0: 60,740; k = 1, 2, 3: 2,730 each; k = 4: 2,050; never above 4
 //      (v) the solid-line text: nodmg iff die + dmg <= 0 (1,092), rule iff 2 normalNum ===
 //          (X + 1 + 2D) normalDen (60,060), else floor bites (9,828); every attack step outside
-//          the bands equals normalNum x die; a band sentence iff that band is drawn (not nodmg)
+//          the bands equals normalNum x die; a band sentence iff that band is drawn (not nodmg,
+//          except the whole-chart cap); and the claims (04-REVIEW CR-01): each sentence that
+//          prices a step ('worth V', from +0 or 'From +k,') sits where the d20 gains a face and
+//          the engine's attack step is V, so no step is priced where +1 to hit adds 0; counts
+//          pinned: capped from +0 11,648 (+ 182 nodmg), floor band first 15,360
 //      (w) the crossover text picks the variant that matches DiceMath.crossings and prints the
 //          ring's N; counts pinned: none-damage 30,095, none-attack 14,677, one adjacent 25,318,
 //          one across a tie 874, end tie only 16, touch / two+ / identical 0
@@ -402,11 +406,11 @@ const S = (n) => VM.signed(n);
 const LQ = '“', RQ = '”';   // U+201C / U+201D around the on-chart band names
 const explainCounts = {
   straight: [0, 0, 0, 0, 0], straightOver: 0,
-  nodmg: 0, rule: 0, floorBites: 0,
+  nodmg: 0, rule: 0, floorBites: 0, capAll: 0, capAllNodmg: 0, floorFirst: 0,
   noneDamage: 0, noneAttack: 0, oneAdjacent: 0, oneTie: 0, endTieOnly: 0, touch: 0, multi: 0, identical: 0,
 };
 const WANT_STRAIGHT = [60740, 2730, 2730, 2730, 2050];
-const WANT_HIT = { nodmg: 1092, rule: 60060, floorBites: 9828 };
+const WANT_HIT = { nodmg: 1092, rule: 60060, floorBites: 9828, capAll: 11648, capAllNodmg: 182, floorFirst: 15360 };
 const WANT_CROSS = { noneDamage: 30095, noneAttack: 14677, oneAdjacent: 25318, oneTie: 874, endTieOnly: 16, touch: 0, multi: 0, identical: 0 };
 const RING_TAIL = ' Change the AC or the die and watch the ring move, or disappear.';
 const RINGS_TAIL = ' Change the AC or the die and watch the rings move, or disappear.';
@@ -482,11 +486,16 @@ function checkExplain(p, a, d, den, hf, ex, c, b, markers) {
     else if ((k === 0) !== got.includes('the line is straight')) record('u', p, `k ${k} straight wording`);
   }
 
-  // (v) solid line: the step variant, the step itself outside the bands, one sentence per band
+  // (v) solid line: the step variant, the step itself outside the bands, one sentence per band,
+  // then the claims themselves (04-REVIEW CR-01, IN-02), read back from the text and tested
+  // against the engine's own attack series, never against a rebuilt string.
   {
     const nodmg = X + D <= 0;
+    const capAll = b.cap !== null && b.cap[0] === 0;
     const rule = !nodmg && 2 * ex.normalNum === (X + 1 + 2 * D) * ex.normalDen;
     if (nodmg) explainCounts.nodmg++; else if (rule) explainCounts.rule++; else explainCounts.floorBites++;
+    if (capAll) explainCounts[nodmg ? 'capAllNodmg' : 'capAll']++;
+    else if (b.floor !== null && !nodmg) explainCounts.floorFirst++;
     let bad = null;
     for (let n = 0; n < MAXN && !bad; n++) {
       const inBand = (b.floor !== null && n + 1 <= b.floor[1]) || (b.cap !== null && n >= b.cap[0]);
@@ -496,22 +505,26 @@ function checkExplain(p, a, d, den, hf, ex, c, b, markers) {
     }
     const parts = [];
     if (nodmg) {
-      parts.push(`Each +1 to hit turns one more d20 face into a hit, but at a damage bonus of ${S(D)} a normal d${X} ` +
-        'hit deals 0. So this line stays flat even outside the shaded bands, and only crits deal damage here.');
+      parts.push(capAll
+        ? `It is flat across the whole chart, in the band marked ${LQ}95% cap${RQ}: you already hit on 2+, and at a ` +
+          `damage bonus of ${S(D)} a normal d${X} hit deals 0 anyway, so only crits deal damage here.`
+        : `Each +1 to hit turns one more d20 face into a hit, but at a damage bonus of ${S(D)} a normal d${X} ` +
+          'hit deals 0. So this line stays flat even outside the shaded bands, and only crits deal damage here.');
+    } else if (capAll) {
+      parts.push(`It is flat across the whole chart, in the band marked ${LQ}95% cap${RQ}: you already hit on 2+, ` +
+        'and a natural 1 always misses, so +1 to hit has no face left to turn into a hit.');
     } else {
-      parts.push(rule
-        ? 'Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth an average ' +
-          `d${X} ${D < 0 ? '−' : '+'} ${Math.abs(D)} = ${VM.fixed(5 * (X + 1 + 2 * D), 1)}.`
-        : 'Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth ' +
-          `${VM.fixed(Math.round((100 * ex.normalNum) / ex.normalDen), 2)} on average here, since damage stops at 0.`);
+      const step = 'turns one more d20 face into a hit: one more hit in 20 rounds, ' + (rule
+        ? `worth an average d${X} ${D < 0 ? '−' : '+'} ${Math.abs(D)} = ${VM.fixed(5 * (X + 1 + 2 * D), 1)}.`
+        : `worth ${VM.fixed(Math.round((100 * ex.normalNum) / ex.normalDen), 2)} on average here, since damage stops at 0.`);
       if (b.floor) {
         parts.push(`It is flat in the band marked ${LQ}only a nat 20 hits${RQ}, up to ${S(b.floor[1])}: a natural 20 ` +
           `always hits, but nothing else does until ${S(b.floor[1] + 1)}.`);
+        if (b.floor[1] < MAXN) parts.push(`From ${S(b.floor[1] + 1)}, each +1 to hit ${step}`);
+      } else {
+        parts.push('Each +1 to hit ' + step);
       }
-      if (b.cap && b.cap[0] === 0) {
-        parts.push(`It is flat across the whole chart, in the band marked ${LQ}95% cap${RQ}: you already hit on 2+, ` +
-          'and a natural 1 always misses, so more to-hit buys nothing.');
-      } else if (b.cap) {
+      if (b.cap) {
         parts.push(`It goes flat${b.floor ? ' again' : ''} in the band marked ${LQ}95% cap${RQ}, from ${S(b.cap[0])}: ` +
           'a natural 1 always misses, so once you hit on 2+, more to-hit buys nothing.');
       }
@@ -520,9 +533,26 @@ function checkExplain(p, a, d, den, hf, ex, c, b, markers) {
     const got = nb(e.hitLine);
     if (!bad && got !== want) bad = `${JSON.stringify(got)} vs ${JSON.stringify(want)}`;
     if (!bad && got.includes('only a nat 20 hits') !== (b.floor !== null && !nodmg)) bad = 'floor sentence presence';
-    if (!bad && got.includes('95% cap') !== (b.cap !== null && !nodmg)) bad = 'cap sentence presence';
-    if (!bad && got.includes('whole chart') !== (b.cap !== null && b.cap[0] === 0 && !nodmg)) bad = 'whole-chart wording';
+    if (!bad && got.includes('95% cap') !== (b.cap !== null && (!nodmg || capAll))) bad = 'cap sentence presence';
+    if (!bad && got.includes('whole chart') !== capAll) bad = 'whole-chart wording';
     if (!bad && got.includes('flat again') !== (b.floor !== null && b.cap !== null && !nodmg)) bad = 'flat-again wording';
+    // Claims (CR-01): each sentence that prices a step names where it starts ("From +k," or +0).
+    // At that N the d20 must gain a face and the engine's attack step must be the printed value
+    // (to the printed 2 decimals). So no step is priced where the card says +1 to hit adds 0.
+    const facesAt = (n) => 21 - Math.min(20, Math.max(2, p.ac - p.atk - n));
+    for (const s of got.split(/(?<=\.) (?=[A-Z])/)) {
+      if (bad || !s.includes('worth')) continue;
+      const m = s.match(/^(?:From ([+−]\d+), each|Each) \+1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth (?:an average d\d+ [+−] \d+ = )?(\d+\.\d+)/);
+      if (!m) { bad = `unparsed step sentence ${JSON.stringify(s)}`; break; }
+      const k = m[1] ? Number(m[1].replace('−', '-')) : 0;
+      const stepNum = k >= 0 && k < MAXN ? a[k + 1] - a[k] : NaN;
+      if (facesAt(k + 1) !== facesAt(k) + 1) bad = `claims a new hit face at ${S(k)}: faces ${facesAt(k)} -> ${facesAt(k + 1)}`;
+      else if (!(stepNum > 0)) bad = `prices a step of ${m[2]} at ${S(k)}, where the line steps by ${stepNum}`;
+      else if (Math.round(100 * Number(m[2])) !== Math.round((100 * stepNum) / den)) {
+        bad = `prices ${m[2]} at ${S(k)}, engine step ${(stepNum / den).toFixed(4)}`;
+      }
+    }
+    if (!bad && a[1] === a[0] && /(^|\. )Each \+1 to hit turns[^.]*worth/.test(got)) bad = 'prices the next +1 to hit where it adds 0';
     if (bad) record('v', p, bad);
   }
 
@@ -1015,7 +1045,8 @@ const extra = {
     `mixed ${branchCounts.mixed}, other ${branchCounts.other})`,
   z: ` (normal thresholds seen ${thresholdsSeen.size ? Math.min(...thresholdsSeen) + '..' + Math.max(...thresholdsSeen) : 'none'}, ${thresholdsSeen.size} values)`,
   u: ` (straightFrom 0..4: ${explainCounts.straight.join(' / ')}, above 4: ${explainCounts.straightOver})`,
-  v: ` (nodmg ${explainCounts.nodmg}, rule ${explainCounts.rule}, floor bites ${explainCounts.floorBites})`,
+  v: ` (nodmg ${explainCounts.nodmg}, rule ${explainCounts.rule}, floor bites ${explainCounts.floorBites}; capped from ` +
+    `+0 ${explainCounts.capAll} + ${explainCounts.capAllNodmg} nodmg, floor band first ${explainCounts.floorFirst})`,
   w: ` (none-damage ${explainCounts.noneDamage}, none-attack ${explainCounts.noneAttack}, one adjacent ` +
     `${explainCounts.oneAdjacent}, one across a tie ${explainCounts.oneTie}, end tie only ${explainCounts.endTieOnly}, ` +
     `touch ${explainCounts.touch}, two+ ${explainCounts.multi}, identical ${explainCounts.identical})`,

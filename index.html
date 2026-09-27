@@ -1539,27 +1539,37 @@ const VM = (() => {
         `the first steps add less. From ${signed(straightFrom)} on, every step adds the same ${step}: ` +
         (hf === 1 ? 'one for the 1 hit you expect in 20 rounds.' : `one for each of the ${hf} hits you expect in 20 rounds.`);
 
-    // Solid line: the step (exact branch by integer equality), then one sentence per drawn band.
+    // Solid line: one sentence per drawn band, and the step (exact branch by integer equality)
+    // only where the line actually steps (04-REVIEW CR-01, D-04, D-06). Capped across the whole
+    // chart: no step sentence, since no +1 to hit turns a face into a hit. A floor band from +0:
+    // the band first, then the step scoped "From +{e + 1}", because the next +1 adds 0 here (the
+    // card's +0). Otherwise the step holds from +0, then any cap band.
     const hitParts = [];
+    const capAll = !!bands.cap && bands.cap[0] === 0;
     if (X + D <= 0) {
-      hitParts.push(`Each +1 to hit turns one more d20 face into a hit, but at a damage bonus of ${signed(D)} ` +
-        `a normal d${X} hit deals 0. So this line stays flat even outside the shaded bands, and only crits deal damage here.`);
+      hitParts.push(capAll
+        ? 'It is flat across the whole chart, in the band marked “95% cap”: you already hit on 2+, and at a damage ' +
+          `bonus of ${signed(D)} a normal d${X} hit deals 0 anyway, so only crits deal damage here.`
+        : `Each +1 to hit turns one more d20 face into a hit, but at a damage bonus of ${signed(D)} ` +
+          `a normal d${X} hit deals 0. So this line stays flat even outside the shaded bands, and only crits deal damage here.`);
+    } else if (capAll) {
+      hitParts.push('It is flat across the whole chart, in the band marked “95% cap”: you already hit on 2+, ' +
+        'and a natural 1 always misses, so +1 to hit has no face left to turn into a hit.');
     } else {
       // The math group keeps U+00A0 (NB, the formula-card rule), so 'd8 + 0 = 4.5' never wraps.
-      hitParts.push(2 * hits.normalNum === (X + 1 + 2 * D) * hits.normalDen
-        ? 'Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth an average ' +
-          `d${X}${NB}${D < 0 ? '−' : '+'}${NB}${Math.abs(D)}${NB}=${NB}${fixed(5 * (X + 1 + 2 * D), 1)}.`
-        : 'Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth ' +
-          `${fixed(Math.round((100 * hits.normalNum) / hits.normalDen), 2)} on average here, since damage stops at 0.`);
+      const step = 'turns one more d20 face into a hit: one more hit in 20 rounds, ' +
+        (2 * hits.normalNum === (X + 1 + 2 * D) * hits.normalDen
+          ? `worth an average d${X}${NB}${D < 0 ? '−' : '+'}${NB}${Math.abs(D)}${NB}=${NB}${fixed(5 * (X + 1 + 2 * D), 1)}.`
+          : `worth ${fixed(Math.round((100 * hits.normalNum) / hits.normalDen), 2)} on average here, since damage stops at 0.`);
       if (bands.floor) {
         const e = bands.floor[1];
         hitParts.push(`It is flat in the band marked “only a nat 20 hits”, up to ${signed(e)}: ` +
           `a natural 20 always hits, but nothing else does until ${signed(e + 1)}.`);
+        if (e < maxN) hitParts.push(`From ${signed(e + 1)}, each +1 to hit ${step}`);
+      } else {
+        hitParts.push('Each +1 to hit ' + step);
       }
-      if (bands.cap && bands.cap[0] === 0) {
-        hitParts.push('It is flat across the whole chart, in the band marked “95% cap”: you already hit on 2+, ' +
-          'and a natural 1 always misses, so more to-hit buys nothing.');
-      } else if (bands.cap) {
+      if (bands.cap) {
         hitParts.push(`It goes flat${bands.floor ? ' again' : ''} in the band marked “95% cap”, from ${signed(bands.cap[0])}: ` +
           'a natural 1 always misses, so once you hit on 2+, more to-hit buys nothing.');
       }
