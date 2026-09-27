@@ -69,9 +69,12 @@
       font-size: 1rem;
       line-height: 1.5;
     }
-    /* Page frame (D-01, D-02): one full-width column up to 90rem, no side column. */
+    /* Page frame (D-01, D-02): one full-width column up to 90rem. Since 260927-1ty `main` is the
+       named `page` container: at >= 64rem the outcome-table notes, the formulas / marginal cards
+       and the compare intro / N strip use side columns; at >= 72rem the chart notes sit beside
+       the chart (see the @container page blocks near the end). Narrower widths stay one column. */
     main, footer { max-width: 90rem; margin-inline: auto; padding-inline: var(--sp-3); }
-    main { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); }
+    main { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); container: page / inline-size; }
     header { padding-top: var(--sp-4); }
     /* When the panel or banner sits above the header, it takes the 24px top space instead. */
     #selftest:not([hidden]), #selftest[hidden] + #engine-error:not([hidden]) { margin-top: var(--sp-4); }
@@ -280,7 +283,8 @@
     .outcome tbody tr:first-child .roll[data-n]::after,
     .outcome th.roll[data-down]::after { top: auto; bottom: -6px; }
 
-    /* Legend (TABLE-05): one wrapping row between the h2 and the table */
+    /* Legend (TABLE-05): one wrapping row between the h2 and the table; at page width >= 64rem
+       it sits in the text column left of the table, under the two-roll paragraph (260927-1ty). */
     .legend {
       display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3);
       padding-block: var(--sp-2); margin-bottom: var(--sp-3);
@@ -326,7 +330,7 @@
       margin: 0 0 var(--sp-3); max-width: 72ch;
       font-size: 0.875rem; line-height: 1.4; color: var(--ink-muted);
     }
-    .n-strip { width: fit-content; max-width: 100%; margin-bottom: var(--sp-4); }
+    .n-strip { width: fit-content; max-width: 100%; margin-bottom: var(--sp-3); }
     #n-out {
       display: inline-block; min-width: 48px; height: 32px; line-height: 32px; text-align: center;
       font-family: var(--font-num); font-variant-numeric: tabular-nums;
@@ -351,6 +355,7 @@
     .ndot-hit { fill: var(--series-hit); }
     .ndot-dmg { fill: var(--series-dmg); }
     .chart-wrap { container: chart / inline-size; max-width: 50rem; }
+    .chart-legend { max-width: 50rem; }   /* the old width cap, now that the legend sits outside .chart-wrap */
     .chart { display: block; width: 100%; height: auto; overflow: visible; }
     .key { width: 32px; height: 16px; overflow: visible; }
     .key.key-sm { width: 24px; }
@@ -542,7 +547,8 @@
        italic, live lines in the number face. The named `formula` container keeps the unnamed
        table-tier queries from resolving against these cards. */
     .explain { margin: 0 0 var(--sp-3); max-width: 72ch; font-size: 1rem; line-height: 1.5; color: var(--ink); }
-    /* Under the sweep chart (COPY-03, COPY-04): three bold-lead-in paragraphs, spaced by the grid gap. */
+    /* Chart explanations (COPY-03, COPY-04): three bold-lead-in paragraphs, spaced by the grid gap.
+       Under the sweep chart; at page width >= 72rem in the notes column beside it (260927-1ty). */
     .chart-explain { margin-top: var(--sp-3); display: grid; gap: var(--sp-2); }
     .chart-explain .explain { margin: 0; }
     .card.formulas { grid-column: 1 / -1; container: formula / inline-size; }
@@ -611,6 +617,47 @@
     /* The page's first links: ink with an underline as the non-color cue; no accent. */
     a { color: var(--ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
     a:hover { text-decoration-thickness: 2px; }
+
+    /* Wide-screen side columns (260927-1ty density pass). Only named `page` queries, so the
+       unnamed outcome-table tiers keep resolving against .table-wrap. Kept late in the sheet so
+       these equal-specificity rules win. Narrower pages keep the stacked order above. */
+    @container page (width >= 64rem) {
+      /* Text (two-roll paragraph, then legend) on the left in DOM order; the table on the right
+         in a 43rem column, so .table-wrap stays >= 42rem (wide tier, d12 652px). The footnote
+         stays directly under the table: the #two-rolls copy says "the note under the table". */
+      #tables {
+        display: grid; grid-template-columns: minmax(0, 1fr) 43rem; column-gap: var(--sp-4); align-items: start;
+        grid-template-areas: "head head" "explain table" "legend table" ". table" ". note";
+        grid-template-rows: auto auto auto 1fr auto;
+      }
+      #tables > h2 { grid-area: head; }
+      #two-rolls { grid-area: explain; }
+      #legend { grid-area: legend; }
+      #tables > .table-wrap { grid-area: table; }
+      #crit-note { grid-area: note; }
+      /* #stats always has six tracks here (6 x 9rem + 5 x 12px = 924px), so the two wide cards
+         share one row at equal height. */
+      .card.formulas { grid-column: 1 / span 3; }
+      .card.marginal { grid-column: 4 / -1; }
+      /* The compare intro and the N strip share a row; #compare keeps its inline size, so the
+         77rem three-up rule is unaffected. */
+      #compare { display: flex; flex-wrap: wrap; align-items: flex-end; column-gap: var(--sp-4); }
+      #compare > h2, #compare > .trio { flex: 1 0 100%; }
+      #compare > .section-intro { flex: 0 1 40rem; }
+    }
+    /* 50rem chart + 16px gap + at least 20rem of notes: legend, caption and the three
+       explanations in a column beside the chart. .chart-wrap stays the 50rem `chart` container. */
+    @container page (width >= 72rem) {
+      .chart-body {
+        display: grid; grid-template-columns: 50rem minmax(0, 1fr); column-gap: var(--sp-4); align-items: start;
+        grid-template-areas: "plot legend" "plot caption" "plot explain" "plot .";
+        grid-template-rows: auto auto auto 1fr;
+      }
+      .chart-body > .chart-wrap { grid-area: plot; }
+      .chart-body > .chart-legend { grid-area: legend; }
+      .chart-body > .chart-caption { grid-area: caption; margin-top: 0; }
+      .chart-body > .chart-explain { grid-area: explain; }
+    }
 
     /* Self-test panel and engine-error banner (UI-SPEC Self-test Panel, States) */
     #selftest, #engine-error {
@@ -798,7 +845,7 @@
     <section id="chart" aria-labelledby="chart-h">
       <h2 id="chart-h">Bonus sweep, +0 to +20</h2>
       <p class="section-intro">Expected damage over 20 rounds for every extra bonus from +0 to +20, at the settings above. Point at or drag across the chart to read any N; the slider sets the marker.</p>
-      <div class="chart-wrap">
+      <div class="chart-body">
         <div class="legend chart-legend">
           <div class="legend-item"><svg class="key" aria-hidden="true" focusable="false"><line class="series-hit" x1="0" y1="8" x2="32" y2="8"></line></svg><span>+N to hit (added to the attack roll)</span></div>
           <div class="legend-item"><svg class="key" aria-hidden="true" focusable="false"><line class="series-dmg" x1="0" y1="8" x2="32" y2="8"></line></svg><span>+N to damage (added to the damage roll)</span></div>
@@ -806,9 +853,11 @@
           <div class="legend-item"><svg class="key key-sm" aria-hidden="true" focusable="false"><line class="n-marker" x1="12" y1="0" x2="12" y2="16"></line><circle class="ndot ndot-hit" cx="12" cy="8" r="4"></circle></svg><span>Current +N from the slider</span></div>
           <div class="legend-item"><svg class="key key-sm" aria-hidden="true" focusable="false"><circle class="cross" cx="12" cy="8" r="6"></circle></svg><span>Where the curves cross, if they do</span></div>
         </div>
-        <p class="chart-ytitle">Expected damage over 20 rounds</p>
-        <div class="plot"><svg id="sweep" class="chart" viewBox="0 0 640 400" role="img" aria-labelledby="chart-caption" focusable="false"></svg></div>
-        <p id="chart-readout" class="readout"></p>
+        <div class="chart-wrap">
+          <p class="chart-ytitle">Expected damage over 20 rounds</p>
+          <div class="plot"><svg id="sweep" class="chart" viewBox="0 0 640 400" role="img" aria-labelledby="chart-caption" focusable="false"></svg></div>
+          <p id="chart-readout" class="readout"></p>
+        </div>
         <p id="chart-caption" class="chart-caption"></p>
         <div class="chart-explain">
           <p class="explain" id="explain-dmg"><b>The dashed line (+N to damage).</b> <span></span></p>
