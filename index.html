@@ -1867,6 +1867,30 @@ const SelfTest = (() => {
     check('sim: simulate without an rng throws TypeError', throwsType(() => Sim.simulate(DEF, 20)), true);
   });
 
+  // Phase 4 copy pins (COPY-01, COPY-02): three statsView-only checks at the defaults (200 ms
+  // budget). check-engine (r)(s)(t)(z) cover every setting. Names avoid visible copy (IN-06).
+  section('copy', () => {
+    const sv = VM.statsView(VM.DEFAULT_STATE);
+    const nb = (x) => String(x).replace(/ /g, ' ');
+    const flat = (g) => nb(g.pre) + nb(g.result) + nb(g.post);
+    const hasF = typeof VM.formulaView === 'function';
+    const fv = hasF ? VM.formulaView(sv) : null;
+    check('copy: hit and round lines at the defaults',
+      hasF ? [fv.hit, { pre: fv.round.l1, result: '', post: '' }, fv.round.l2].map(flat).join(' | ') : 'formulaView missing',
+      '= (21 − (15 − 5)) / 20 = 11/20 = 55% | = 0.50 × (4.5 + 0) + 0.05 × (2 × 4.5 + 0) | ' +
+      '= 0.50 × 4.5 + 0.05 × 9.0 = 2.700');
+    check('copy: +1 lines at the defaults',
+      hasF ? [flat(fv.plusHit), flat(fv.plusDmg), nb(fv.win.pre) + nb(fv.win.verdict) + nb(fv.win.post)].join(' | ')
+        : 'formulaView missing',
+      '= (4.5 + 0) / 20 = 0.225 | = 11/20 = 0.550 | Here 4.5 < 20 × 0.55 = 11.0, so ' + '+1 to damage wins.');
+    check('copy: two-roll paragraph at the defaults',
+      typeof VM.twoRollsText === 'function' ? nb(VM.twoRollsText(sv)) : 'twoRollsText missing',
+      'Every attack is two rolls, and the d20 comes first: with +5 against AC 15, a 10 or higher hits. ' +
+      'Only a hit rolls damage: one d8, or two on a natural 20, and a miss deals 0. ' +
+      'The table pairs all 20 d20 faces with all 8 damage faces, so its 160 cells are equally likely outcomes. ' +
+      'That makes the average cell the expected damage per attack.');
+  });
+
   const failed = results.filter((r) => !r.ok);
   for (const f of failed) console.error('SELFTEST FAIL:', f.name, '| got', f.actual, '| expected', f.expected);
   const ms = (now() - t0).toFixed(1);
@@ -3375,6 +3399,51 @@ function runUiSmoke() {
   // The click above queued its announcement for the next frame. rAF callbacks run in
   // registration order, so this clears it afterwards and the DOM dump never carries it.
   requestAnimationFrame(() => { document.getElementById('sim-status').textContent = ''; });
+
+  // Phase 4 formulas and two-roll paragraph (COPY-01, COPY-02, D-04): the DOM shows the VM's
+  // strings, the table branch swaps line 2 for the note, and the mixed case compares displayed
+  // values. Names avoid visible copy; expected literals are split (IN-06).
+  try {
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); render(); };
+    const node = (id) => document.getElementById(id);
+    const txt = (id) => (node(id) ? node(id).textContent.replace(/ /g, ' ') : null);
+    const hid = (id) => (node(id) ? node(id).hidden : null);
+    const nb = (x) => String(x).replace(/ /g, ' ');
+
+    show({});
+    const sv0 = VM.statsView(state);
+    const hit0 = typeof VM.formulaView === 'function' ? VM.formulaView(sv0).hit : null;
+    check('formula ui: defaults show round line 2', hid('f-round-l2'), false);
+    check('formula ui: defaults hide the round note', hid('f-round-note'), true);
+    check('formula ui: hit line equals the VM segment', txt('f-hit-live'),
+      hit0 ? nb(hit0.pre) + nb(hit0.result) + nb(hit0.post) : 'formulaView missing');
+    check('formula ui: two-roll paragraph equals the VM text', txt('two-rolls'),
+      typeof VM.twoRollsText === 'function' ? nb(VM.twoRollsText(sv0)) : 'twoRollsText missing');
+
+    show({ dmg: -3 });
+    check('formula ui: table branch hides round line 2', hid('f-round-l2'), true);
+    check('formula ui: table branch shows the round note', hid('f-round-note'), false);
+    check('formula ui: the note carries the card figure',
+      (txt('f-round-note') || '').includes(VM.statsView(state).perRoundText), true);
+    check('formula ui: table branch verdict', txt('f-plus-win-live'),
+      'Here 0.425 > 0.095 per round, ' + 'so +1 to damage wins.');
+
+    show({ atk: -5, dmg: -2 });
+    check('formula ui: mixed case verdict', txt('f-plus-win-live'),
+      'Here 0.130 > 0.050 per round, ' + 'so +1 to hit wins.');
+
+    show({ atk: 14 });
+    check('formula ui: cap clamp shown', (txt('f-hit-live') || '').includes('19/20 = ' + '95%'), true);
+
+    show({ ac: 25, atk: 0, die: 12 });
+    check('formula ui: floor clamp shown', (txt('f-hit-live') || '').includes('raised ' + 'to 1'), true);
+
+    show({});
+    const root = document.documentElement;
+    check('formula ui: no horizontal page scroll', root.scrollWidth <= root.clientWidth, true);
+  } catch (err) {
+    results.push({ name: 'formula ui smoke crashed: ' + (err && err.message), ok: false });
+  }
 
   Object.assign(state, VM.DEFAULT_STATE);
   renderControls();

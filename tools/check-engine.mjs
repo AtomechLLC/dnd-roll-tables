@@ -47,6 +47,17 @@
 //      (y) every combo and every N: VM.readoutLines(attack, damage, den)[N] ends in 'even'
 //          exactly when attack[N] === damage[N], and otherwise names the exact leader
 //          ('to hit ahead by' / 'to damage ahead by' from sign(attack[N] - damage[N]))
+//      and the Phase 4 copy (plan 04-02), from each combo's VM.statsView result (no engine calls):
+//      (r) VM.formulaView hit line: raw faces 21 - (AC - atk), the clamp shown iff they leave
+//          1..19, result === the card's percent
+//      (s) the per-round line takes the rule branch iff the integer closed form equals
+//          2 x e20Num, and its result (line 2 or the table note) is the card's perRoundText;
+//          counts pinned: rule 60,740, table 10,240
+//      (t) the +1 lines print the card's own strings, 'Which wins' names the larger displayed
+//          value and uses the inequality form only when both +1 lines are rule branch; counts
+//          pinned: rule/rule 36,850, reason 28,100, table/table 5,950, mixed 80
+//      (z) VM.twoRollsText equals the UI-SPEC paragraph, with 'an' before 8, 11 and 18, and
+//          every normal threshold 3..19 is seen
 //      Zero-count asserts (02-REVIEW IN-04): no setting has a touch (a tie that is neither a
 //      crossing's tieN nor the end tie), a leading tie (tie at N = 1), or two or more
 //      crossings. The copy branches for those exist only for synthetic series; a rule change
@@ -129,6 +140,10 @@ const names = {
   p: '(p) SIM-05: exhaustive exact 20-round distribution: variance === var20, "2 in 3" band in [0.60, 0.80), "Most" >= 0.80',
   q: '(q) SIM-01: seeded 100k-round samples: mean within 4 SE, d20 faces within 5 SE, every round obeys the rules',
   y: '(y) CHART-05: VM.readoutLines says "even" iff attack[N] === damage[N], else names the exact leader',
+  r: '(r) COPY-02 hit-chance formula',
+  s: '(s) COPY-02 per-round formula branch and result',
+  t: '(t) COPY-02 +1 formulas and Which wins',
+  z: '(z) COPY-01 two-roll text',
   cover: '(cover) the stride-53 sample reaches 21 AC values, 5 dice, 26 attack and 26 damage bonuses',
   zero: '(zero) no touches, no leading ties, no setting with 2+ crossings',
 };
@@ -193,6 +208,173 @@ function dist20Of(p, sp) {
 const distMemo = new Map();
 const cov = { minTwoInThree: Infinity, maxTwoInThree: -Infinity, minMost: Infinity };
 
+// Phase 4 copy (r)(s)(t)(z), COPY-01 / COPY-02 / D-04. VM.formulaView and VM.twoRollsText are
+// pure functions of the loop's statsView result (view.exact carries the engine numerators), so
+// these checks add no engine calls. Every expectation below is computed independently from p
+// and view.exact; strings are compared after U+00A0 -> space (the page's no-break wrapping).
+const hasFormula = typeof VM.formulaView === 'function';
+const hasTwoRolls = typeof VM.twoRollsText === 'function';
+const nb = (x) => String(x ?? '').replace(/ /g, ' ');
+const MINUS = '−';
+const minusInt = (n) => (n < 0 ? MINUS + Math.abs(n) : String(n));
+const fx1 = (k) => (k < 0 ? MINUS + VM.fixed(-k, 1) : VM.fixed(k, 1));   // k in tenths
+const branchCounts = { roundRule: 0, roundTable: 0, ruleRule: 0, reason: 0, tableTable: 0, mixed: 0, other: 0 };
+const thresholdsSeen = new Set();
+const WANT_BRANCHES = { roundRule: 60740, roundTable: 10240, ruleRule: 36850, reason: 28100, tableTable: 5950, mixed: 80, other: 0 };
+const flatSeg = (g) => (g ? nb(g.pre) + nb(g.result) + nb(g.post) : String(g));
+const flatWin = (w) => (w ? nb(w.pre) + nb(w.verdict) + nb(w.post) : String(w));
+
+function checkCopy(p, view) {
+  const { ac, atk, die: X, dmg: D } = p;
+  const ex = view.exact;
+  const hf = view.hitFaces;
+  const normal = hf - 1;                 // the crit face is always one of the hit faces
+  const twoAvgD = X + 1 + 2 * D;         // 2 x (avg die + D)
+  const sg = D < 0 ? MINUS : '+', aD = Math.abs(D);
+  const avg = VM.fixed(5 * (X + 1), 1);
+  const pN = VM.fixed(5 * normal, 2);
+
+  // (z) two-roll paragraph (COPY-01, D-02), including the article rule (RESEARCH Pitfall 3)
+  if (!hasTwoRolls) {
+    record('z', p, 'VM.twoRollsText missing');
+  } else {
+    const t = view.threshold;
+    let s1;
+    if (view.hitState === 'cap') s1 = 'anything but a natural 1 hits (the 95% cap).';
+    else if (view.hitState === 'floor') s1 = 'only a natural 20 hits (the 5% floor).';
+    else {
+      thresholdsSeen.add(t);
+      s1 = `${[8, 11, 18].includes(t) ? 'an' : 'a'} ${t} or higher hits.`;
+    }
+    const want = `Every attack is two rolls, and the d20 comes first: with ${VM.signed(atk)} against AC ${ac}, ${s1} ` +
+      `Only a hit rolls damage: one d${X}, or two on a natural 20, and a miss deals 0. ` +
+      `The table pairs all 20 d20 faces with all ${X} damage faces, so its ${20 * X} cells are equally likely outcomes. ` +
+      (view.critFloorDiffers
+        ? 'That makes the average cell close to the expected damage per attack (the note under the table explains the small gap).'
+        : 'That makes the average cell the expected damage per attack.');
+    let got;
+    try { got = nb(VM.twoRollsText(view)); } catch (err) { got = `threw ${err && err.message}`; }
+    if (got !== want) record('z', p, `${JSON.stringify(got)} vs ${JSON.stringify(want)}`);
+  }
+
+  if (!hasFormula) {
+    record('r', p, 'VM.formulaView missing');
+    record('s', p, 'VM.formulaView missing');
+    record('t', p, 'VM.formulaView missing');
+    return;
+  }
+  if (!ex) {
+    record('s', p, 'statsView.exact missing');
+    record('t', p, 'statsView.exact missing');
+    return;
+  }
+  let fv;
+  try { fv = VM.formulaView(view); } catch (err) {
+    const msg = `formulaView threw: ${err && err.message}`;
+    record('r', p, msg); record('s', p, msg); record('t', p, msg);
+    return;
+  }
+
+  // (r) hit chance: raw faces F, the clamp shown iff F leaves 1..19, result = the card's percent
+  {
+    const F = 21 - (ac - atk);
+    const atkT = atk < 0 ? `(${MINUS}${-atk})` : String(atk);
+    const pre = nb(fv.hit && fv.hit.pre);
+    const head = `= (21 − (${ac} − ${atkT})) / 20`;
+    let bad = null;
+    if (Math.min(19, Math.max(1, F)) !== hf) bad = `clamp(F ${F}) vs hitFaces ${hf}`;
+    else if (!pre.startsWith(head)) bad = `pre ${JSON.stringify(pre)} does not start ${JSON.stringify(head)}`;
+    else if (!pre.endsWith(`= ${hf}/20 = `)) bad = `pre ${JSON.stringify(pre)} does not end in "= ${hf}/20 = "`;
+    else if (F >= 1 && F <= 19 && pre !== `${head} = ${hf}/20 = `) bad = `unclamped pre ${JSON.stringify(pre)}`;
+    else if (pre.includes('kept to 19') !== (F > 19)) bad = `cap clamp wording with F ${F}: ${JSON.stringify(pre)}`;
+    else if (pre.includes('raised to 1') !== (F < 1)) bad = `floor clamp wording with F ${F}: ${JSON.stringify(pre)}`;
+    else if ((F > 19 || F < 1) && !pre.includes(`→ ${minusInt(F)} faces`)) bad = `clamp without raw faces ${F}: ${JSON.stringify(pre)}`;
+    else if (fv.hit.result !== `${view.hitPct}%`) bad = `result ${fv.hit.result} vs card ${view.hitPct}%`;
+    else if (nb(fv.hit.post) !== '') bad = `post ${JSON.stringify(fv.hit.post)}`;
+    if (bad) record('r', p, bad);
+  }
+
+  // (s) per round: rule branch iff the integer closed form equals the exact numerator (D-04)
+  const roundRule = normal * X * X * twoAvgD + X * X * (2 * X + 2 + 2 * D) === 2 * ex.e20Num;
+  if (roundRule) branchCounts.roundRule++; else branchCounts.roundTable++;
+  {
+    const r = fv.round || {};
+    const keyWant = `A normal hit is any hit except the natural 20. avg die = (${X} + 1) / 2 = ${avg}, ` +
+      'and D is the damage bonus. A crit rolls the die twice and adds D once.';
+    const l1Want = `= ${pN} × (${avg} ${sg} ${aD}) + 0.05 × (2 × ${avg} ${sg} ${aD})`;
+    let bad = null;
+    if (nb(fv.roundKey) !== keyWant) bad = `key ${JSON.stringify(nb(fv.roundKey))}`;
+    else if (nb(r.l1) !== l1Want) bad = `l1 ${JSON.stringify(nb(r.l1))} vs ${JSON.stringify(l1Want)}`;
+    else if ((fv.branch && fv.branch.round) !== (roundRule ? 'rule' : 'table')) bad = `branch.round ${fv.branch && fv.branch.round}, rule ${roundRule}`;
+    else if (roundRule) {
+      const l2Pre = `= ${pN} × ${fx1(5 * twoAvgD)} + 0.05 × ${fx1(5 * (2 * X + 2 + 2 * D))} = `;
+      if (!r.l2 || r.note !== null) bad = 'rule branch needs l2 and a null note';
+      else if (nb(r.l2.pre) !== l2Pre) bad = `l2 pre ${JSON.stringify(nb(r.l2.pre))} vs ${JSON.stringify(l2Pre)}`;
+      else if (r.l2.result !== view.perRoundText) bad = `l2 result ${r.l2.result} vs card ${view.perRoundText}`;
+    } else {
+      const notePre = `Not exact here: at a damage bonus of ${VM.signed(D)}, some rolls would deal less than 0, ` +
+        'but damage stops at 0. The table gives ';
+      if (r.l2 !== null || !r.note) bad = 'table branch needs a null l2 and a note';
+      else if (nb(r.note.pre) !== notePre) bad = `note pre ${JSON.stringify(nb(r.note.pre))}`;
+      else if (r.note.result !== view.perRoundText) bad = `note result ${r.note.result} vs card ${view.perRoundText}`;
+      else if (nb(r.note.post) !== ' per round, the same as the Expected per round card.') bad = `note post ${JSON.stringify(r.note.post)}`;
+    }
+    if (bad) record('s', p, bad);
+  }
+
+  // (t) +1 to hit, +1 to damage, Which wins (D-03, D-04, RESEARCH Pitfall 1)
+  {
+    const marg = view.marg;
+    const hitRule = marg.reason === null && 2 * ex.hitNum === twoAvgD * ex.den;
+    const dmgRule = ex.dmgNum === hf * ex.den;
+    if (marg.reason !== null) branchCounts.reason++;
+    else if (hitRule && dmgRule) branchCounts.ruleRule++;
+    else if (!hitRule && !dmgRule) branchCounts.tableTable++;
+    else if (!hitRule && dmgRule) branchCounts.mixed++;
+    else branchCounts.other++;
+    const b = fv.branch || {};
+    const ph = fv.plusHit || {}, pd = fv.plusDmg || {}, w = fv.win || {};
+    const form = marg.reason ? 'zero-hit' : hitRule && dmgRule ? 'inequality' : 'compare-displayed';
+    const mHitT = VM.tenths(ex.hitNum, ex.den), mDmgT = VM.tenths(ex.dmgNum, ex.den);
+    let bad = null;
+    if (marg.reason !== null) {
+      if (ph.result !== '' || !nb(ph.pre).startsWith('= 0')) bad = `zero +1 to hit ${JSON.stringify(flatSeg(ph))}`;
+      else if (b.hit !== 'zero') bad = `branch.hit ${b.hit} with reason ${marg.reason}`;
+    } else if (ph.result !== marg.hitRound) bad = `+1 to hit result ${ph.result} vs card ${marg.hitRound}`;
+    else if (b.hit !== (hitRule ? 'rule' : 'table')) bad = `branch.hit ${b.hit}, rule ${hitRule}`;
+    else if (hitRule && nb(ph.pre) !== `= (${avg} ${sg} ${aD}) / 20 = `) bad = `+1 to hit pre ${JSON.stringify(nb(ph.pre))}`;
+    else if (!hitRule && (nb(ph.pre) !== '= ' || !nb(ph.post).includes('from the table'))) bad = `+1 to hit table ${JSON.stringify(flatSeg(ph))}`;
+    if (!bad) {
+      if (pd.result !== marg.dmgRound) bad = `+1 to damage result ${pd.result} vs card ${marg.dmgRound}`;
+      else if (b.dmg !== (dmgRule ? 'rule' : 'table')) bad = `branch.dmg ${b.dmg}, rule ${dmgRule}`;
+      else if (dmgRule && nb(pd.pre) !== `= ${hf}/20 = `) bad = `+1 to damage pre ${JSON.stringify(nb(pd.pre))}`;
+      else if (!dmgRule && (nb(pd.pre) !== '= ' || !nb(pd.post).includes('from the table'))) bad = `+1 to damage table ${JSON.stringify(flatSeg(pd))}`;
+    }
+    if (!bad) {
+      let verdict;
+      if (marg.reason) verdict = '+1 to damage wins.';
+      else if (mHitT > mDmgT) verdict = '+1 to hit wins.';
+      else if (mHitT < mDmgT) verdict = '+1 to damage wins.';
+      else verdict = form === 'inequality' ? 'they tie.' : 'they are about even.';
+      let preWant;
+      if (form === 'zero-hit') preWant = 'Here +1 to hit adds nothing, so ';
+      else if (form === 'inequality') {
+        const op = twoAvgD < 2 * hf ? '<' : twoAvgD > 2 * hf ? '>' : '=';
+        preWant = `Here ${VM.fixed(5 * twoAvgD, 1)} ${op} 20 × ${VM.fixed(5 * hf, 2)} = ${VM.fixed(10 * hf, 1)}, so `;
+      } else if (mHitT === mDmgT) preWant = `Here both add about ${marg.hitRound} per round, so `;
+      else {
+        const [big, small] = mHitT > mDmgT ? [marg.hitRound, marg.dmgRound] : [marg.dmgRound, marg.hitRound];
+        preWant = `Here ${big} > ${small} per round, so `;
+      }
+      if (b.win !== form) bad = `branch.win ${b.win} vs ${form}`;
+      else if (nb(w.verdict) !== verdict) bad = `verdict ${JSON.stringify(w.verdict)} vs ${JSON.stringify(verdict)}`;
+      else if (nb(w.pre) !== preWant) bad = `win pre ${JSON.stringify(nb(w.pre))} vs ${JSON.stringify(preWant)}`;
+      else if (nb(w.post) !== '') bad = `win post ${JSON.stringify(w.post)}`;
+    }
+    if (bad) record('t', p, bad);
+  }
+}
+
 const t0 = performance.now();
 for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
   for (const die of DICE_SET) {
@@ -256,6 +438,9 @@ for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
         const view = VM.statsView(p);
         const back = VM.fixed(Math.round(Number(view.perRoundText) * 200), 1);
         if (back !== view.e20Text) record('f', p, `perRound ${view.perRoundText} x 20 -> ${back} vs ${view.e20Text}`);
+
+        // Phase 4 copy (r)(s)(t)(z) from the same view, no new engine calls
+        checkCopy(p, view);
 
         // Exact spread (o), SIM-05 / D-05, reusing the cached stats s
         const sp = DiceMath.spread(p);
@@ -456,6 +641,43 @@ if (hasReadout) {
   if (got !== want) record('y', pin, `pin N 3: ${JSON.stringify(got)} vs ${JSON.stringify(want)}`);
 }
 
+// (s)(t)(z) branch counts and threshold coverage (RESEARCH Pattern 3, Pitfalls 1 and 3). The
+// counts are the full-domain distribution; a rule change that moves any setting fails here.
+if (hasFormula) {
+  for (const [k, want] of Object.entries(WANT_BRANCHES)) {
+    if (branchCounts[k] === want) continue;
+    const key = k.startsWith('round') ? 's' : 't';
+    counts[key]++;
+    firstFailures.push(`${key}: branch count ${k} ${branchCounts[k]} vs ${want}`);
+  }
+}
+if (hasTwoRolls) {
+  const seen = [...thresholdsSeen].sort((x, y) => x - y).join(',');
+  const want = Array.from({ length: 17 }, (_, i) => i + 3).join(',');
+  if (seen !== want) {
+    counts.z++;
+    firstFailures.push(`z: normal thresholds seen ${seen} vs ${want}`);
+  }
+}
+// (t) pins: the table branch and the mixed case (hit table, damage rule) compare displayed values.
+if (hasFormula) {
+  const WIN_PINS = [
+    [{ ac: 15, die: 8, atk: 5, dmg: -3, n: 5 }, 'Here 0.425 > 0.095 per round, so +1 to damage wins.'],
+    [{ ac: 15, die: 8, atk: -5, dmg: -2, n: 5 }, 'Here 0.130 > 0.050 per round, so +1 to hit wins.'],
+  ];
+  for (const [pin, want] of WIN_PINS) {
+    let got;
+    try { got = flatWin(VM.formulaView(VM.statsView(pin)).win); } catch (err) { got = `threw ${err && err.message}`; }
+    if (got !== want) record('t', pin, `pin ${JSON.stringify(got)} vs ${JSON.stringify(want)}`);
+  }
+}
+const extra = {
+  s: ` (rule ${branchCounts.roundRule}, table ${branchCounts.roundTable})`,
+  t: ` (rule/rule ${branchCounts.ruleRule}, reason ${branchCounts.reason}, table/table ${branchCounts.tableTable}, ` +
+    `mixed ${branchCounts.mixed}, other ${branchCounts.other})`,
+  z: ` (normal thresholds seen ${thresholdsSeen.size ? Math.min(...thresholdsSeen) + '..' + Math.max(...thresholdsSeen) : 'none'}, ${thresholdsSeen.size} values)`,
+};
+
 // (cover) 02-REVIEW WR-03: the sample must reach every value of every control.
 const coverWant = { ac: span(CS.ac), die: DICE_SET.length, atk: span(CS.atk), dmg: span(CS.dmg) };
 for (const k of Object.keys(coverWant)) {
@@ -519,7 +741,9 @@ for (const p of QSET) {
 const qMs = (performance.now() - tq).toFixed(0);
 
 // ---- report -----------------------------------------------------------------
-for (const k of Object.keys(names)) console.log(`${counts[k] === 0 ? 'ok  ' : 'FAIL'} ${names[k]}: ${counts[k]} failures`);
+for (const k of Object.keys(names)) {
+  console.log(`${counts[k] === 0 ? 'ok  ' : 'FAIL'} ${names[k]}: ${counts[k]} failures${extra[k] || ''}`);
+}
 const n = SelfTest.results.length;
 console.log(`selftest ${SelfTest.passed}/${n}`);
 for (const r of SelfTest.results.filter((x) => !x.ok)) {
