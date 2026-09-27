@@ -570,6 +570,43 @@
     /* Inside the marginal card: a hairline separates the two readout lines from their derivation. */
     .f-marg { margin-top: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--line); }
 
+    /* Try this (COPY-05, UI-SPEC #explore and Preset Button). Cards share the #stats subgrid
+       technique so titles, descriptions, Sets lines and buttons line up across a row. The
+       buttons are secondary to Roll: paper fill and an ink-muted outline, never the accent. */
+    .explore-list {
+      list-style: none; margin: 0; padding: 0; display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--sp-3);
+    }
+    .explore-item {
+      display: grid; grid-row: span 4; grid-template-rows: subgrid; gap: var(--sp-2); padding: var(--sp-3);
+      background: var(--surface); border: 1px solid var(--line); border-radius: 8px; align-content: start;
+    }
+    .explore-title { margin: 0; font-family: var(--font-prose); font-size: 1rem; font-weight: 700; line-height: 1.2; color: var(--ink); }
+    .explore-desc { margin: 0; font-family: var(--font-prose); font-size: 1rem; line-height: 1.5; color: var(--ink); }
+    .explore-sets { margin: 0; font-family: var(--font-prose); font-size: 0.875rem; line-height: 1.4; color: var(--ink-muted); }
+    .btn-preset {
+      background: var(--paper); color: var(--ink);
+      border: 1px solid var(--ink-muted); border-radius: 4px;
+      font: 700 1rem/1.5 var(--font-prose);
+      min-height: 40px; padding: var(--sp-2) var(--sp-3); width: fit-content; max-width: 100%;
+      text-align: left; justify-self: start; align-self: end;
+      cursor: pointer; touch-action: manipulation;
+    }
+    .btn-preset:hover:not(:disabled) { background: color-mix(in oklch, var(--paper) 85%, var(--ink)); }
+    .btn-preset:active:not(:disabled) { background: color-mix(in oklch, var(--paper) 75%, var(--ink)); }
+    .btn-preset:disabled {
+      background: var(--surface); color: var(--ink-muted); border-color: var(--line); cursor: not-allowed;
+    }
+    .explore-status {
+      margin: var(--sp-3) 0 0; min-height: 1.4em; max-width: 72ch;
+      font-family: var(--font-prose); font-size: 0.875rem; line-height: 1.4; color: var(--ink);
+    }
+    .explore-jump { margin: var(--sp-2) 0 0; font-family: var(--font-prose); font-size: 0.875rem; line-height: 1.4; }
+    .explore-jump > span { margin-inline: var(--sp-1); }
+    /* The page's first links: ink with an underline as the non-color cue; no accent. */
+    a { color: var(--ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+    a:hover { text-decoration-thickness: 2px; }
+
     /* Self-test panel and engine-error banner (UI-SPEC Self-test Panel, States) */
     #selftest, #engine-error {
       padding: var(--sp-3); border-radius: 8px;
@@ -817,6 +854,33 @@
           </table>
         </div>
       </div>
+    </section>
+
+    <section id="explore" aria-labelledby="explore-h">
+      <h2 id="explore-h">Try this</h2>
+      <p class="section-intro">Each button sets the controls at the top of the page, and every table, chart and figure follows. Read what to look for, then use the links below to go and see it.</p>
+      <ul class="explore-list" role="list">
+        <li class="explore-item">
+          <h3 class="explore-title">A crossover</h3>
+          <p class="explore-desc" id="ex-cross-d">At AC 25 only a natural 20 hits, so +1 to hit buys nothing until +6. After that, each +1 to hit adds a whole extra d12 hit (6.5 over 20 rounds), while +1 to damage adds just 1.0. Look for the ring at +6, where +N to hit takes over.</p>
+          <p class="explore-sets" id="ex-cross-s">Sets: AC 25, d12, +0 to hit, +0 damage, compare at +6</p>
+          <button type="button" class="btn-preset" data-preset="cross" aria-describedby="ex-cross-d ex-cross-s" disabled>Try AC 25 with a d12</button>
+        </li>
+        <li class="explore-item">
+          <h3 class="explore-title">Damage always wins</h3>
+          <p class="explore-desc" id="ex-dmg-d">At AC 15 with +0 to hit you expect 6 hits in 20 rounds, so each +1 to damage adds 6.0. Each +1 to hit adds one more hit, worth only 4.5. The dashed line stays on top at every N, and there is no ring.</p>
+          <p class="explore-sets" id="ex-dmg-s">Sets: AC 15, d8, +0 to hit, +0 damage, compare at +5</p>
+          <button type="button" class="btn-preset" data-preset="dmg" aria-describedby="ex-dmg-d ex-dmg-s" disabled>Try AC 15 with a d8</button>
+        </li>
+        <li class="explore-item">
+          <h3 class="explore-title">The cap flips it</h3>
+          <p class="explore-desc" id="ex-cap-d">With a d12, one more hit is worth 6.5 and +1 to damage adds 6.0, so +N to hit leads at first. At +13 it reaches the 95% cap and goes flat, and +N to damage passes it at +15.</p>
+          <p class="explore-sets" id="ex-cap-s">Sets: AC 15, d12, +0 to hit, +0 damage, compare at +15</p>
+          <button type="button" class="btn-preset" data-preset="cap" aria-describedby="ex-cap-d ex-cap-s" disabled>Try AC 15 with a d12</button>
+        </li>
+      </ul>
+      <p id="explore-status" class="explore-status" role="status"></p>
+      <p class="explore-jump"><a href="#chart">Go to the chart</a> <span aria-hidden="true">·</span> <a href="#controls">Go to the controls</a></p>
     </section>
   </main>
 
@@ -1427,9 +1491,10 @@ const VM = (() => {
       hitParts.push(`Each +1 to hit turns one more d20 face into a hit, but at a damage bonus of ${signed(D)} ` +
         `a normal d${X} hit deals 0. So this line stays flat even outside the shaded bands, and only crits deal damage here.`);
     } else {
+      // The math group keeps U+00A0 (NB, the formula-card rule), so 'd8 + 0 = 4.5' never wraps.
       hitParts.push(2 * hits.normalNum === (X + 1 + 2 * D) * hits.normalDen
         ? 'Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth an average ' +
-          `d${X} ${D < 0 ? '−' : '+'} ${Math.abs(D)} = ${fixed(5 * (X + 1 + 2 * D), 1)}.`
+          `d${X}${NB}${D < 0 ? '−' : '+'}${NB}${Math.abs(D)}${NB}=${NB}${fixed(5 * (X + 1 + 2 * D), 1)}.`
         : 'Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth ' +
           `${fixed(Math.round((100 * hits.normalNum) / hits.normalDen), 2)} on average here, since damage stops at 0.`);
       if (bands.floor) {
@@ -1552,6 +1617,32 @@ const VM = (() => {
   // Settings in control order, Phase 2 naming: 'AC 15, d8, +5 to hit, +0 damage'.
   const settingsText = (p) => `AC ${p.ac}, d${p.die}, ${signed(p.atk)} to hit, ${signed(p.dmg)} damage`;
 
+  // ---- Try this presets (COPY-05, D-07, D-08) -------------------------------------------
+  // Frozen data. Every claim in each desc is re-derived from the engine at these exact settings
+  // by tools/check-engine.mjs (x), which also checks that the static #explore markup matches
+  // these strings character for character. The app applies `sets` through parseControl.
+  const preset = (key, title, button, desc, sets) => Object.freeze({
+    key, title, button, desc, sets: Object.freeze(sets),
+    setsText: `Sets: ${settingsText(sets)}, compare at ${signed(sets.n)}`,
+  });
+  const PRESETS = Object.freeze([
+    preset('cross', 'A crossover', 'Try AC 25 with a d12',
+      'At AC 25 only a natural 20 hits, so +1 to hit buys nothing until +6. After that, each +1 to hit adds a whole ' +
+      'extra d12 hit (6.5 over 20 rounds), while +1 to damage adds just 1.0. Look for the ring at +6, where +N to ' +
+      'hit takes over.',
+      { ac: 25, die: 12, atk: 0, dmg: 0, n: 6 }),
+    preset('dmg', 'Damage always wins', 'Try AC 15 with a d8',
+      'At AC 15 with +0 to hit you expect 6 hits in 20 rounds, so each +1 to damage adds 6.0. Each +1 to hit adds ' +
+      'one more hit, worth only 4.5. The dashed line stays on top at every N, and there is no ring.',
+      { ac: 15, die: 8, atk: 0, dmg: 0, n: 5 }),
+    preset('cap', 'The cap flips it', 'Try AC 15 with a d12',
+      'With a d12, one more hit is worth 6.5 and +1 to damage adds 6.0, so +N to hit leads at first. At +13 it ' +
+      'reaches the 95% cap and goes flat, and +N to damage passes it at +15.',
+      { ac: 15, die: 12, atk: 0, dmg: 0, n: 15 }),
+  ]);
+  // The one announcement per preset click (UI-SPEC Click behavior): written only by the handler.
+  const presetStatus = (s) => `Set to ${settingsText(s)}, compare at ${signed(s.n)}. Everything above has updated.`;
+
   // SIM-02, SIM-05, D-04, D-05: the exact figure and its spread, all in displayed tenths
   // (UI-SPEC A8), so a reader can add them up by hand. eT uses the stat card's tenths (STAT-02).
   // lopsided: E - SD <= 0, or only a nat 20 hits. At E - SD = 0 the band's low end is already
@@ -1606,7 +1697,7 @@ const VM = (() => {
   return Object.freeze({
     CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, twoRollsText, formulaView, compareView,
     niceTicks, captionOrder, captionCross, captionBands, explainChart, readoutLines, chartView, computeView,
-    settingsText, simExact, simPlacement, simStatus,
+    settingsText, simExact, simPlacement, simStatus, PRESETS, presetStatus,
   });
 })();
   </script>
@@ -2281,6 +2372,10 @@ const fPlusWinLiveEl = document.getElementById('f-plus-win-live');
 const explainDmgEl = document.querySelector('#explain-dmg span');
 const explainHitEl = document.querySelector('#explain-hit span');
 const explainCrossEl = document.querySelector('#explain-cross span');
+// Try this: one delegated click root, the three preset buttons, and the visible status line.
+const exploreListEl = document.querySelector('#explore .explore-list');
+const presetBtns = Array.from(document.querySelectorAll('#explore button.btn-preset'));
+const exploreStatusEl = document.getElementById('explore-status');
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
@@ -2302,6 +2397,13 @@ function resetSim() {
   shownRunId = 0;
 }
 
+// The last applied preset lives here, never in state (like `sim`): a click is an event, not a
+// derivation. Only applyPreset writes it, and render() only clears it (with #explore-status)
+// once any of the five controls no longer matches it, so the status line never outlives the
+// settings it announced. The UI smoke resets it to null.
+let lastPreset = null;
+const PRESET_KEYS = ['ac', 'die', 'atk', 'dmg', 'n'];
+
 let pending = false;
 // Latched by a failed first render (03-REVIEW WR-04): no later render is ever scheduled.
 let broken = false;
@@ -2321,6 +2423,12 @@ function render() {
   const stale = sim.run !== null && !Sim.sameAttack(sim.run.params, view.params);
   const marks = sim.run !== null && !stale ? Sim.runMarks(sim.run) : null;
   const simCtx = { stale, marks };
+  // D-08: the preset status is honest by comparison. render() only ever clears it, so no drag
+  // announces anything, and returning to the preset's values by hand does not bring it back.
+  if (lastPreset && PRESET_KEYS.some((k) => state[k] !== lastPreset[k])) {
+    lastPreset = null;
+    setText(exploreStatusEl, '');
+  }
   for (const r of RENDERERS) r(view, simCtx);
   lastView = view;
   paintReadout();
@@ -2336,6 +2444,31 @@ function onControl(e) {
   const v = VM.parseControl(key, e.target.value, state[key]);
   if (v !== state[key]) setState({ [key]: v });
   else scheduleRender();
+}
+
+// Try this (COPY-05, D-07, D-08): every value goes through the one parse path, then ONE
+// setState, so controls, cards, formulas, tables, chart, explanations and the sim (a rolled run
+// turns stale by the normal comparison) all update in the same frame. The status is cleared,
+// then written in the next frame (the #sim-status pattern), so a second click re-announces.
+// rAF callbacks run in registration order, so the render queued by setState runs first; the
+// lastPreset guard drops the write if a control change lands in the same frame. No scrolling
+// and no focus move: focus stays on the button (UI-SPEC A8).
+function applyPreset(key) {
+  const pr = VM.PRESETS.find((x) => x.key === key);
+  if (!pr) return;
+  const patch = {};
+  for (const k of PRESET_KEYS) patch[k] = VM.parseControl(k, pr.sets[k], state[k]);
+  const applied = Object.freeze({ ...patch });
+  lastPreset = applied;
+  setState(patch);
+  exploreStatusEl.textContent = '';
+  const msg = VM.presetStatus(applied);
+  requestAnimationFrame(() => { if (lastPreset === applied) exploreStatusEl.textContent = msg; });
+}
+
+function onPresetClick(e) {
+  const b = e.target.closest('button[data-preset]');
+  if (b && !b.disabled) applyPreset(b.dataset.preset);
 }
 
 function onChange(e) {
@@ -3860,9 +3993,9 @@ function runUiSmoke() {
 
     rollWith(Sim.mulberry32(1));
     render();
-    document.querySelector('button[data-preset="cross"]').click();
+    btns.find((b) => b.dataset.preset === 'cross').click();   // the real button, the real handler
     render();
-    const dieChecked = document.querySelector('input[data-key="die"]:checked');
+    const dieChecked = document.querySelector('#controls input[name="die"]:checked');
     check('explore ui: preset sets the five controls',
       [node('ac-num').value, dieChecked && dieChecked.value, node('atk-num').value, node('dmg-num').value,
         node('n-range').value].join(' '), '25 12 0 0 6');
@@ -3921,7 +4054,7 @@ function showEngineError() {
 }
 
 // Sections a failed first render may have half painted; hidden under the banner.
-const PAINTED_SECTIONS = ['stats', 'tables', 'compare', 'chart', 'sim'];
+const PAINTED_SECTIONS = ['stats', 'tables', 'compare', 'chart', 'sim', 'explore'];
 
 function init() {
   const testMode = new URLSearchParams(location.search).has('test');
@@ -3934,8 +4067,9 @@ function init() {
 
   // WR-01 (02-REVIEW), WR-04 (03-REVIEW): the first render is guarded, so a view-model or DOM
   // throw shows the banner instead of a blank page. Nothing is wired until that render has
-  // succeeded: the control listeners and the Roll click come after it, and the Roll button
-  // (shipped disabled) and the sim body (shipped hidden) go live as the last steps. A throw
+  // succeeded: the control listeners, the Roll click and the preset click come after it, and
+  // the Roll and preset buttons (shipped disabled) and the sim body (shipped hidden) go live
+  // as the last steps. A throw
   // latches `broken`, hides every painted section, and leaves the controls inert.
   try {
     // The N slider's range comes only from CONTROL_SPEC.n (IN-04: no second copy in the markup).
@@ -3951,8 +4085,10 @@ function init() {
       root.addEventListener('change', onChange);
     }
     rollBtn.addEventListener('click', onRoll);
+    exploreListEl.addEventListener('click', onPresetClick);   // Try this: one delegated listener
     simBodyEl.hidden = false;
     rollBtn.disabled = false;
+    for (const b of presetBtns) b.disabled = false;          // enabled with Roll, last (D-09)
   } catch (err) {
     broken = true;
     console.error('render failed:', err);
