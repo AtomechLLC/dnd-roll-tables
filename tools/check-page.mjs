@@ -28,6 +28,24 @@
 //   failed'), which the console check does not match, so these are its only guard.
 //   Budget gate (03-REVIEW IN-01): the Chrome console's `SELFTEST PASSED: n/n (X ms)` must
 //   report X <= 200.
+//   Accessibility guards (DEPLOY-04, D-10), on the mini tree minus section#selftest, in both
+//   ?test and --plain mode; each prints `CHECK-PAGE FAIL: a11y …` when it fails:
+//   (9)  every input / select / textarea / button has an accessible name (aria-labelledby,
+//        aria-label, label[for], wrapping label, or button text); radios also need a
+//        fieldset legend with text
+//   (10) that name is shown on screen: label text is not only inside .vh / [hidden] /
+//        aria-hidden, and an aria-label contains its group's visible .group-label (without
+//        the .hint), so #ac-num must say "Target AC"
+//   (11) no tabindex > 0; no control with a negative tabindex, `disabled`, or a [hidden]
+//        ancestor; and the focusable order (same-name radios collapsed, presets by
+//        data-preset, links by href) is exactly ac-range, ac-num, die, atk-num, dmg-num,
+//        n-range, roll, cross, dmg, cap, #chart, #controls
+//   (12) miss is not color-only: every td.m in the four table.outcome shows 0, every
+//        auto-miss row has only td.m data cells, the `.m` style rule has the
+//        repeating-linear-gradient hatch, and the legend's .swatch.m shows 0
+//   (13) the `.series-dmg` style rule has stroke-dasharray and `.series-hit` has none
+//   (12) and (13) read the raw <style> text from the dump. A dump cannot prove real focus or
+//   rendering; the page's ?test smoke ('a11y ui:') covers that in the live DOM.
 //
 // --fault render (02-REVIEW WR-01, 03-REVIEW WR-04): copies index.html to a temp dir, makes
 // render() throw, and appends a script that dispatches an `input` event on #ac-range after
@@ -229,6 +247,180 @@ const selftestEl = byId(pageTree, 'selftest');
 if (selftestEl && selftestEl.tag === 'section') detach(selftestEl);
 const pageText = norm(visibleText(pageTree));
 
+// ---- accessibility guards (9)-(13), DEPLOY-04 / D-10 ----------------------------
+// They walk pageTree (rendered markup minus section#selftest). (12) and (13) read the raw
+// <style> text from `dom`, because `rendered` has the style blocks stripped.
+function* ancestors(el) {
+  for (let n = el.parent; n; n = n.parent) yield n;
+}
+const closest = (el, pred) => {
+  for (let n = el; n && n.tag !== '#root'; n = n.parent) if (n.text === undefined && pred(n)) return n;
+  return null;
+};
+const hasClass = (el, c) => classes(el).includes(c);
+const ariaHidden = (el) => el.attrs['aria-hidden'] === 'true';
+// Text with some subtrees dropped. `drop` runs on every element below the start node.
+function textExcept(el, drop) {
+  if (el.text !== undefined) return decode(el.text);
+  if (el.tag !== '#root' && drop(el)) return '';
+  const inner = el.children.map((c) => textExcept(c, drop)).join('');
+  return BLOCK.has(el.tag) ? ` ${inner} ` : inner;
+}
+// Name text (what a screen reader gets): .vh counts, [hidden] and aria-hidden do not.
+const nameText = (el) => norm(textExcept(el, (e) =>
+  'hidden' in e.attrs || ariaHidden(e) || e.tag === 'noscript' || e.tag === 'template' || e.tag === 'title'));
+// Shown text (what a sighted user reads): also drops .vh.
+const shownText = (el) => norm(textExcept(el, (e) => hiddenSelf(e) || ariaHidden(e)));
+// A group label without its .hint ("Target AC 10 to 30" -> "Target AC").
+const groupLabelText = (el) => norm(textExcept(el, (e) => hiddenSelf(e) || ariaHidden(e) || hasClass(e, 'hint')));
+const inHiddenTree = (el) => [el, ...ancestors(el)].some((n) => n.tag !== '#root' && n.text === undefined &&
+  (hiddenSelf(n) || ariaHidden(n)));
+const pageEls = [...walk(pageTree)];
+const idIndex = new Map();
+for (const el of pageEls) if (el.attrs.id && !idIndex.has(el.attrs.id)) idIndex.set(el.attrs.id, el);
+const isControl = (el) => (el.tag === 'input' && el.attrs.type !== 'hidden') ||
+  el.tag === 'select' || el.tag === 'textarea' || el.tag === 'button';
+const isFocusable = (el) => isControl(el) || (el.tag === 'a' && 'href' in el.attrs) || el.tag === 'summary' ||
+  ('tabindex' in el.attrs && Number(el.attrs.tabindex) >= 0);
+const ctlName = (el) => el.attrs.id ? `#${el.attrs.id}` : el.attrs.name ? `${el.tag}[name=${el.attrs.name}]` :
+  el.attrs['data-preset'] ? `${el.tag}[data-preset=${el.attrs['data-preset']}]` : el.tag;
+
+// The accessible name source, in ARIA precedence: aria-labelledby, aria-label, <label>
+// (for= or wrapping), then a button's own content.
+function nameSource(el) {
+  const lb = (el.attrs['aria-labelledby'] || '').trim();
+  if (lb) {
+    const refs = lb.split(/\s+/).map((id) => idIndex.get(id)).filter(Boolean);
+    return { kind: 'aria-labelledby', els: refs, text: norm(refs.map(nameText).join(' ')) };
+  }
+  const al = (el.attrs['aria-label'] || '').trim();
+  if (al) return { kind: 'aria-label', els: [], text: norm(al) };
+  const labels = [];
+  if (el.attrs.id) for (const l of pageEls) if (l.tag === 'label' && l.attrs.for === el.attrs.id) labels.push(l);
+  const wrap = el.parent ? closest(el.parent, (n) => n.tag === 'label') : null;
+  if (wrap && !labels.includes(wrap)) labels.push(wrap);
+  if (labels.length) return { kind: 'label', els: labels, text: norm(labels.map(nameText).join(' ')) };
+  if (el.tag === 'button') return { kind: 'content', els: [el], text: nameText(el) };
+  return { kind: 'none', els: [], text: '' };
+}
+
+function a11yGuards() {
+  const controls = pageEls.filter(isControl);
+
+  // (9) every control has an accessible name; radios also need a fieldset legend with text.
+  const unnamed = [];
+  for (const el of controls) {
+    const src = nameSource(el);
+    if (!src.text) unnamed.push(`${ctlName(el)} (no name)`);
+    if (el.tag === 'input' && el.attrs.type === 'radio') {
+      const fs = closest(el, (n) => n.tag === 'fieldset');
+      const legend = fs ? fs.children.find((c) => c.tag === 'legend') : null;
+      if (!legend || !nameText(legend)) unnamed.push(`${ctlName(el)} (no fieldset legend)`);
+    }
+  }
+  check(`a11y (9) every control has an accessible name (${controls.length} controls)`,
+    controls.length > 0 && unnamed.length === 0, unnamed.slice(0, 8).join('; '));
+
+  // (10) the label a control uses is shown on screen, and an aria-label contains the visible
+  // group label (label in name, WCAG 2.5.3).
+  const unseen = [];
+  for (const el of controls) {
+    const src = nameSource(el);
+    if (src.kind === 'aria-label') {
+      const group = closest(el, (n) => hasClass(n, 'group'));
+      const gl = group ? [...walk(group)].find((n) => hasClass(n, 'group-label')) : null;
+      const vis = gl && !inHiddenTree(gl) ? groupLabelText(gl) : (el.tag === 'button' ? shownText(el) : '');
+      if (!vis) unseen.push(`${ctlName(el)}: aria-label with no visible label beside it`);
+      else if (!src.text.toLowerCase().includes(vis.toLowerCase())) {
+        unseen.push(`${ctlName(el)}: aria-label ${JSON.stringify(src.text)} lacks the visible label ${JSON.stringify(vis)}`);
+      }
+    } else if (src.kind === 'none') {
+      unseen.push(`${ctlName(el)}: no label`);
+    } else {
+      const shown = src.els.filter((n) => !inHiddenTree(n)).map(shownText).join(' ').trim();
+      if (!shown) unseen.push(`${ctlName(el)}: ${src.kind} text is only in .vh / [hidden] / aria-hidden`);
+    }
+    if (el.tag === 'input' && el.attrs.type === 'radio') {
+      const fs = closest(el, (n) => n.tag === 'fieldset');
+      const legend = fs ? fs.children.find((c) => c.tag === 'legend') : null;
+      if (!legend || inHiddenTree(legend) || !shownText(legend)) unseen.push(`${ctlName(el)}: legend not shown`);
+    }
+  }
+  check('a11y (10) labels are visible', unseen.length === 0, unseen.slice(0, 8).join('; '));
+
+  // (11) keyboard reach: no positive tabindex, no control removed from the tab order,
+  // disabled or inside a [hidden] ancestor, and the focus order equals the reading order.
+  const problems = [];
+  for (const el of pageEls) {
+    if ('tabindex' in el.attrs && Number(el.attrs.tabindex) > 0) problems.push(`${ctlName(el)} tabindex=${el.attrs.tabindex}`);
+  }
+  const focusables = pageEls.filter(isFocusable);
+  for (const el of focusables) {
+    if (el.attrs.tabindex !== undefined && Number(el.attrs.tabindex) < 0) problems.push(`${ctlName(el)} tabindex=${el.attrs.tabindex}`);
+    if ('disabled' in el.attrs) problems.push(`${ctlName(el)} disabled`);
+    if ([el, ...ancestors(el)].some((n) => n.attrs && 'hidden' in n.attrs)) problems.push(`${ctlName(el)} inside [hidden]`);
+  }
+  const order = [];
+  for (const el of focusables) {
+    let key;
+    if (el.tag === 'input' && el.attrs.type === 'radio') key = el.attrs.name || ctlName(el);
+    else if (el.tag === 'button' && el.attrs['data-preset']) key = el.attrs['data-preset'];
+    else if (el.tag === 'a') key = el.attrs.href;
+    else key = el.attrs.id || ctlName(el);
+    if (el.tag === 'input' && el.attrs.type === 'radio' && order.includes(key)) continue;   // one stop per group
+    order.push(key);
+  }
+  const want = ['ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'n-range', 'roll', 'cross', 'dmg', 'cap', '#chart', '#controls'];
+  if (order.join(' ') !== want.join(' ')) problems.push(`order ${order.join(', ')} (want ${want.join(', ')})`);
+  check('a11y (11) tab order reaches every control', problems.length === 0, problems.slice(0, 8).join('; '));
+
+  // (12) miss is not color-only: text 0 in every miss cell, the hatch rule, the legend key,
+  // and auto-miss rows hold only miss cells.
+  const miss = [];
+  const tables = pageEls.filter((el) => el.tag === 'table' && hasClass(el, 'outcome'));
+  let missCells = 0, autoRows = 0;
+  for (const t of tables) {
+    for (const el of walk(t)) {
+      if (el.tag === 'td' && hasClass(el, 'm')) {
+        missCells++;
+        if (shownText(el) !== '0') miss.push(`#${t.attrs.id} td.m shows ${JSON.stringify(shownText(el))}`);
+      }
+      if (el.tag === 'tr') {
+        const note = el.children.find((c) => c.tag === 'td' && hasClass(c, 'note'));
+        if (!note || shownText(note) !== 'auto-miss') continue;
+        autoRows++;
+        const data = el.children.filter((c) => c.tag === 'td' && !hasClass(c, 'note'));
+        if (data.length === 0 || !data.every((c) => hasClass(c, 'm'))) miss.push(`#${t.attrs.id} auto-miss row has a non-miss cell`);
+      }
+    }
+  }
+  if (tables.length !== 4) miss.push(`${tables.length} table.outcome (want 4)`);
+  if (missCells === 0) miss.push('no td.m cells found');
+  if (autoRows < tables.length) miss.push(`${autoRows} auto-miss rows for ${tables.length} tables`);
+  if (!rulesFor('.m').some((r) => r.body.includes('repeating-linear-gradient'))) miss.push('the .m rule has no repeating-linear-gradient hatch');
+  const legendEl = idIndex.get('legend');
+  const key = legendEl ? [...walk(legendEl)].find((el) => hasClass(el, 'swatch') && hasClass(el, 'm')) : null;
+  if (!key) miss.push('legend has no .swatch.m');
+  else if (shownText(key) !== '0') miss.push(`legend .swatch.m shows ${JSON.stringify(shownText(key))}`);
+  check(`a11y (12) miss is not color-only (${missCells} miss cells, ${autoRows} auto-miss rows)`,
+    miss.length === 0, miss.slice(0, 8).join('; '));
+
+  // (13) the two chart series differ by more than color: the damage line is dashed, the
+  // to-hit line is not.
+  const series = [];
+  if (!rulesFor('.series-dmg').some((r) => r.body.includes('stroke-dasharray'))) series.push('.series-dmg has no stroke-dasharray');
+  if (rulesFor('.series-hit').some((r) => r.body.includes('stroke-dasharray'))) series.push('.series-hit is dashed too');
+  check('a11y (13) series are not color-only', series.length === 0, series.join('; '));
+}
+
+// CSS rules from the raw <style> text: innermost { } blocks, so rules inside @media and
+// @container are found too. Selector lists are split on commas.
+const styleText = [...dom.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n')
+  .replace(/\/\*[\s\S]*?\*\//g, '');
+const cssRules = [...styleText.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+  .map((m) => ({ sels: m[1].split(',').map((s) => s.trim().replace(/\s+/g, ' ')), body: m[2] }));
+const rulesFor = (sel) => cssRules.filter((r) => r.sels.includes(sel));
+
 // ---- checks ------------------------------------------------------------------
 const consoleLines = consoleText.split(/\r?\n/).filter((l) => /CONSOLE/.test(l));
 const results = [];
@@ -286,6 +478,8 @@ if (fault === 'render') {
   for (const text of expects) {
     check(`page shows ${JSON.stringify(text)}`, pageText.includes(norm(text)));
   }
+
+  a11yGuards();
 }
 
 const mode = fault === 'render' ? ', mode: fault render' : '';
@@ -297,6 +491,7 @@ for (const r of results) {
   if (!r.ok && r.detail) console.log(`      ${r.detail}`);
 }
 const failed = results.filter((r) => !r.ok).length;
+for (const r of results.filter((x) => !x.ok)) console.log(`CHECK-PAGE FAIL: ${r.name}`);
 if (failed === 0) {
   console.log('CHECK-PAGE PASS');
   process.exit(0);

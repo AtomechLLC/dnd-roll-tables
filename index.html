@@ -4018,6 +4018,51 @@ function runUiSmoke() {
     try { resetSim(); } catch { /* resetSim missing: the crash above is already reported */ }
   }
 
+  // Phase 4 accessibility (DEPLOY-04, D-09): each control, in the Tab order check-page's guard
+  // (11) expects, really takes focus in Chrome, and the label a sighted user reads beside it is
+  // rendered (checkVisibility and a non-zero box). A DOM dump cannot prove either (RESEARCH
+  // Pattern 6). preventScroll keeps the page still; the last focus is dropped in finally.
+  try {
+    Object.assign(state, VM.DEFAULT_STATE);
+    renderControls();
+    render();
+    const presetBtn = (k) => Array.from(document.querySelectorAll('button.btn-preset'))
+      .find((b) => b.dataset.preset === k) || null;
+    const jump = (h) => Array.from(document.querySelectorAll('a[href]')).find((a) => a.getAttribute('href') === h) || null;
+    const find = (key) => {
+      if (key === 'die') return document.querySelector('#controls input[name="die"]:checked');
+      if (key === 'cross' || key === 'dmg' || key === 'cap') return presetBtn(key);
+      if (key.startsWith('#')) return jump(key);
+      return document.getElementById(key);
+    };
+    const labelOf = (key, el) => {
+      if (key === 'die') {                      // the group's legend; each radio's own label is its span
+        const fs = el.closest('fieldset');
+        return fs ? fs.querySelector('legend') : null;
+      }
+      if (el.tagName === 'BUTTON' || el.tagName === 'A') return el;   // named by their own text
+      if (el.labels && el.labels.length) return el.labels[0];
+      const group = el.closest('.group');       // #ac-num: aria-label, shown as the group label
+      return group ? group.querySelector('.group-label') : null;
+    };
+    const order = ['ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'n-range', 'roll', 'cross', 'dmg', 'cap',
+      '#chart', '#controls'];
+    for (const key of order) {
+      const el = find(key);
+      if (el) el.focus({ preventScroll: true });
+      check('a11y ui: focus reaches ' + key, el !== null && document.activeElement === el, true);
+      const lab = el ? labelOf(key, el) : null;
+      const box = lab ? lab.getBoundingClientRect() : null;
+      check('a11y ui: label rendered for ' + key,
+        lab !== null && lab.checkVisibility() && box.width > 0 && box.height > 0, true);
+    }
+  } catch (err) {
+    results.push({ name: 'a11y ui smoke crashed: ' + (err && err.message), ok: false });
+  } finally {
+    const active = document.activeElement;
+    if (active && active !== document.body && typeof active.blur === 'function') active.blur();
+  }
+
   Object.assign(state, VM.DEFAULT_STATE);
   renderControls();
   render();
