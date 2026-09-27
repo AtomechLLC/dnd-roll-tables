@@ -557,12 +557,15 @@
       font-size: 1rem; line-height: 1.5; color: var(--ink);
     }
     .f-live b { font-weight: 700; }
+    .f-live b:not(.num) { font-family: var(--font-prose); }   /* the Which-wins verdict is prose bold */
     /* Hanging indent: a wrapped continuation sits right of the leading '='. */
     dd.f-rule, dd.f-live { padding-left: var(--sp-3); text-indent: calc(-1 * var(--sp-3)); }
     .f-key { font-family: var(--font-prose); font-size: 0.875rem; line-height: 1.4; color: var(--ink-muted); }
     .f-note { font-family: var(--font-prose); font-size: 0.875rem; line-height: 1.4; color: var(--ink); }
     .f-note b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; }
     .nw { white-space: nowrap; }
+    /* Inside the marginal card: a hairline separates the two readout lines from their derivation. */
+    .f-marg { margin-top: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--line); }
 
     /* Self-test panel and engine-error banner (UI-SPEC Self-test Panel, States) */
     #selftest, #engine-error {
@@ -689,6 +692,23 @@
         <h2>Value of the next +1</h2>
         <p class="marg-line" id="marg-hit"><span class="lead">+1 to hit:</span> <span class="mv" id="marg-hit-v"></span><span class="mnote" id="marg-hit-n"></span></p>
         <p class="marg-line" id="marg-dmg"><span class="lead">+1 to damage:</span> <span class="mv" id="marg-dmg-v"></span></p>
+        <dl class="formulas f-marg">
+          <div class="formula" id="f-plus-hit">
+            <dt>+1 to hit</dt>
+            <dd class="f-rule">= <span class="nw">(avg die + D) / <span class="num">20</span></span> per round: one more d20 face becomes a normal hit. <span class="num">0</span> once capped.</dd>
+            <dd class="f-live" id="f-plus-hit-live"></dd>
+          </div>
+          <div class="formula" id="f-plus-dmg">
+            <dt>+1 to damage</dt>
+            <dd class="f-rule">= P(hit) per round: every hit deals <span class="num">1</span> more.</dd>
+            <dd class="f-live" id="f-plus-dmg-live"></dd>
+          </div>
+          <div class="formula" id="f-plus-win">
+            <dt>Which wins</dt>
+            <dd class="f-rule">+<span class="num">1</span> to hit wins only while avg die + D &gt; <span class="nw"><span class="num">20</span> × P(hit)</span>.</dd>
+            <dd class="f-live" id="f-plus-win-live"></dd>
+          </div>
+        </dl>
       </div>
     </section>
 
@@ -1164,6 +1184,12 @@ const VM = (() => {
   const tenthsText = (k) => (k < 0 ? '−' + fixed(-k, 1) : fixed(k, 1));    // k in tenths
   const groupD = (D) => NB + (D < 0 ? '−' : '+') + NB + Math.abs(D);          // "(4.5 + 0)" tail
   const seg = (pre, result = '', post = '') => Object.freeze({ pre, result, post });
+  // '+1 to hit' when it adds nothing (DiceMath.marginals reason), UI-SPEC +1 variants.
+  const PLUS_HIT_ZERO = Object.freeze({
+    cap: '= 0: you already hit on 2+ (the 95% cap)',
+    floor: '= 0: even with +1, only a natural 20 hits',
+    nodmg: (D, X) => `= 0, from the table: at a damage bonus of ${signed(D)}, a normal d${X} hit deals 0`,
+  });
 
   // COPY-01 (D-01, D-02): the two rolls and the joint outcome space, above the outcome table.
   // 'an' before 8, 11 and 18 (RESEARCH Pitfall 3; normal thresholds are 3..19).
@@ -1218,11 +1244,55 @@ const VM = (() => {
           'but damage stops at 0. The table gives ', sv.perRoundText, ' per round, the same as the Expected per round card.'),
       });
 
+    // Value of the next +1. Rule lines only where the rule is exact; otherwise the card's value
+    // "from the table". The Which-wins inequality only when both +1 lines are rule branch
+    // (RESEARCH Pitfall 1: 80 nat-20-only settings at D = -2 have a table +1 to hit).
+    const marg = sv.marg;
+    const hitRule = marg.reason === null && 2 * ex.hitNum === twoAvgD * ex.den;
+    const dmgRule = ex.dmgNum === hf * ex.den;
+    let plusHit;
+    if (marg.reason === 'nodmg') plusHit = seg(PLUS_HIT_ZERO.nodmg(D, X));
+    else if (marg.reason) plusHit = seg(PLUS_HIT_ZERO[marg.reason]);
+    else if (hitRule) plusHit = seg(`= (${avg}${groupD(D)})${NB}/${NB}20 = `, marg.hitRound);
+    else plusHit = seg('= ', marg.hitRound, ', from the table: damage stops at 0 at this penalty, so the rule is off');
+    const plusDmg = dmgRule
+      ? seg(`= ${hf}/20 = `, marg.dmgRound)
+      : seg('= ', marg.dmgRound, ', from the table: damage stops at 0 at this penalty, so some hits gain nothing');
+
+    let win, winForm;
+    if (marg.reason) {
+      winForm = 'zero-hit';
+      win = { pre: 'Here +1 to hit adds nothing, so ', verdict: '+1 to damage wins.' };
+    } else if (hitRule && dmgRule) {
+      winForm = 'inequality';
+      const two = 2 * hf;                               // compare 2(avg + D) with 2 x 20 x P(hit)
+      const op = twoAvgD < two ? '<' : twoAvgD > two ? '>' : '=';
+      win = {
+        pre: `Here ${fixed(5 * twoAvgD, 1)} ${op} 20${TIMES}${fixed(5 * hf, 2)} = ${fixed(10 * hf, 1)}, so `,
+        verdict: op === '<' ? '+1 to damage wins.' : op === '>' ? '+1 to hit wins.' : 'they tie.',
+      };
+    } else {
+      // Compare the displayed values, the same tenths the card prints (Phase 2 readout convention).
+      winForm = 'compare-displayed';
+      const mHitT = tenths(ex.hitNum, ex.den), mDmgT = tenths(ex.dmgNum, ex.den);
+      if (mHitT === mDmgT) {
+        win = { pre: `Here both add about ${marg.hitRound} per round, so `, verdict: 'they are about even.' };
+      } else {
+        const hitAhead = mHitT > mDmgT;
+        const [big, small] = hitAhead ? [marg.hitRound, marg.dmgRound] : [marg.dmgRound, marg.hitRound];
+        win = { pre: `Here ${big} > ${small} per round, so `, verdict: hitAhead ? '+1 to hit wins.' : '+1 to damage wins.' };
+      }
+    }
+
     return Object.freeze({
-      hit, roundKey, round,
-      plusHit: seg(''), plusDmg: seg(''),
-      win: Object.freeze({ pre: '', verdict: '', post: '' }),
-      branch: Object.freeze({ round: roundRule ? 'rule' : 'table', hit: null, dmg: null, win: null }),
+      hit, roundKey, round, plusHit, plusDmg,
+      win: Object.freeze({ ...win, post: '' }),
+      branch: Object.freeze({
+        round: roundRule ? 'rule' : 'table',
+        hit: marg.reason ? 'zero' : hitRule ? 'rule' : 'table',
+        dmg: dmgRule ? 'rule' : 'table',
+        win: winForm,
+      }),
     });
   }
 
@@ -2080,6 +2150,9 @@ const fRoundL1El = document.getElementById('f-round-l1');
 const fRoundL2El = document.getElementById('f-round-l2');
 const fRoundNoteEl = document.getElementById('f-round-note');
 const twoRollsEl = document.getElementById('two-rolls');
+const fPlusHitLiveEl = document.getElementById('f-plus-hit-live');
+const fPlusDmgLiveEl = document.getElementById('f-plus-dmg-live');
+const fPlusWinLiveEl = document.getElementById('f-plus-win-live');
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
@@ -2217,6 +2290,15 @@ function renderFormulas(view) {
     setSeg(fRoundNoteEl, f.round.note);
     fRoundL2El.hidden = true;
     fRoundNoteEl.hidden = false;
+  }
+  setSeg(fPlusHitLiveEl, f.plusHit);
+  setSeg(fPlusDmgLiveEl, f.plusDmg);
+  // The verdict is prose bold (a plain <b>, not the number face).
+  const w = f.win;
+  if (fPlusWinLiveEl.textContent !== w.pre + w.verdict + w.post) {
+    const b = document.createElement('b');
+    b.textContent = w.verdict;
+    fPlusWinLiveEl.replaceChildren(w.pre, b, w.post);
   }
 }
 
