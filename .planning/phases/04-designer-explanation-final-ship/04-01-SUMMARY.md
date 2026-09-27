@@ -170,3 +170,9 @@ None. No push, gh or Pages work (publishing is plan 04-05).
 
 - Plans 04-02..04-04 can prove copy with `--expect` (visible text only) and build guards (9)-(13) on `parseTree` / `walk` / `byId`.
 - Plan 04-03 appends `'explore'` to `PAINTED_SECTIONS`, wires the preset click after `render()`, and enables `.btn-preset` next to `rollBtn.disabled = false`. `--fault render` already checks `explore` and `.btn-preset` when they exist.
+
+## Self-Check: PASSED
+
+- Files: tools/check-page.mjs, tools/check-engine.mjs, index.html, 04-01-SUMMARY.md all present.
+- Commits: d30fd9f, e8c01e5, a5f85b7 all in the log.
+- TDD gates: `test(04-01)` d30fd9f (RED: check-engine failed only on (o), (p), (y); `--fault render` failed), then `fix(04-01)` e8c01e5 (GREEN: everything passes).
