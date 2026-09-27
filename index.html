@@ -33,7 +33,8 @@
       --series-hit:  oklch(0.45 0.13 255);
       --series-dmg:  oklch(0.47 0.12 50);
       --band:        color-mix(in oklch, var(--ink) 8%, var(--paper));   /* recomputes from the dark tokens */
-      --sp-1: 4px; --sp-2: 8px; --sp-3: 16px; --sp-4: 24px; --sp-5: 32px; --sp-6: 48px;
+      /* density pass 260927-1ty: 4/8/12/16/20/24, was 4/8/16/24/32/48 */
+      --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
     }
     /* DARK: candlelit (UI-SPEC Color, D-06). The only theming mechanism; no light-dark(). */
     @media (prefers-color-scheme: dark) {
@@ -95,13 +96,14 @@
       border: 1px solid var(--line);
       border-radius: 8px;
     }
-    .group { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+    .group { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
     .group-label { font-size: 0.875rem; font-weight: 700; line-height: 1.4; }
     .hint { font-weight: 400; font-size: 0.75rem; margin-left: var(--sp-1); color: var(--ink-muted); }
     .pair { display: flex; gap: var(--sp-2); align-items: center; }
-    .pair input[type="range"] { flex: 1 1 192px; width: 192px; accent-color: var(--accent); }
+    /* 32px tall like the other controls (260927-1ty); the track and thumb stay centered. */
+    .pair input[type="range"] { flex: 1 1 192px; width: 192px; height: 32px; margin: 0; accent-color: var(--accent); }
     input[type="number"] {
-      width: 80px; height: 40px; font: inherit; font-family: var(--font-num);
+      width: 80px; height: 32px; font: inherit; font-family: var(--font-num);
       font-variant-numeric: tabular-nums; text-align: center;
       background: var(--paper); color: var(--ink);
       border: 1px solid var(--ink-muted); border-radius: 4px;
@@ -115,7 +117,7 @@
     .segs label { position: relative; display: block; }
     .segs span {
       display: flex; align-items: center; justify-content: center;
-      width: 48px; height: 40px; margin-left: -1px;
+      width: 48px; height: 32px; margin-left: -1px;
       font-family: var(--font-num); font-variant-numeric: tabular-nums;
       font-size: 0.875rem; font-weight: 400; line-height: 1;
       background: var(--surface); color: var(--ink);
@@ -132,12 +134,13 @@
     }
 
     /* Stat cards */
-    /* auto-fit minmax(10rem, 1fr), with the track minimum raised to a sixth of the row so there
-       are never more than six tracks: the full-row marginal card (grid-column: 1 / -1) would
-       otherwise keep a seventh, empty track alive and leave a gap on wide screens. */
+    /* auto-fit minmax(9rem, 1fr) (was 10rem; 260927-1ty, so phones get two cards per row), with
+       the track minimum raised to a sixth of the row so there are never more than six tracks:
+       the full-row marginal card (grid-column: 1 / -1) would otherwise keep a seventh, empty
+       track alive and leave a gap on wide screens. */
     #stats {
       display: grid; gap: var(--sp-3);
-      grid-template-columns: repeat(auto-fit, minmax(max(10rem, (100% - 5 * var(--sp-3)) / 6), 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(max(9rem, (100% - 5 * var(--sp-3)) / 6), 1fr));
     }
     /* Each stat card spans three subgrid rows so labels, values and sub-lines line up across a
        row even when one label wraps. */
@@ -166,8 +169,9 @@
        overflow-x is a last resort only; the page itself never scrolls sideways. */
     .table-wrap { display: block; container-type: inline-size; overflow-x: auto; }
     .outcome {
-      /* wide tier: >= 42rem container (UI-SPEC approved single-table size) */
-      --cell: 40px; --row: 28px; --rowhead: 44px; --note: 128px;
+      /* wide tier: >= 42rem container (UI-SPEC approved single-table size; 24px rows since the
+         260927-1ty density pass, was 28px; the 652px d12 width is unchanged) */
+      --cell: 40px; --row: 24px; --rowhead: 44px; --note: 128px;
       border-collapse: collapse;
       table-layout: fixed;
       width: calc(var(--rowhead) + var(--cols, 8) * var(--cell) + var(--note));
@@ -288,7 +292,7 @@
     .legend-item > .swatch, .legend-item > .ramp { flex-shrink: 0; }
     .ramp { display: flex; }
     .swatch {
-      display: inline-block; width: 40px; height: 28px; line-height: 26px;
+      display: inline-block; width: 40px; height: 24px; line-height: 22px;   /* matches a 24px wide-tier cell */
       text-align: center; font-family: var(--font-num); font-variant-numeric: tabular-nums;
       font-size: 0.875rem; font-weight: 400;
       border: 1px solid var(--line); border-radius: 4px;
@@ -324,7 +328,7 @@
     }
     .n-strip { width: fit-content; max-width: 100%; margin-bottom: var(--sp-4); }
     #n-out {
-      display: inline-block; min-width: 48px; height: 40px; line-height: 40px; text-align: center;
+      display: inline-block; min-width: 48px; height: 32px; line-height: 32px; text-align: center;
       font-family: var(--font-num); font-variant-numeric: tabular-nums;
       font-size: 1rem; font-weight: 700; border: 0;
     }
@@ -476,7 +480,7 @@
       background: var(--accent); color: var(--paper);
       border: 1px solid var(--accent); border-radius: 4px;
       font: 700 1rem/1.5 var(--font-prose);
-      min-height: 40px; padding: 0 var(--sp-4); width: fit-content; justify-self: start;
+      min-height: 32px; padding: 0 var(--sp-4); width: fit-content; justify-self: start;
       cursor: pointer; touch-action: manipulation;
     }
     .btn-roll:hover:not(:disabled) { background: color-mix(in oklch, var(--accent) 85%, var(--ink)); }
@@ -546,8 +550,9 @@
     dl.formulas { margin: 0; display: grid; gap: var(--sp-3); max-width: 72ch; }
     dl.formulas dd { margin: 0; }
     .formula { display: grid; grid-template-columns: minmax(0, 1fr); }
-    /* Wide: the name in a 12rem column, so every '=' in a card starts at the same x. */
-    @container formula (width >= 40rem) {
+    /* Wide: the name in a 12rem column, so every '=' in a card starts at the same x.
+       36rem (was 40rem; 260927-1ty) so the half-width cards on laptops keep the column. */
+    @container formula (width >= 36rem) {
       .formula { grid-template-columns: 12rem minmax(0, 1fr); column-gap: var(--sp-3); }
       .formula > dt { grid-row: 1 / span 6; }
       .formula > dd { grid-column: 2; }
@@ -588,7 +593,7 @@
       background: var(--paper); color: var(--ink);
       border: 1px solid var(--ink-muted); border-radius: 4px;
       font: 700 1rem/1.5 var(--font-prose);
-      min-height: 40px; padding: var(--sp-2) var(--sp-3); width: fit-content; max-width: 100%;
+      min-height: 32px; padding: var(--sp-1) var(--sp-3); width: fit-content; max-width: 100%;
       text-align: left; justify-self: start; align-self: end;
       cursor: pointer; touch-action: manipulation;
     }
