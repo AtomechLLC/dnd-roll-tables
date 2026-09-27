@@ -79,7 +79,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **DEPLOY-01**: The whole site is one `index.html` with inline CSS and classic inline `<script>` blocks, no build step, no external requests; it also works when opened directly from disk
 - [x] **DEPLOY-02**: The repository is on GitHub as a public repo with the default branch renamed to `main`, with a `.nojekyll` file and a README describing the page
 - [x] **DEPLOY-03**: GitHub Pages is enabled from the `main` branch root via the REST API (gh CLI installed and authenticated as a prerequisite), and the public URL returns HTTP 200 with the page rendering and no console errors
-- [ ] **DEPLOY-04**: Controls are keyboard operable, every control has a label, and miss vs hit is not encoded by color alone
+- [x] **DEPLOY-04**: Controls are keyboard operable, every control has a label, and miss vs hit is not encoded by color alone
 
 ## v2 Requirements
 
@@ -167,7 +167,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEPLOY-01 | Phase 1 | Complete |
 | DEPLOY-02 | Phase 1 | Partial (main branch, .nojekyll, README done locally; public repo deferred 2026-09-25, user chose local git) |
 | DEPLOY-03 | Phase 1 | Deferred (user chose local git only on 2026-09-25; gh installed, not authenticated) |
-| DEPLOY-04 | Phase 4 | Pending |
+| DEPLOY-04 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 47 total (the initial count of 45 was a miscount; 8 RULES + 5 CTRL + 6 TABLE + 3 STAT + 5 CHART + 5 CMP + 6 SIM + 5 COPY + 4 DEPLOY = 47)

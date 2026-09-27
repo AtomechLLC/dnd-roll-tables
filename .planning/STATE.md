@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-03-PLAN.md
-last_updated: "2026-09-27T07:03:31.539Z"
+stopped_at: Completed 04-04-PLAN.md
+last_updated: "2026-09-27T07:18:30.475Z"
 last_activity: 2026-09-27
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
   percent: 75
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 04 (designer-explanation-final-ship) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-09-27
 
-Progress: [█████████░] 88%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [█████████░] 88%
 | Phase 04 P01 | 10min | 2 tasks | 4 files |
 | Phase 04 P02 | 14min | 3 tasks | 2 files |
 | Phase 04 P03 | 13min | 3 tasks | 3 files |
+| Phase 04 P04 | 14min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,8 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-03: three Try-this presets (cross / dmg / cap) that also set N (6 / 5 / 15); a click neither scrolls nor moves focus, and static jump links go to #chart / #controls
 - [Phase 04]: 04-03: chart explanations are built by VM.explainChart inside chartBase from the same crossings and bands that draw the rings; the singular bent dashed-line sentence reads ': one for the 1 hit you expect in 20 rounds.'
 - [Phase 04]: 04-03: the solid-line math group (d8 + 0 = 4.5) uses U+00A0 like the formula cards so it never wraps mid-expression
+- [Phase 04]: 04-04: a11y guards (9)-(13) live in check-page (dump structure) and the 'a11y ui' smoke (live focus and rendered labels); each guard proved to bite on a broken scratch copy; no markup change was needed
+- [Phase 04]: 04-04: guard (9) uses the screen-reader name (.vh counts), guard (10) the shown text; (13) also fails if the to-hit line becomes dashed
 
 ### Pending Todos
 
@@ -122,6 +125,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-27T07:03:31.526Z
-Stopped at: Completed 04-03-PLAN.md
+Last session: 2026-09-27T07:18:30.466Z
+Stopped at: Completed 04-04-PLAN.md
 Resume file: None

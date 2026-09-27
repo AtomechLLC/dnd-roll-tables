@@ -129,7 +129,7 @@ Plans:
   4. A suggested-exploration section points to settings that produce a crossover (for example AC 25 with a d12) and settings where the damage bonus always wins (AC 15 with a d8). Trying them shows exactly what the text describes.
   5. Every control can be reached and operated by keyboard and has a visible label. Miss vs hit can be told apart without color. The final version is live at the public GitHub Pages URL with HTTP 200 and no console errors.
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 **Wave 1**
@@ -146,7 +146,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 04-04-PLAN.md — Accessibility guards (9)-(13), runtime focus smoke, README for the finished page, pre-ship gate with state screenshots (Wave 4)
+- [x] 04-04-PLAN.md — Accessibility guards (9)-(13), runtime focus smoke, README for the finished page, pre-ship gate with state screenshots (Wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -163,4 +163,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 | 1. Live Roll Table, Deployed | 5/5 | Complete    | 2026-09-25 |
 | 2. Bonus Comparison | 3/3 | Complete   | 2026-09-25 |
 | 3. Roll-20-Rounds Simulation | 3/3 | Complete   | 2026-09-26 |
-| 4. Designer Explanation & Final Ship | 3/5 | In Progress|  |
+| 4. Designer Explanation & Final Ship | 4/5 | In Progress|  |

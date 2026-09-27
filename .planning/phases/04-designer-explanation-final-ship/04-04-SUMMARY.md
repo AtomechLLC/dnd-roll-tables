@@ -220,3 +220,8 @@ This task adds guards whose targets already existed, so the plan's RED step was 
 
 - Plan 04-05 can publish: every check is green, `git remote` is empty, and the README carries `https://<owner>.github.io/DnD-CombatRollSimulator/` for the URL swap.
 - The live checks for 04-05 can reuse `--expect "11/20 = 55%" --expect "Try AC 25 with a d12"`. The a11y guards run automatically on any URL, including the live one.
+
+## Self-Check: PASSED
+
+- Files: tools/check-page.mjs, index.html, README.md, 04-04-SUMMARY.md present.
+- Commits: 9251e1f, 724535e, 72c5009 in the log.
