@@ -52,10 +52,12 @@
 //          1..19, result === the card's percent
 //      (s) the per-round line takes the rule branch iff the integer closed form equals
 //          2 x e20Num, and its result (line 2 or the table note) is the card's perRoundText;
-//          counts pinned: rule 60,740, table 10,240
+//          counts pinned: rule 60,740, table 10,240. Claim (04-REVIEW WR-01): the note credits
+//          "the table" iff tableSum x die === e20Num (the table's own average is exact)
 //      (t) the +1 lines print the card's own strings, 'Which wins' names the larger displayed
 //          value and uses the inequality form only when both +1 lines are rule branch; counts
-//          pinned: rule/rule 36,850, reason 28,100, table/table 5,950, mixed 80
+//          pinned: rule/rule 36,850, reason 28,100, table/table 5,950, mixed 80. Claim (WR-01):
+//          a +1 line that says "from the table" prints the table's own difference exactly
 //      (z) VM.twoRollsText equals the UI-SPEC paragraph, with 'an' before 8, 11 and 18, and
 //          every normal threshold 3..19 is seen
 //      and the chart explanations (plan 04-03), from the loop's own series, crossings and bands
@@ -246,7 +248,7 @@ const WANT_BRANCHES = { roundRule: 60740, roundTable: 10240, ruleRule: 36850, re
 const flatSeg = (g) => (g ? nb(g.pre) + nb(g.result) + nb(g.post) : String(g));
 const flatWin = (w) => (w ? nb(w.pre) + nb(w.verdict) + nb(w.post) : String(w));
 
-function checkCopy(p, view) {
+function checkCopy(p, view, tab) {
   const { ac, atk, die: X, dmg: D } = p;
   const ex = view.exact;
   const hf = view.hitFaces;
@@ -335,11 +337,21 @@ function checkCopy(p, view) {
       else if (r.l2.result !== view.perRoundText) bad = `l2 result ${r.l2.result} vs card ${view.perRoundText}`;
     } else {
       const notePre = `Not exact here: at a damage bonus of ${VM.signed(D)}, some rolls would deal less than 0, ` +
-        'but damage stops at 0. The table gives ';
+        'but damage stops at 0. ' + (view.critFloorDiffers
+        ? 'Counting every roll exactly, with a real two-dice crit, gives ' : 'The table gives ');
       if (r.l2 !== null || !r.note) bad = 'table branch needs a null l2 and a note';
       else if (nb(r.note.pre) !== notePre) bad = `note pre ${JSON.stringify(nb(r.note.pre))}`;
       else if (r.note.result !== view.perRoundText) bad = `note result ${r.note.result} vs card ${view.perRoundText}`;
       else if (nb(r.note.post) !== ' per round, the same as the Expected per round card.') bad = `note post ${JSON.stringify(r.note.post)}`;
+    }
+    // Claim (04-REVIEW WR-01, IN-02): the note may credit "the table" only where the table's own
+    // average (tableSum / X per 20 rounds) is the exact expectation, so the number printed is the
+    // table's, at the card's rounding too.
+    if (!bad && r.note) {
+      const saysTable = /\btable\b/.test(nb(r.note.pre) + nb(r.note.post));
+      const tableExact = tab.ts * X === ex.e20Num;
+      if (saysTable !== tableExact) bad = `note ${saysTable ? 'credits' : 'does not credit'} the table, tableSum x die === e20Num is ${tableExact}`;
+      else if (saysTable && VM.fixed(VM.tenths(tab.ts, X) * 5, 3) !== r.note.result) bad = `table average vs note ${r.note.result}`;
     }
     if (bad) record('s', p, bad);
   }
@@ -370,7 +382,17 @@ function checkCopy(p, view) {
       if (pd.result !== marg.dmgRound) bad = `+1 to damage result ${pd.result} vs card ${marg.dmgRound}`;
       else if (b.dmg !== (dmgRule ? 'rule' : 'table')) bad = `branch.dmg ${b.dmg}, rule ${dmgRule}`;
       else if (dmgRule && nb(pd.pre) !== `= ${hf}/20 = `) bad = `+1 to damage pre ${JSON.stringify(nb(pd.pre))}`;
-      else if (!dmgRule && (nb(pd.pre) !== '= ' || !nb(pd.post).includes('from the table'))) bad = `+1 to damage table ${JSON.stringify(flatSeg(pd))}`;
+      else if (!dmgRule && (nb(pd.pre) !== '= ' || !nb(pd.post).includes(view.critFloorDiffers ? 'counted exactly' : 'from the table'))) {
+        bad = `+1 to damage table ${JSON.stringify(flatSeg(pd))}`;
+      }
+    }
+    // Claims (04-REVIEW WR-01): a +1 line that says "from the table" prints the table's own
+    // difference, i.e. (table sum after the +1 - table sum now) x die is the exact numerator.
+    if (!bad && nb(flatSeg(ph)).includes('from the table') && (tab.tsHit - tab.ts) * X !== ex.hitNum) {
+      bad = `+1 to hit credits the table: table step ${(tab.tsHit - tab.ts) * X} vs exact ${ex.hitNum}`;
+    }
+    if (!bad && nb(flatSeg(pd)).includes('from the table') && (tab.tsDmg - tab.ts) * X !== ex.dmgNum) {
+      bad = `+1 to damage credits the table: table step ${(tab.tsDmg - tab.ts) * X} vs exact ${ex.dmgNum}`;
     }
     if (!bad) {
       let verdict;
@@ -636,8 +658,11 @@ for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
         const back = VM.fixed(Math.round(Number(view.perRoundText) * 200), 1);
         if (back !== view.e20Text) record('f', p, `perRound ${view.perRoundText} x 20 -> ${back} vs ${view.e20Text}`);
 
-        // Phase 4 copy (r)(s)(t)(z) from the same view, no new engine calls
-        checkCopy(p, view);
+        // Phase 4 copy (r)(s)(t)(z) from the same view. The table sums at +1 to hit / +1 to
+        // damage come from the cache the sweep below reuses (04-REVIEW WR-01 claim checks).
+        checkCopy(p, view, {
+          ts: s.tableSum, tsHit: statAt(atk + 1, dmg).st.tableSum, tsDmg: statAt(atk, dmg + 1).st.tableSum,
+        });
 
         // Exact spread (o), SIM-05 / D-05, reusing the cached stats s
         const sp = DiceMath.spread(p);

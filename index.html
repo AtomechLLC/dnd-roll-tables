@@ -1351,6 +1351,10 @@ const VM = (() => {
     const hit = seg(`= (21${NB}−${NB}(${ac}${NB}−${NB}${atkT}))${NB}/${NB}20${clamp} = ${hf}/20 = `, `${sv.hitPct}%`);
 
     // Expected per round: the closed form, exact only when it equals the engine numerator.
+    // "The table gives" only while the table's own average is exact (04-REVIEW WR-01): once
+    // critFloorDiffers, the doubled-face crit row is off (the footnote says so), and the card's
+    // number comes from counting the real two-dice crits instead.
+    const source = sv.critFloorDiffers ? 'Counting every roll exactly, with a real two-dice crit, gives ' : 'The table gives ';
     const roundKey = 'A normal hit is any hit except the natural 20. ' +
       `avg die = (${X}${NB}+${NB}1)${NB}/${NB}2 = ${avg}, and D is the damage bonus. ` +
       'A crit rolls the die twice and adds D once.';
@@ -1367,7 +1371,7 @@ const VM = (() => {
         l1,
         l2: null,
         note: seg(`Not exact here: at a damage bonus of ${signed(D)}, some rolls would deal less than 0, ` +
-          'but damage stops at 0. The table gives ', sv.perRoundText, ' per round, the same as the Expected per round card.'),
+          'but damage stops at 0. ' + source, sv.perRoundText, ' per round, the same as the Expected per round card.'),
       });
 
     // Value of the next +1. Rule lines only where the rule is exact; otherwise the card's value
@@ -1381,9 +1385,12 @@ const VM = (() => {
     else if (marg.reason) plusHit = seg(PLUS_HIT_ZERO[marg.reason]);
     else if (hitRule) plusHit = seg(`= (${avg}${groupD(D)})${NB}/${NB}20 = `, marg.hitRound);
     else plusHit = seg('= ', marg.hitRound, ', from the table: damage stops at 0 at this penalty, so the rule is off');
+    // +1 to hit "from the table" is always the table's value (both settings share the crit row).
+    // +1 to damage moves the crit row too, so "from the table" only while that row is exact (WR-01).
     const plusDmg = dmgRule
       ? seg(`= ${hf}/20 = `, marg.dmgRound)
-      : seg('= ', marg.dmgRound, ', from the table: damage stops at 0 at this penalty, so some hits gain nothing');
+      : seg('= ', marg.dmgRound, `, ${sv.critFloorDiffers ? 'counted exactly' : 'from the table'}: ` +
+        'damage stops at 0 at this penalty, so some hits gain nothing');
 
     let win, winForm;
     if (marg.reason) {
