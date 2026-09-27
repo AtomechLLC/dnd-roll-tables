@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 Phase: 04 (designer-explanation-final-ship) — EXECUTING
 Plan: 5 of 5
 Status: Ready to execute
-Last activity: 2026-09-27
+Last activity: 2026-09-27 - Completed quick task 260927-17o: Move settings and outcome table to the top of the page
 
 Progress: [█████████░] 94%
 
@@ -114,6 +114,12 @@ None yet.
 - Phase 1 deploy prerequisite: gh CLI is not installed on this machine. It must be installed and authenticated before DEPLOY-02/03.
 - The local git repo exists on branch `master` with no remote. Rename it to `main` before the first push, and the GitHub repo must be public.
 - REQUIREMENTS.md header said 45 v1 requirements, but 47 are listed (RULES 8, CTRL 5, TABLE 6, STAT 3, CHART 5, CMP 5, SIM 6, COPY 5, DEPLOY 4). The coverage count is corrected to 47.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260927-17o | Move settings and outcome table to the top of the page (page order: header, controls, outcome table, stat cards, compare, chart, sim, explore; reverses Phase 1 D-01 / Phase 2 D-02 / Phase 4 D-01 at the user's request after previewing) | 2026-09-27 | 54a9add | [260927-17o-move-settings-and-outcome-table-to-the-t](./quick/260927-17o-move-settings-and-outcome-table-to-the-t/) |
 
 ## Deferred Items
 
