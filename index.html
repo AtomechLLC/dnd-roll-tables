@@ -1527,11 +1527,12 @@ const VM = (() => {
 
   // Chart explanations (COPY-03, COPY-04, D-05, D-06): three bodies under the chart, one per
   // chart feature. Pure: reads only `series` (the chartBase sweep, crossings and bands that
-  // draw the lines, bands and rings) and `hits` (hitFaces and the normal-hit average), never
+  // draw the lines, bands and rings, plus the crossLevers probe when the curves never cross)
+  // and `hits` (hitFaces and the normal-hit average), never
   // DiceMath, so it can never name a crossing or band the chart does not draw. maxN comes from
   // the series, so short synthetic arrays work (the self-test's two-crossing and touch cases).
   function explainChart(p, series, hits) {
-    const { attack, damage, den, crossings: cr, bands } = series;
+    const { attack, damage, den, crossings: cr, bands, levers } = series;
     const maxN = attack.length - 1;
     const X = p.die, D = p.dmg, hf = hits.hitFaces;
     const step = fixed(10 * hf, 1);
@@ -1597,11 +1598,30 @@ const VM = (() => {
       crossLine = `At these settings the curves touch at ${signed(cr.ties[0])} without crossing, so there is no ring ` +
         'on the chart. Change the AC or the die and watch the gap open or a crossover appear.';
     } else if (k === 0) {
-      crossLine = 'At these settings the curves never cross, so there is no ring on the chart. ' + (cr.first === 'damage'
-        ? 'A higher AC leaves fewer hits for +1 damage to add to, and a bigger die makes each extra hit worth more. ' +
-          'Either can let +N to hit pull ahead.'
-        : 'A lower AC gives +1 damage more hits to add to, and a smaller die makes each extra hit worth less. ' +
-          'Either can hand the lead to +N to damage.');
+      // 04-REVIEW WR-02: name only the levers the engine confirms (series.levers, from
+      // crossLevers). Without that probe (a synthetic series), no lever is named at all.
+      const toHit = cr.first === 'damage';
+      let lever = '';
+      if (levers && levers.ac && levers.die) {
+        lever = toHit
+          ? 'A higher AC leaves fewer hits for +1 damage to add to, and a bigger die makes each extra hit worth more. ' +
+            'Either can let +N to hit pull ahead.'
+          : 'A lower AC gives +1 damage more hits to add to, and a smaller die makes each extra hit worth less. ' +
+            'Either can hand the lead to +N to damage.';
+      } else if (levers && levers.ac) {
+        lever = toHit
+          ? 'A higher AC leaves fewer hits for +1 damage to add to, and that can let +N to hit pull ahead.'
+          : 'A lower AC gives +1 damage more hits to add to, and that can hand the lead to +N to damage.';
+      } else if (levers && levers.die) {
+        lever = toHit
+          ? 'A bigger die makes each extra hit worth more, and that can let +N to hit pull ahead.'
+          : 'A smaller die makes each extra hit worth less, and that can hand the lead to +N to damage.';
+      } else if (levers) {
+        lever = toHit
+          ? 'Here neither a higher AC nor a bigger die, on its own, lets +N to hit pull ahead.'
+          : 'Here neither a lower AC nor a smaller die, on its own, hands the lead to +N to damage.';
+      }
+      crossLine = 'At these settings the curves never cross, so there is no ring on the chart.' + (lever ? ' ' + lever : '');
     } else if (k === 1) {
       const e = cr.list[0];
       crossLine = (e.tieN === null
@@ -1640,11 +1660,78 @@ const VM = (() => {
     });
   }
 
-  let chartMemo = { key: null, base: null };
+  // What moves the crossover (04-REVIEW WR-02): which single control change can take a lead the
+  // curves never give up. first 'damage' (+N to damage leads at every N): does some higher AC
+  // (same die) or some bigger die (same AC) let +N to hit lead at some N from +1 to +maxN?
+  // first 'attack': the mirror, a lower AC or a smaller die handing +N to damage the lead. Only
+  // the slider's own values count. A 20-round total depends on the d20 only through hitFaces:
+  // e20Num = (hitFaces - 1) x die x normalNum + critNum (DiceMath.stats; the crit face is one of
+  // the hit faces), so the two hitAverages sums, memoized per (die, dmg), price every probed
+  // sweep. They go through DiceMath.damageFor (RULES-05), with a crit priced once per two-dice
+  // total s (die - |s - die - 1| pairs roll it) rather than once per pair, which keeps a cold
+  // probe cheap. check-engine (w) confirms every answer against the full-domain sweeps.
+  const leverMemo = new Map();
+  function e20At(ac, atk, die, dmg) {
+    const key = die * 1000 + dmg;
+    let h = leverMemo.get(key);
+    if (!h) {
+      const q = { ac, atk, die, dmg };                  // a natural 20 always hits, at any ac and atk
+      let normalNum = 0, critNum = 0;
+      for (let k = 1; k <= die; k++) normalNum += DiceMath.damageFor(20, [k], q);
+      for (let s = 2; s <= 2 * die; s++) {
+        const a = Math.min(die, s - 1);
+        critNum += (die - Math.abs(s - die - 1)) * DiceMath.damageFor(20, [a, s - a], q);
+      }
+      h = { normalNum, critNum };
+      leverMemo.set(key, h);
+    }
+    return (20 - DiceMath.threshold({ ac, atk })) * die * h.normalNum + h.critNum;   // hitFaces - 1 = 20 - threshold
+  }
+  function crossLevers(p, first, maxN = CONTROL_SPEC.n.max) {
+    const sg = first === 'damage' ? 1 : -1;
+    const leads = (ac, die) => {
+      for (let n = 1; n <= maxN; n++) {
+        if (sg * (e20At(ac, p.atk + n, die, p.dmg) - e20At(ac, p.atk, die, p.dmg + n)) > 0) return true;
+      }
+      return false;
+    };
+    let ac = false, die = false;
+    for (let c = CONTROL_SPEC.ac.min; c <= CONTROL_SPEC.ac.max && !ac; c++) {
+      if ((sg > 0 ? c > p.ac : c < p.ac) && leads(c, p.die)) ac = true;
+    }
+    for (const x of CONTROL_SPEC.die.set) {
+      if (!die && (sg > 0 ? x > p.die : x < p.die) && leads(p.ac, x)) die = true;
+    }
+    return Object.freeze({ ac, die });
+  }
+
+  let chartMemo = { key: null, base: null, q: null, explain: null };
   function chartView(p, n) {
     const key = `${p.ac},${p.atk},${p.die},${p.dmg}`;
-    if (chartMemo.key !== key) chartMemo = { key, base: chartBase(p) };
-    return { n, ...chartMemo.base };
+    if (chartMemo.key !== key) {
+      const q = { ac: p.ac, atk: p.atk, die: p.die, dmg: p.dmg };
+      chartMemo = { key, base: chartBase(q), q, explain: null };
+    }
+    // The chart explanations are built on first read, once per memo key (the lever probe is
+    // their costly part): every render reads them, while the self-test's chart checks do not,
+    // so its 200 ms budget pays nothing for the probe (04-REVIEW WR-02).
+    const memo = chartMemo;
+    return Object.defineProperty({ n, ...memo.base }, 'explain', {
+      enumerable: true,
+      get: () => memo.explain ?? (memo.explain = chartExplain(memo.q, memo.base)),
+    });
+  }
+  // Chart explanations (D-05): built from the chart's own crossings and bands, so an N-slider
+  // drag recomputes none of it. The lever probe runs only for the plain no-crossing text (no
+  // ring, no tie), the one that names levers.
+  function chartExplain(p, base) {
+    const { maxN, attack, damage, den, crossings, bands } = base;
+    const st = DiceMath.stats(p), ha = DiceMath.hitAverages(p);
+    const neverCross = crossings.list.length === 0 && crossings.endTieN === null && crossings.ties.length === 0 &&
+      crossings.first !== 'none';
+    const levers = neverCross ? crossLevers(p, crossings.first, maxN) : null;
+    return explainChart(p, { attack, damage, den, crossings, bands, levers },
+      { hitFaces: st.hitFaces, normalNum: ha.normalNum, normalDen: ha.normalDen });
   }
   function chartBase(p) {
     const maxN = CONTROL_SPEC.n.max;
@@ -1675,13 +1762,7 @@ const VM = (() => {
       captionCross(crossings),
       captionBands(bands),
     ].filter((part) => part !== '').join(' ');
-    // Chart explanations (D-05): built from these same crossings and bands, once per memo key,
-    // so an N-slider drag recomputes none of it.
-    const st = DiceMath.stats(p), ha = DiceMath.hitAverages(p);
-    return {
-      maxN, den, attack, damage, attackText, damageText, ticks, readout, crossings, bands, markers, caption,
-      explain: explainChart(p, { attack, damage, den, crossings, bands }, { hitFaces: st.hitFaces, normalNum: ha.normalNum, normalDen: ha.normalDen }),
-    };
+    return { maxN, den, attack, damage, attackText, damageText, ticks, readout, crossings, bands, markers, caption };
   }
 
   // ---- Roll-20-rounds copy (Phase 3)----------------------------------------------------
@@ -1767,7 +1848,7 @@ const VM = (() => {
 
   return Object.freeze({
     CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, twoRollsText, formulaView, compareView,
-    niceTicks, captionOrder, captionCross, captionBands, explainChart, readoutLines, chartView, computeView,
+    niceTicks, captionOrder, captionCross, captionBands, explainChart, crossLevers, readoutLines, chartView, computeView,
     settingsText, simExact, simPlacement, simStatus, PRESETS, presetStatus,
   });
 })();
@@ -2360,16 +2441,18 @@ const SelfTest = (() => {
     const DEF = { ac: 15, atk: 5, die: 8, dmg: 0 };
     const s = SW(15, 5, 8, 0);
     const ha = DiceMath.hitAverages(DEF);
+    // levers: the defaults' crossLevers result as a literal (no probe here); check-engine pins
+    // that the page's chartView computes exactly this line at the defaults.
     const e = hasE ? VM.explainChart(DEF,
-      { ...s, crossings: DiceMath.crossings(s.attack, s.damage), bands: DiceMath.attackBands(DEF, VM.CONTROL_SPEC.n.max) },
+      { ...s, crossings: DiceMath.crossings(s.attack, s.damage), bands: DiceMath.attackBands(DEF, VM.CONTROL_SPEC.n.max),
+        levers: { ac: true, die: false } },
       { hitFaces: 11, normalNum: ha.normalNum, normalDen: ha.normalDen }) : null;
     check('explain: three lines at the defaults', e ? [e.dmgLine, e.hitLine, e.crossLine].map(nb).join(' | ') : 'explainChart missing',
       'Each +1 to damage adds 1 to every hit. You expect 11 hits in 20 rounds, so every step adds the same 11.0 and ' +
       'the line is straight. | Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth an ' +
       'average d8 + 0 = 4.5. It goes flat in the band marked “95% cap”, from +8: a natural 1 always misses, so once ' +
       'you hit on 2+, more to-hit buys nothing. | At these settings the curves never cross, so there is no ring on ' +
-      'the chart. A higher AC leaves fewer hits for +1 damage to add to, and a bigger die makes each extra hit worth ' +
-      'more. Either can let +N to hit pull ahead.');
+      'the chart. A higher AC leaves fewer hits for +1 damage to add to, and that can let +N to hit pull ahead.');
     const syn = (a, d) => nb(VM.explainChart(DEF,
       { attack: a, damage: d, den: 1, crossings: DiceMath.crossings(a, d), bands: { floor: null, cap: null } },
       { hitFaces: 1, normalNum: 0, normalDen: 1 }).crossLine);

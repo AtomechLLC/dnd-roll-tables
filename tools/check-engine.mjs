@@ -74,7 +74,11 @@
 //          pinned: capped from +0 11,648 (+ 182 nodmg), floor band first 15,360
 //      (w) the crossover text picks the variant that matches DiceMath.crossings and prints the
 //          ring's N; counts pinned: none-damage 30,095, none-attack 14,677, one adjacent 25,318,
-//          one across a tie 874, end tie only 16, touch / two+ / identical 0
+//          one across a tie 874, end tie only 16, touch / two+ / identical 0. Lever claims
+//          (04-REVIEW WR-02): a no-crossing text names a higher / lower AC or a bigger / smaller
+//          die iff that change alone (a slider value, from the full-domain sweeps) lets the
+//          trailing bonus lead at some N, and says "neither" iff none does; sampled
+//          VM.chartView lines equal the checked line; the defaults' line is pinned
 //      (x) once: every VM.PRESETS entry re-run through the engine at its exact settings: bands,
 //          steps, crossings, caption and readout claims (UI-SPEC Presets table), parseControl
 //          round trip, the UI-SPEC strings, and parity with the static #explore markup
@@ -434,10 +438,39 @@ const explainCounts = {
 const WANT_STRAIGHT = [60740, 2730, 2730, 2730, 2050];
 const WANT_HIT = { nodmg: 1092, rule: 60060, floorBites: 9828, capAll: 11648, capAllNodmg: 182, floorFirst: 15360 };
 const WANT_CROSS = { noneDamage: 30095, noneAttack: 14677, oneAdjacent: 25318, oneTie: 874, endTieOnly: 16, touch: 0, multi: 0, identical: 0 };
+// (w) lever claims (04-REVIEW WR-02). leadTab: one byte per setting, from the loop's own sweeps:
+// bit 1 = +N to hit leads at some N >= 1, bit 2 = +N to damage does. leverClaims: what each
+// no-crossing text names, checked after the loop. Counts pinned per leader and lever set.
+const leadIdx = (ac, die, atk, dmg) => (((ac - CS.ac.min) * DICE_SET.length + DICE_SET.indexOf(die)) * span(CS.atk) +
+  (atk - CS.atk.min)) * span(CS.dmg) + (dmg - CS.dmg.min);
+const leadTab = new Uint8Array(TOTAL_COMBOS);
+const leverClaims = [];
+const leverCounts = { damage: { both: 0, ac: 0, die: 0, none: 0 }, attack: { both: 0, ac: 0, die: 0, none: 0 } };
+const WANT_LEVERS = { damage: { both: 2946, ac: 16687, die: 1744, none: 8718 }, attack: { both: 1961, ac: 10916, die: 56, none: 1744 } };
 const RING_TAIL = ' Change the AC or the die and watch the ring move, or disappear.';
 const RINGS_TAIL = ' Change the AC or the die and watch the rings move, or disappear.';
 
-function crossWant(c) {
+// lv: the page's VM.crossLevers answer for this setting. The (w) lever claims below test that
+// answer against the sweeps; this only rebuilds the sentence it selects.
+const LEVER_TEXT = {
+  damage: {
+    both: 'A higher AC leaves fewer hits for +1 damage to add to, and a bigger die makes each extra hit worth more. ' +
+      'Either can let +N to hit pull ahead.',
+    ac: 'A higher AC leaves fewer hits for +1 damage to add to, and that can let +N to hit pull ahead.',
+    die: 'A bigger die makes each extra hit worth more, and that can let +N to hit pull ahead.',
+    none: 'Here neither a higher AC nor a bigger die, on its own, lets +N to hit pull ahead.',
+  },
+  attack: {
+    both: 'A lower AC gives +1 damage more hits to add to, and a smaller die makes each extra hit worth less. ' +
+      'Either can hand the lead to +N to damage.',
+    ac: 'A lower AC gives +1 damage more hits to add to, and that can hand the lead to +N to damage.',
+    die: 'A smaller die makes each extra hit worth less, and that can hand the lead to +N to damage.',
+    none: 'Here neither a lower AC nor a smaller die, on its own, hands the lead to +N to damage.',
+  },
+};
+const leverKey = (lv) => (lv.ac && lv.die ? 'both' : lv.ac ? 'ac' : lv.die ? 'die' : 'none');
+
+function crossWant(c, lv) {
   const k = c.list.length;
   const at = (e) => S(e.tieN ?? e.flipN);
   if (c.first === 'none') return ['identical', 'At these settings the two curves are identical, so neither bonus is better.'];
@@ -449,15 +482,9 @@ function crossWant(c) {
     return ['touch', `At these settings the curves touch at ${S(c.ties[0])} without crossing, so there is no ring on the ` +
       'chart. Change the AC or the die and watch the gap open or a crossover appear.'];
   }
-  if (k === 0 && c.first === 'damage') {
-    return ['noneDamage', 'At these settings the curves never cross, so there is no ring on the chart. A higher AC ' +
-      'leaves fewer hits for +1 damage to add to, and a bigger die makes each extra hit worth more. Either can let ' +
-      '+N to hit pull ahead.'];
-  }
   if (k === 0) {
-    return ['noneAttack', 'At these settings the curves never cross, so there is no ring on the chart. A lower AC ' +
-      'gives +1 damage more hits to add to, and a smaller die makes each extra hit worth less. Either can hand the ' +
-      'lead to +N to damage.'];
+    return [c.first === 'damage' ? 'noneDamage' : 'noneAttack', 'At these settings the curves never cross, so there is ' +
+      'no ring on the chart.' + (lv ? ' ' + LEVER_TEXT[c.first][leverKey(lv)] : '')];
   }
   if (k === 1 && c.list[0].tieN === null) {
     return ['oneAdjacent', `At these settings the lead changes once, at ${S(c.list[0].flipN)}: the ring on the chart.` + RING_TAIL];
@@ -473,7 +500,7 @@ function crossWant(c) {
   return ['multi', `At these settings the lead changes ${k} times: the rings on the chart.` + RINGS_TAIL];
 }
 
-function checkExplain(p, a, d, den, hf, ex, c, b, markers) {
+function checkExplain(p, a, d, den, hf, ex, c, b, markers, cvExplain) {
   if (!hasExplain) {
     record('u', p, 'VM.explainChart missing');
     record('v', p, 'VM.explainChart missing');
@@ -481,9 +508,12 @@ function checkExplain(p, a, d, den, hf, ex, c, b, markers) {
     return;
   }
   const { die: X, dmg: D } = p;
-  let e;
+  // The plain no-crossing text names levers from the page's own probe (chartBase does the same).
+  const neverCross = c.list.length === 0 && c.endTieN === null && c.ties.length === 0 && c.first !== 'none';
+  let e, lv = null;
   try {
-    e = VM.explainChart(p, { attack: a, damage: d, den, crossings: c, bands: b },
+    if (neverCross) lv = VM.crossLevers(p, c.first, MAXN);
+    e = VM.explainChart(p, { attack: a, damage: d, den, crossings: c, bands: b, levers: lv },
       { hitFaces: hf, normalNum: ex.normalNum, normalDen: ex.normalDen });
   } catch (err) {
     const msg = `explainChart threw: ${err && err.message}`;
@@ -580,7 +610,7 @@ function checkExplain(p, a, d, den, hf, ex, c, b, markers) {
 
   // (w) crossover: the variant matches crossings, and every ring's N is the N printed
   {
-    const [variant, want] = crossWant(c);
+    const [variant, want] = crossWant(c, lv);
     explainCounts[variant]++;
     const got = nb(e.crossLine);
     let bad = got !== want ? `${variant}: ${JSON.stringify(got)} vs ${JSON.stringify(want)}` : null;
@@ -590,7 +620,19 @@ function checkExplain(p, a, d, den, hf, ex, c, b, markers) {
         if (!got.includes('at ' + N)) { bad = `ring "${m.label}" N not in ${JSON.stringify(got)}`; break; }
       }
     }
+    // Sampled: the page's chartView wires the same probe into the same line.
+    if (!bad && cvExplain && nb(cvExplain.crossLine) !== got) bad = `chartView crossLine ${JSON.stringify(nb(cvExplain.crossLine))}`;
     if (bad) record('w', p, bad);
+    // Lever claims (04-REVIEW WR-02, IN-02): read the levers back from the text; checked after
+    // the loop against every sweep, since they name other ACs and dice.
+    if (neverCross) {
+      const neither = got.includes('neither');
+      leverClaims.push({
+        p, first: c.first, neither,
+        ac: !neither && /\b(higher|lower) AC\b/.test(got),
+        die: !neither && /\b(bigger|smaller) die\b/.test(got),
+      });
+    }
   }
 }
 
@@ -754,6 +796,11 @@ for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
           if (!(d[n] > d[n - 1])) { record('k', p, `damage not increasing at N ${n}: ${d[n - 1]} -> ${d[n]}`); break; }
           if (a[n] < a[n - 1]) { record('k', p, `attack falls at N ${n}: ${a[n - 1]} -> ${a[n]}`); break; }
         }
+        {
+          let lb = 0;
+          for (let n = 1; n <= MAXN; n++) lb |= a[n] > d[n] ? 1 : a[n] < d[n] ? 2 : 0;
+          leadTab[leadIdx(ac, die, atk, dmg)] = lb;
+        }
 
         // Readout leader (y), 02-REVIEW WR-02: the word comes from the exact numerators, so the
         // readout never says "even" where the ring says the curves flip.
@@ -854,8 +901,8 @@ for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
         // Chart explanations (u)(v)(w) from the same series, crossings and bands. Sampled combos
         // also compare the drawn rings' N (the chartView memo already holds this setting).
         if (crossRes && bandRes) {
-          const markers = inSample && typeof VM.chartView === 'function' ? VM.chartView(p, 5).markers : null;
-          checkExplain(p, a, d, den, s.hitFaces, view.exact, crossRes, bandRes, markers);
+          const cv = inSample && typeof VM.chartView === 'function' ? VM.chartView(p, 5) : null;
+          checkExplain(p, a, d, den, s.hitFaces, view.exact, crossRes, bandRes, cv ? cv.markers : null, cv ? cv.explain : null);
         }
       }
     }
@@ -916,6 +963,33 @@ if (hasExplain) {
   tally('u', 'straightFrom > 4', explainCounts.straightOver, 0);
   for (const [k, want] of Object.entries(WANT_HIT)) tally('v', k, explainCounts[k], want);
   for (const [k, want] of Object.entries(WANT_CROSS)) tally('w', k, explainCounts[k], want);
+
+  // (w) lever claims (04-REVIEW WR-02): each no-crossing text names a lever iff one of the
+  // slider's own values, changed alone, makes the trailing bonus lead at some N (from leadTab,
+  // the loop's sweeps), and says "neither" iff no such value exists.
+  for (const cl of leverClaims) {
+    const { ac, die, atk, dmg } = cl.p;
+    const bit = cl.first === 'damage' ? 1 : 2;
+    let tAC = false, tDie = false;
+    for (let c2 = CS.ac.min; c2 <= CS.ac.max; c2++) {
+      if ((bit === 1 ? c2 > ac : c2 < ac) && (leadTab[leadIdx(c2, die, atk, dmg)] & bit)) tAC = true;
+    }
+    for (const x of DICE_SET) {
+      if ((bit === 1 ? x > die : x < die) && (leadTab[leadIdx(ac, x, atk, dmg)] & bit)) tDie = true;
+    }
+    leverCounts[cl.first][leverKey({ ac: tAC, die: tDie })]++;
+    if (cl.ac !== tAC || cl.die !== tDie || cl.neither !== (!tAC && !tDie)) {
+      record('w', cl.p, `levers named: AC ${cl.ac}, die ${cl.die}, neither ${cl.neither}; the sweeps: AC ${tAC}, die ${tDie}`);
+    }
+  }
+  for (const first of ['damage', 'attack']) {
+    for (const [k, want] of Object.entries(WANT_LEVERS[first])) tally('w', `${first}-first levers ${k}`, leverCounts[first][k], want);
+  }
+  // Pin: the page's own chartView at the defaults (the self-test passes this probe result as a literal).
+  const defLine = nb(VM.chartView({ ac: 15, atk: 5, die: 8, dmg: 0 }, 5).explain.crossLine);
+  const defWant = 'At these settings the curves never cross, so there is no ring on the chart. A higher AC leaves fewer ' +
+    'hits for +1 damage to add to, and that can let +N to hit pull ahead.';
+  if (defLine !== defWant) record('w', { ac: 15, atk: 5, die: 8, dmg: 0 }, `defaults pin ${JSON.stringify(defLine)}`);
 }
 
 // Presets (x): COPY-05, D-07, D-08, success criterion 4. Every preset's description re-derived from the
@@ -1074,7 +1148,8 @@ const extra = {
     `+0 ${explainCounts.capAll} + ${explainCounts.capAllNodmg} nodmg, floor band first ${explainCounts.floorFirst})`,
   w: ` (none-damage ${explainCounts.noneDamage}, none-attack ${explainCounts.noneAttack}, one adjacent ` +
     `${explainCounts.oneAdjacent}, one across a tie ${explainCounts.oneTie}, end tie only ${explainCounts.endTieOnly}, ` +
-    `touch ${explainCounts.touch}, two+ ${explainCounts.multi}, identical ${explainCounts.identical})`,
+    `touch ${explainCounts.touch}, two+ ${explainCounts.multi}, identical ${explainCounts.identical}; levers ` +
+    ['damage', 'attack'].map((f) => `${f}-first ${Object.entries(leverCounts[f]).map(([k, v]) => `${k} ${v}`).join(' / ')}`).join(', ') + ')',
   x: ` (${presetFacts.join(', ') || 'no presets'})`,
 };
 
