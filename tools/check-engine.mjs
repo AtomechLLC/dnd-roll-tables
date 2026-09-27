@@ -214,7 +214,7 @@ const cov = { minTwoInThree: Infinity, maxTwoInThree: -Infinity, minMost: Infini
 // and view.exact; strings are compared after U+00A0 -> space (the page's no-break wrapping).
 const hasFormula = typeof VM.formulaView === 'function';
 const hasTwoRolls = typeof VM.twoRollsText === 'function';
-const nb = (x) => String(x ?? '').replace(/ /g, ' ');
+const nb = (x) => String(x ?? '').replaceAll(String.fromCharCode(0xa0), ' ');
 const MINUS = '−';
 const minusInt = (n) => (n < 0 ? MINUS + Math.abs(n) : String(n));
 const fx1 = (k) => (k < 0 ? MINUS + VM.fixed(-k, 1) : VM.fixed(k, 1));   // k in tenths

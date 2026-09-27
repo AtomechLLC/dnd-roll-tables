@@ -141,7 +141,7 @@
     }
     /* Each stat card spans three subgrid rows so labels, values and sub-lines line up across a
        row even when one label wraps. */
-    #stats > .card:not(.marginal) { grid-row: span 3; grid-template-rows: subgrid; }
+    #stats > .card:not(.marginal):not(.formulas) { grid-row: span 3; grid-template-rows: subgrid; }
     .card {
       display: grid; gap: var(--sp-2); padding: var(--sp-3); align-content: start;
       background: var(--surface);
@@ -155,7 +155,7 @@
     .card .sub { font-size: 0.75rem; line-height: 1.4; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
     .card.focal { border-top: 3px solid var(--ink); }
     /* "Value of the next +1" (STAT-03): full grid row, h2 then two Body lines. */
-    .card.marginal { grid-column: 1 / -1; }
+    .card.marginal { grid-column: 1 / -1; container: formula / inline-size; }
     .card.marginal h2 { margin: 0; }
     .marg-line { margin: 0; font-size: 1rem; line-height: 1.5; }
     .marg-line .lead { font-weight: 700; }
@@ -533,6 +533,37 @@
     #sim.is-stale .fig { border-color: var(--line); }
     #sim.is-stale .fig-exact { border-top-color: var(--line); }
 
+    /* Phase 4 explanation copy (COPY-01, COPY-02, UI-SPEC Layout Contract). .explain is Body in
+       ink: it is the lesson, not usage help. Formulas are a dl per card: rule lines in prose
+       italic, live lines in the number face. The named `formula` container keeps the unnamed
+       table-tier queries from resolving against these cards. */
+    .explain { margin: 0 0 var(--sp-3); max-width: 72ch; font-size: 1rem; line-height: 1.5; color: var(--ink); }
+    .card.formulas { grid-column: 1 / -1; container: formula / inline-size; }
+    .card.formulas h2 { margin: 0; }
+    dl.formulas { margin: 0; display: grid; gap: var(--sp-3); max-width: 72ch; }
+    dl.formulas dd { margin: 0; }
+    .formula { display: grid; grid-template-columns: minmax(0, 1fr); }
+    /* Wide: the name in a 12rem column, so every '=' in a card starts at the same x. */
+    @container formula (width >= 40rem) {
+      .formula { grid-template-columns: 12rem minmax(0, 1fr); column-gap: var(--sp-3); }
+      .formula > dt { grid-row: 1 / span 6; }
+      .formula > dd { grid-column: 2; }
+    }
+    .formula > dt { font-family: var(--font-prose); font-weight: 700; font-size: 1rem; line-height: 1.5; }
+    .f-rule { font-family: var(--font-prose); font-style: italic; font-weight: 400; font-size: 1rem; line-height: 1.5; color: var(--ink); }
+    .f-rule .num { font-family: var(--font-num); font-style: normal; font-variant-numeric: tabular-nums; }
+    .f-live {
+      font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 400;
+      font-size: 1rem; line-height: 1.5; color: var(--ink);
+    }
+    .f-live b { font-weight: 700; }
+    /* Hanging indent: a wrapped continuation sits right of the leading '='. */
+    dd.f-rule, dd.f-live { padding-left: var(--sp-3); text-indent: calc(-1 * var(--sp-3)); }
+    .f-key { font-family: var(--font-prose); font-size: 0.875rem; line-height: 1.4; color: var(--ink-muted); }
+    .f-note { font-family: var(--font-prose); font-size: 0.875rem; line-height: 1.4; color: var(--ink); }
+    .f-note b { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; }
+    .nw { white-space: nowrap; }
+
     /* Self-test panel and engine-error banner (UI-SPEC Self-test Panel, States) */
     #selftest, #engine-error {
       padding: var(--sp-3); border-radius: 8px;
@@ -570,7 +601,7 @@
 
     <header>
       <h1>D&amp;D Combat Roll Simulator</h1>
-      <p class="lede">One attack roll, laid out as a table: a d20 to hit against Armor Class, then a damage die. Change the numbers and every outcome updates.</p>
+      <p class="lede">One attack roll, laid out as a table: a d20 to hit against Armor Class, then a damage die. Change the numbers and every outcome updates. Further down, the page answers a design question: is a bonus worth more on the attack roll or on the damage roll?</p>
     </header>
 
     <noscript><p>This page needs JavaScript to calculate the table. Everything runs in your browser; nothing is sent anywhere.</p></noscript>
@@ -634,6 +665,26 @@
         <span class="value" id="stat-e20"></span>
         <span class="sub" id="stat-e20-sub"></span>
       </div>
+      <div class="card formulas" id="formulas">
+        <h2>How these numbers are worked out</h2>
+        <dl class="formulas">
+          <div class="formula" id="f-hit">
+            <dt>Hit chance</dt>
+            <dd class="f-rule">= d20 faces that hit / <span class="num">20</span></dd>
+            <dd class="f-rule">= <span class="nw">(<span class="num">21</span> − (AC − attack bonus))</span> / <span class="num">20</span>, kept between <span class="num">1</span> and <span class="num">19</span> faces</dd>
+            <dd class="f-key">A natural 1 always misses and a natural 20 always hits, so it is always 1 to 19 faces: 5% to 95%.</dd>
+            <dd class="f-live" id="f-hit-live"></dd>
+          </div>
+          <div class="formula" id="f-round">
+            <dt>Expected per round</dt>
+            <dd class="f-rule">= <span class="nw">P(normal hit) × (avg die + D)</span> + <span class="nw">P(crit) × (<span class="num">2</span> × avg die + D)</span></dd>
+            <dd class="f-key" id="f-round-key"></dd>
+            <dd class="f-live" id="f-round-l1"></dd>
+            <dd class="f-live" id="f-round-l2"></dd>
+            <dd class="f-note" id="f-round-note" hidden></dd>
+          </div>
+        </dl>
+      </div>
       <div class="card marginal" id="marginal">
         <h2>Value of the next +1</h2>
         <p class="marg-line" id="marg-hit"><span class="lead">+1 to hit:</span> <span class="mv" id="marg-hit-v"></span><span class="mnote" id="marg-hit-n"></span></p>
@@ -643,6 +694,7 @@
 
     <section id="tables">
       <h2>Outcome table</h2>
+      <p class="explain" id="two-rolls"></p>
       <div id="legend" class="legend"></div>
       <div class="table-wrap">
         <table id="outcome" class="outcome"><caption></caption><thead></thead><tbody></tbody></table>
@@ -1059,7 +1111,9 @@ const VM = (() => {
 
   // Stats-only view (Phase 1 cards, big table). The self-test grid and check-engine call it per
   // combo, so it never pulls in compare or sweep work (RESEARCH Pitfall 4). Its heatMax is the
-  // single-table domain; the page view below replaces it with the shared compare domain.
+  // single-table domain; the page view below replaces it with the shared compare domain. It
+  // also exposes the exact engine numerators (exact) for the Phase 4 copy builders, so they
+  // never call DiceMath again (D-04).
   function statsView(state) {
     const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
     const s = DiceMath.stats(p);
@@ -1087,6 +1141,10 @@ const VM = (() => {
         dmg20: fixed(mDmgT, 1), dmgRound: fixed(mDmgT * 5, 3),
         reason: m.reason,
       },
+      exact: Object.freeze({
+        e20Num: s.e20Num, e20Den: s.e20Den, hitNum: m.hitNum, dmgNum: m.dmgNum, den: m.den,
+        normalNum: ha.normalNum, normalDen: ha.normalDen,
+      }),
       heatMax: Math.max(1, 2 * X + p.dmg),                      // heat domain [0, crit max]
       critFloorDiffers: s.tableSum * X !== s.e20Num,            // only when dmg <= -3
     };
@@ -1094,6 +1152,79 @@ const VM = (() => {
 
   // Threshold phrase for a compact table's stats line (UI-SPEC Copywriting).
   const ruleText = (t) => (t === 2 ? 'hits on 2+ (95% cap)' : t === 20 ? 'only a nat 20 hits' : `hits on ${t}+`);
+
+  // Phase 4 copy (COPY-01, COPY-02, D-02..D-04). Pure functions of a statsView result: they never
+  // call DiceMath, so check-engine asserts them on every setting at no engine cost. Every result
+  // printed is the card's own string, and every branch is an exact integer comparison.
+  // U+00A0 sits inside each parenthesized group and around each ×, so a live line breaks only
+  // between terms (UI-SPEC wrapping rule).
+  const NB = String.fromCharCode(0xa0);   // U+00A0 NO-BREAK SPACE
+  const TIMES = NB + '×' + NB;
+  const minusInt = (n) => (n < 0 ? '−' + Math.abs(n) : String(n));
+  const tenthsText = (k) => (k < 0 ? '−' + fixed(-k, 1) : fixed(k, 1));    // k in tenths
+  const groupD = (D) => NB + (D < 0 ? '−' : '+') + NB + Math.abs(D);          // "(4.5 + 0)" tail
+  const seg = (pre, result = '', post = '') => Object.freeze({ pre, result, post });
+
+  // COPY-01 (D-01, D-02): the two rolls and the joint outcome space, above the outcome table.
+  // 'an' before 8, 11 and 18 (RESEARCH Pitfall 3; normal thresholds are 3..19).
+  function twoRollsText(sv) {
+    const { ac, atk, die } = sv.params;
+    const t = sv.threshold;
+    const rule = sv.hitState === 'cap' ? 'anything but a natural 1 hits (the 95% cap).'
+      : sv.hitState === 'floor' ? 'only a natural 20 hits (the 5% floor).'
+        : `${[8, 11, 18].includes(t) ? 'an' : 'a'} ${t} or higher hits.`;
+    return `Every attack is two rolls, and the d20 comes first: with ${signed(atk)} against AC ${ac}, ${rule} ` +
+      `Only a hit rolls damage: one d${die}, or two on a natural 20, and a miss deals 0. ` +
+      `The table pairs all 20 d20 faces with all ${die} damage faces, so its ${20 * die} cells are equally likely outcomes. ` +
+      (sv.critFloorDiffers
+        ? 'That makes the average cell close to the expected damage per attack (the note under the table explains the small gap).'
+        : 'That makes the average cell the expected damage per attack.');
+  }
+
+  // COPY-02 (D-03, D-04): each formula as today's values, ending in the card's own result.
+  // Seg = { pre, result, post }; result '' means no bold number.
+  function formulaView(sv) {
+    const { ac, atk, die: X, dmg: D } = sv.params;
+    const ex = sv.exact;
+    const hf = sv.hitFaces, normal = hf - 1;          // the crit face is always one of the hit faces
+    const twoAvgD = X + 1 + 2 * D;                    // 2 x (avg die + D), an integer
+    const avg = fixed(5 * (X + 1), 1);
+    const pN = fixed(5 * normal, 2);
+
+    // Hit chance: raw faces F = 21 - (AC - atk), and the clamp to 1..19 shown when it bites.
+    const F = 21 - (ac - atk);
+    const atkT = atk < 0 ? `(−${-atk})` : String(atk);
+    const clamp = F > 19 ? ` →${NB}${F} faces, kept to 19 (a natural 1 always misses)`
+      : F < 1 ? ` →${NB}${minusInt(F)} faces, raised to 1 (a natural 20 always hits)` : '';
+    const hit = seg(`= (21${NB}−${NB}(${ac}${NB}−${NB}${atkT}))${NB}/${NB}20${clamp} = ${hf}/20 = `, `${sv.hitPct}%`);
+
+    // Expected per round: the closed form, exact only when it equals the engine numerator.
+    const roundKey = 'A normal hit is any hit except the natural 20. ' +
+      `avg die = (${X}${NB}+${NB}1)${NB}/${NB}2 = ${avg}, and D is the damage bonus. ` +
+      'A crit rolls the die twice and adds D once.';
+    const l1 = `= ${pN}${TIMES}(${avg}${groupD(D)}) + 0.05${TIMES}(2${TIMES}${avg}${groupD(D)})`;
+    const roundRule = normal * X * X * twoAvgD + X * X * (2 * X + 2 + 2 * D) === 2 * ex.e20Num;
+    const round = roundRule
+      ? Object.freeze({
+        l1,
+        l2: seg(`= ${pN}${TIMES}${tenthsText(5 * twoAvgD)} + 0.05${TIMES}${tenthsText(5 * (2 * X + 2 + 2 * D))} = `,
+          sv.perRoundText),
+        note: null,
+      })
+      : Object.freeze({
+        l1,
+        l2: null,
+        note: seg(`Not exact here: at a damage bonus of ${signed(D)}, some rolls would deal less than 0, ` +
+          'but damage stops at 0. The table gives ', sv.perRoundText, ' per round, the same as the Expected per round card.'),
+      });
+
+    return Object.freeze({
+      hit, roundKey, round,
+      plusHit: seg(''), plusDmg: seg(''),
+      win: Object.freeze({ pre: '', verdict: '', post: '' }),
+      branch: Object.freeze({ round: roundRule ? 'rule' : 'table', hit: null, dmg: null, win: null }),
+    });
+  }
 
   // CMP-01..04 (D-04, D-06, D-08): Baseline, +N to hit, +N to damage, one DiceMath.stats call
   // each. Plain values only. heatMax is the true largest cell across the three row sets.
@@ -1299,15 +1430,17 @@ const VM = (() => {
   function computeView(state) {
     const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
     const compare = compareView(p, state.n);
-    // simExact is page-view only: statsView stays sim-free for the per-combo callers.
+    const sv = statsView(state);
+    // simExact is page-view only: statsView stays sim-free for the per-combo callers. The copy
+    // builders reuse this one statsView result (no second engine pass).
     return {
-      ...statsView(state), heatMax: compare.heatMax, compare, chart: chartView(p, state.n),
-      simExact: simExact(p),
+      ...sv, heatMax: compare.heatMax, compare, chart: chartView(p, state.n),
+      simExact: simExact(p), formulas: formulaView(sv), twoRolls: twoRollsText(sv),
     };
   }
 
   return Object.freeze({
-    CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, compareView,
+    CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, twoRollsText, formulaView, compareView,
     niceTicks, captionOrder, captionCross, captionBands, readoutLines, chartView, computeView,
     settingsText, simExact, simPlacement, simStatus,
   });
@@ -1871,7 +2004,7 @@ const SelfTest = (() => {
   // budget). check-engine (r)(s)(t)(z) cover every setting. Names avoid visible copy (IN-06).
   section('copy', () => {
     const sv = VM.statsView(VM.DEFAULT_STATE);
-    const nb = (x) => String(x).replace(/ /g, ' ');
+    const nb = (x) => String(x).replaceAll(String.fromCharCode(0xa0), ' ');
     const flat = (g) => nb(g.pre) + nb(g.result) + nb(g.post);
     const hasF = typeof VM.formulaView === 'function';
     const fv = hasF ? VM.formulaView(sv) : null;
@@ -1940,12 +2073,19 @@ const simLogWrapEl = simEl.querySelector('.sim-log-wrap');
 const simLogEl = document.getElementById('sim-log');
 const simNoteBaseEl = simNoteEl.querySelector('.note-base');
 const simNoteStaleEl = simNoteEl.querySelector('.note-stale');
+// Explanations and Try this (Phase 4): formula live lines and the two-roll paragraph.
+const fHitLiveEl = document.getElementById('f-hit-live');
+const fRoundKeyEl = document.getElementById('f-round-key');
+const fRoundL1El = document.getElementById('f-round-l1');
+const fRoundL2El = document.getElementById('f-round-l2');
+const fRoundNoteEl = document.getElementById('f-round-note');
+const twoRollsEl = document.getElementById('two-rolls');
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
 const state = {};
-const RENDERERS = [renderControls, renderStats, renderTable, renderLegend, renderFootnote, renderCompare,
-  renderChart, renderSim];
+const RENDERERS = [renderControls, renderStats, renderFormulas, renderTable, renderTwoRolls, renderLegend,
+  renderFootnote, renderCompare, renderChart, renderSim];
 
 // The last run lives here, never in state (RESEARCH Pattern 2, Pitfall 2): a run is an event,
 // not a derivation. init() and the UI smoke do Object.assign(state, DEFAULT_STATE), which would
@@ -2053,6 +2193,36 @@ function renderStats(view) {
     margHitNEl.textContent = '';
   }
   margDmgVEl.textContent = `+${marg.dmgRound} per round (+${marg.dmg20} over 20 rounds)`;
+}
+
+// A formula line from a VM segment: pre text, the card's result in bold (num face), post text.
+// Written only when the text differs; no innerHTML (T-04-05).
+function setSeg(el, seg) {
+  if (el.textContent === seg.pre + seg.result + seg.post) return;
+  el.replaceChildren(...(seg.result === '' ? [seg.pre, seg.post] : [seg.pre, num(seg.result), seg.post]));
+}
+
+// COPY-02 (D-03, D-04): formulas under the stat cards. Rule branch shows line 2; table branch
+// hides it and shows the note, so no line ever prints a number that disagrees with a card.
+function renderFormulas(view) {
+  const f = view.formulas;
+  setSeg(fHitLiveEl, f.hit);
+  setText(fRoundKeyEl, f.roundKey);
+  setText(fRoundL1El, f.round.l1);
+  if (f.round.l2) {
+    setSeg(fRoundL2El, f.round.l2);
+    fRoundL2El.hidden = false;
+    fRoundNoteEl.hidden = true;
+  } else {
+    setSeg(fRoundNoteEl, f.round.note);
+    fRoundL2El.hidden = true;
+    fRoundNoteEl.hidden = false;
+  }
+}
+
+// COPY-01 (D-01, D-02): the two-roll paragraph above the outcome table.
+function renderTwoRolls(view) {
+  setText(twoRollsEl, view.twoRolls);
 }
 
 // Note column labels (D-10). Fixed markup plus the integer threshold only (T-01-12).
@@ -3406,9 +3576,9 @@ function runUiSmoke() {
   try {
     const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); render(); };
     const node = (id) => document.getElementById(id);
-    const txt = (id) => (node(id) ? node(id).textContent.replace(/ /g, ' ') : null);
+    const nb = (x) => String(x).replaceAll(String.fromCharCode(0xa0), ' ');
+    const txt = (id) => (node(id) ? nb(node(id).textContent) : null);
     const hid = (id) => (node(id) ? node(id).hidden : null);
-    const nb = (x) => String(x).replace(/ /g, ' ');
 
     show({});
     const sv0 = VM.statsView(state);
