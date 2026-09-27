@@ -111,8 +111,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 1 deploy prerequisite: gh CLI is not installed on this machine. It must be installed and authenticated before DEPLOY-02/03.
-- The local git repo exists on branch `master` with no remote. Rename it to `main` before the first push, and the GitHub repo must be public.
+- Resolved 2026-09-27: repo public at github.com/AtomechLLC/dnd-roll-tables on main (pushed over SSH; the user chose this remote instead of gh auth login), Pages live at https://atomechllc.github.io/dnd-roll-tables/ via the repo's GitHub Actions static workflow (Phase 4).
 - REQUIREMENTS.md header said 45 v1 requirements, but 47 are listed (RULES 8, CTRL 5, TABLE 6, STAT 3, CHART 5, CMP 5, SIM 6, COPY 5, DEPLOY 4). The coverage count is corrected to 47.
 
 ### Quick Tasks Completed

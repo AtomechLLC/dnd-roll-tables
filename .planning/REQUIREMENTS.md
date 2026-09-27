@@ -165,8 +165,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COPY-04 | Phase 4 | Complete |
 | COPY-05 | Phase 4 | Complete |
 | DEPLOY-01 | Phase 1 | Complete |
-| DEPLOY-02 | Phase 1 | Partial (main branch, .nojekyll, README done locally; public repo deferred 2026-09-25, user chose local git) |
-| DEPLOY-03 | Phase 1 | Deferred (user chose local git only on 2026-09-25; gh installed, not authenticated) |
+| DEPLOY-02 | Phase 1 | Complete (verified in Phase 4, 2026-09-27, https://atomechllc.github.io/dnd-roll-tables/; public repo AtomechLLC/dnd-roll-tables on main, user's choice replacing DnD-CombatRollSimulator) |
+| DEPLOY-03 | Phase 1 | Complete (verified in Phase 4, 2026-09-27, https://atomechllc.github.io/dnd-roll-tables/; Pages deploys from main via the repo's GitHub Actions static workflow instead of legacy branch publishing, no gh auth on this machine) |
 | DEPLOY-04 | Phase 4 | Complete |
 
 **Coverage:**
@@ -176,4 +176,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-09-24 after roadmap creation (traceability filled, 4 phases)*
+*Last updated: 2026-09-27 after Phase 4 publish (DEPLOY-02/03 verified live)*
