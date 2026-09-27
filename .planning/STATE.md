@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-09-27T06:20:44.740Z"
-last_activity: 2026-09-27 -- Phase 4 planning complete
+last_updated: "2026-09-27T06:21:01.246Z"
+last_activity: 2026-09-27 -- Phase 04 execution started
 progress:
   total_phases: 4
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** A designer can see, in one glance at a live table and a curve, why attack bonuses saturate (hit chance caps at 95%) while damage bonuses scale linearly, and why the crossover depends on AC and the damage die.
-**Current focus:** Phase 4 — designer explanation & final ship
+**Current focus:** Phase 04 — designer-explanation-final-ship
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-09-27 -- Phase 4 planning complete
+Phase: 04 (designer-explanation-final-ship) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 04
+Last activity: 2026-09-27 -- Phase 04 execution started
 
 Progress: [██████████] 100%
 
