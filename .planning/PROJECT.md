@@ -19,11 +19,12 @@ A designer can see, in one glance at a live table and a curve, why attack bonuse
 - [x] Line chart: x-axis bonus 0 to +20, two curves for expected 20-round damage when the bonus is on the attack roll vs on the damage roll, at the current AC and die. Crossings are marked, and the flat 95%-cap and nat-20-only stretches are shaded and labeled. Validated in Phase 2: Bonus Comparison.
 - [x] Side-by-side 2D tables: baseline (+0), with +N to hit, with +N to damage, on one shared color scale, driven by a "Compare at +N" slider. Validated in Phase 2 (code review 02-REVIEW.md: 3 warnings open, including a first-render crash path that bypasses the engine-error banner).
 - [x] Simulation: a "roll 20 rounds" button that actually rolls the dice and shows the realized total alongside the exact expected value and its standard deviation, with a per-round log, stale marking, a tally of recent runs, and rolled cells marked on the outcome table. Validated in Phase 3: Roll-20-Rounds Simulation (code review 03-REVIEW.md: 4 warnings open).
+- [x] Explanatory text for game designers: live formulas, the two-roll structure, why the attack bonus plateaus and the damage bonus is linear, where the crossover sits, and one-click "Try this" presets. Validated in Phase 4: Designer Explanation & Final Ship (code review 04-REVIEW.md: 1 blocker open. At the 95% cap the chart text still says +1 to hit is worth the full hit value, contradicting the card. Also 4 warnings).
+- [x] Deployed to GitHub Pages: live at https://atomechllc.github.io/dnd-roll-tables/ (repo AtomechLLC/dnd-roll-tables, deployed by a GitHub Actions Pages workflow on push to main). Verified in Phase 4 on 2026-09-27: HTTP 200, served file identical to local, self-test 251/251, no console errors.
 
 ### Active
 
-- [ ] Explanatory text for game designers: formulas shown, why attack bonus plateaus, why damage bonus is linear, where the crossover sits
-- [ ] Deployed to GitHub Pages: repo created, site pushed, Pages enabled, public URL works — Deferred 2026-09-25: user chose local git only. Local prep is done (branch `main`, `.nojekyll`, README); gh CLI is installed but not authenticated.
+None. All v1 requirements are validated; the open review findings are listed in the phase REVIEW.md files.
 
 ### Out of Scope
 
@@ -67,7 +68,7 @@ A designer can see, in one glance at a live table and a curve, why attack bonuse
 | Audience is game designers, formulas shown | Sets the tone: explain the why, not just the number | — Pending |
 | Crit row in the table shows 2 × face + damage bonus with a footnote; the simulator rolls two real dice | Easiest to read in a one-column-per-face table and keeps table average = expected value; the footnote and simulator keep the real rule honest | — Pending |
 | Classic inline `<script>` blocks, not ES modules | Blocks share globals for the self-test and the page works over file:// | ✓ Good (Phase 1: four blocks, engine → self-test → view-model → app) |
-| Deploy a minimal skeleton to Pages at the end of Phase 1 | Front-loads gh CLI install, branch rename, and Pages API friction while the code is small | ⚠ Revised (gh installed and branch renamed, but the user chose local git only at the auth checkpoint; publish deferred) |
+| Deploy a minimal skeleton to Pages at the end of Phase 1 | Front-loads gh CLI install, branch rename, and Pages API friction while the code is small | ⚠ Revised (publish deferred in Phase 1; shipped in Phase 4 to AtomechLLC/dnd-roll-tables over SSH, deployed by an Actions Pages workflow instead of gh + branch publishing) |
 | Local git only for now; GitHub publish deferred (2026-09-25) | User declined the `gh auth login` step mid-Phase 1; nothing about the page depends on being published | — Pending (re-run plan 01-03 task 2 when ready to deploy) |
 | Tabletop theme: parchment/ink light, candlelit dark, blood-red heat ramp, serif prose, tabular numerals | Chosen in Phase 1 discussion; contrast kept at 4.5:1+ via a mid-ramp text flip | ✓ Good (Phase 1) |
 | Crossover marker and copy handle 0, 1, or 2 crossings | Research showed the most common settings have no crossover; asserting one would be wrong | — Pending |
@@ -90,4 +91,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-26 after Phase 3 completion (local git only; publish deferred)*
+*Last updated: 2026-09-27 after Phase 4 completion (live at https://atomechllc.github.io/dnd-roll-tables/)*
