@@ -4135,9 +4135,11 @@ function runUiSmoke() {
 
   // Phase 4 Try this (COPY-05, D-07, D-08): a real click on a preset sets all five controls in
   // one parse path, draws the one ring the description names, stales a rolled run, and a later
-  // control change clears the record and the status line. The status write queued by the click
-  // is cleared by an rAF registered after it (RESEARCH Pitfall 5), so the DOM dump never
-  // carries it. Names avoid visible copy; expected literals are split (IN-06).
+  // control change clears the record and the status line. The frame the click queues (render,
+  // then the status write) is run inside the smoke, so the status is written before the control
+  // change that must clear it (04-REVIEW WR-04); the rAF registered in `finally` still clears
+  // it (RESEARCH Pitfall 5), so the DOM dump never carries it. Names avoid visible copy;
+  // expected literals are split (IN-06).
   try {
     const node = (id) => document.getElementById(id);
     const nb = (x) => String(x).replaceAll(String.fromCharCode(0xa0), ' ');
@@ -4158,8 +4160,21 @@ function runUiSmoke() {
 
     rollWith(Sim.mulberry32(1));
     render();
-    btns.find((b) => b.dataset.preset === 'cross').click();   // the real button, the real handler
+    // 04-REVIEW WR-04: hold the frames the click queues (the render, then the status write) and
+    // run them here in order, so the real write path, guard included, lands before the checks.
+    const queued = [];
+    const realRaf = window.requestAnimationFrame;
+    window.requestAnimationFrame = (cb) => { queued.push(cb); return 0; };
+    try {
+      btns.find((b) => b.dataset.preset === 'cross').click();   // the real button, the real handler
+    } finally {
+      window.requestAnimationFrame = realRaf;
+    }
     render();
+    for (const cb of queued) cb(performance.now());
+    const statusNow = node('explore-status') ? node('explore-status').textContent : null;
+    check('explore ui: the click writes the status in its frame',
+      statusNow !== null && statusNow !== '' && statusNow === VM.presetStatus(lastPreset), true);
     const dieChecked = document.querySelector('#controls input[name="die"]:checked');
     check('explore ui: preset sets the five controls',
       [node('ac-num').value, dieChecked && dieChecked.value, node('atk-num').value, node('dmg-num').value,
@@ -4171,7 +4186,7 @@ function runUiSmoke() {
     check('explore ui: preset record kept', lastPreset !== null && lastPreset.n === 6, true);
 
     send(acRange, '24');
-    render();
+    render();   // the status was written above, so this check can fail
     check('explore ui: a control change clears the record', lastPreset, null);
     check('explore ui: a control change clears the status', node('explore-status') ? node('explore-status').textContent : null, '');
   } catch (err) {
