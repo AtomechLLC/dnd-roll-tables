@@ -58,6 +58,20 @@
 //          pinned: rule/rule 36,850, reason 28,100, table/table 5,950, mixed 80
 //      (z) VM.twoRollsText equals the UI-SPEC paragraph, with 'an' before 8, 11 and 18, and
 //          every normal threshold 3..19 is seen
+//      and the chart explanations (plan 04-03), from the loop's own series, crossings and bands
+//      (VM.explainChart is pure, so no new sweep or engine call):
+//      (u) the dashed-line text: straightFrom k (the first N from which every damage step is
+//          hitFaces x den), 'the line is straight' iff k = 0, else 'From +k on'; counts pinned:
+//          k = 0: 60,740; k = 1, 2, 3: 2,730 each; k = 4: 2,050; never above 4
+//      (v) the solid-line text: nodmg iff die + dmg <= 0 (1,092), rule iff 2 normalNum ===
+//          (X + 1 + 2D) normalDen (60,060), else floor bites (9,828); every attack step outside
+//          the bands equals normalNum x die; a band sentence iff that band is drawn (not nodmg)
+//      (w) the crossover text picks the variant that matches DiceMath.crossings and prints the
+//          ring's N; counts pinned: none-damage 30,095, none-attack 14,677, one adjacent 25,318,
+//          one across a tie 874, end tie only 16, touch / two+ / identical 0
+//      (x) once: every VM.PRESETS entry re-run through the engine at its exact settings: bands,
+//          steps, crossings, caption and readout claims (UI-SPEC Presets table), parseControl
+//          round trip, the UI-SPEC strings, and parity with the static #explore markup
 //      Zero-count asserts (02-REVIEW IN-04): no setting has a touch (a tie that is neither a
 //      crossing's tieN nor the end tie), a leading tie (tie at N = 1), or two or more
 //      crossings. The copy branches for those exist only for synthetic series; a rule change
@@ -144,6 +158,10 @@ const names = {
   s: '(s) COPY-02 per-round formula branch and result',
   t: '(t) COPY-02 +1 formulas and Which wins',
   z: '(z) COPY-01 two-roll text',
+  u: '(u) COPY-04 dashed-line explanation',
+  v: '(v) COPY-04 solid-line explanation and bands',
+  w: '(w) COPY-03 crossover explanation',
+  x: '(x) COPY-05 preset claims and markup',
   cover: '(cover) the stride-53 sample reaches 21 AC values, 5 dice, 26 attack and 26 damage bonuses',
   zero: '(zero) no touches, no leading ties, no setting with 2+ crossings',
 };
@@ -375,6 +393,155 @@ function checkCopy(p, view) {
   }
 }
 
+// Phase 4 chart copy (u)(v)(w), COPY-03 / COPY-04 / D-05 / D-06. VM.explainChart is fed the
+// loop's own series a / d, crossings c and bands b (the objects that draw the rings and bands),
+// plus hitFaces and the normal-hit average from view.exact, so it costs no engine call. Every
+// expected string is rebuilt here from p and those objects; U+00A0 is normalized first.
+const hasExplain = typeof VM.explainChart === 'function';
+const S = (n) => VM.signed(n);
+const LQ = '“', RQ = '”';   // U+201C / U+201D around the on-chart band names
+const explainCounts = {
+  straight: [0, 0, 0, 0, 0], straightOver: 0,
+  nodmg: 0, rule: 0, floorBites: 0,
+  noneDamage: 0, noneAttack: 0, oneAdjacent: 0, oneTie: 0, endTieOnly: 0, touch: 0, multi: 0, identical: 0,
+};
+const WANT_STRAIGHT = [60740, 2730, 2730, 2730, 2050];
+const WANT_HIT = { nodmg: 1092, rule: 60060, floorBites: 9828 };
+const WANT_CROSS = { noneDamage: 30095, noneAttack: 14677, oneAdjacent: 25318, oneTie: 874, endTieOnly: 16, touch: 0, multi: 0, identical: 0 };
+const RING_TAIL = ' Change the AC or the die and watch the ring move, or disappear.';
+const RINGS_TAIL = ' Change the AC or the die and watch the rings move, or disappear.';
+
+function crossWant(c) {
+  const k = c.list.length;
+  const at = (e) => S(e.tieN ?? e.flipN);
+  if (c.first === 'none') return ['identical', 'At these settings the two curves are identical, so neither bonus is better.'];
+  if (k === 0 && c.endTieN !== null) {
+    return ['endTieOnly', `At these settings the curves only meet at ${S(c.endTieN)}, at the ring on the right edge: ` +
+      'they touch but do not cross.' + RING_TAIL];
+  }
+  if (k === 0 && c.ties.length > 0) {
+    return ['touch', `At these settings the curves touch at ${S(c.ties[0])} without crossing, so there is no ring on the ` +
+      'chart. Change the AC or the die and watch the gap open or a crossover appear.'];
+  }
+  if (k === 0 && c.first === 'damage') {
+    return ['noneDamage', 'At these settings the curves never cross, so there is no ring on the chart. A higher AC ' +
+      'leaves fewer hits for +1 damage to add to, and a bigger die makes each extra hit worth more. Either can let ' +
+      '+N to hit pull ahead.'];
+  }
+  if (k === 0) {
+    return ['noneAttack', 'At these settings the curves never cross, so there is no ring on the chart. A lower AC ' +
+      'gives +1 damage more hits to add to, and a smaller die makes each extra hit worth less. Either can hand the ' +
+      'lead to +N to damage.'];
+  }
+  if (k === 1 && c.list[0].tieN === null) {
+    return ['oneAdjacent', `At these settings the lead changes once, at ${S(c.list[0].flipN)}: the ring on the chart.` + RING_TAIL];
+  }
+  if (k === 1) {
+    return ['oneTie', `At these settings the two are even at ${S(c.list[0].tieN)}, and the lead changes there: ` +
+      'the ring on the chart.' + RING_TAIL];
+  }
+  if (k === 2) {
+    return ['multi', `At these settings the lead changes twice, at ${at(c.list[0])} and ${at(c.list[1])}: ` +
+      'the two rings on the chart.' + RINGS_TAIL];
+  }
+  return ['multi', `At these settings the lead changes ${k} times: the rings on the chart.` + RINGS_TAIL];
+}
+
+function checkExplain(p, a, d, den, hf, ex, c, b, markers) {
+  if (!hasExplain) {
+    record('u', p, 'VM.explainChart missing');
+    record('v', p, 'VM.explainChart missing');
+    record('w', p, 'VM.explainChart missing');
+    return;
+  }
+  const { die: X, dmg: D } = p;
+  let e;
+  try {
+    e = VM.explainChart(p, { attack: a, damage: d, den, crossings: c, bands: b },
+      { hitFaces: hf, normalNum: ex.normalNum, normalDen: ex.normalDen });
+  } catch (err) {
+    const msg = `explainChart threw: ${err && err.message}`;
+    record('u', p, msg); record('v', p, msg); record('w', p, msg);
+    return;
+  }
+
+  // (u) dashed line: straightFrom k and the step hitFaces (1 decimal)
+  {
+    const step = VM.fixed(10 * hf, 1);
+    let k = MAXN;
+    for (let j = MAXN - 1; j >= 0 && d[j + 1] - d[j] === hf * den; j--) k = j;
+    if (k <= 4) explainCounts.straight[k]++; else explainCounts.straightOver++;
+    const want = k === 0
+      ? `Each +1 to damage adds 1 to every hit. You expect ${hf} ${hf === 1 ? 'hit' : 'hits'} in 20 rounds, ` +
+        `so every step adds the same ${step} and the line is straight.`
+      : `Each +1 to damage adds 1 to every hit, but damage stops at 0, so at a damage bonus of ${S(D)} the first ` +
+        `steps add less. From ${S(k)} on, every step adds the same ${step}: ` +
+        (hf === 1 ? 'one for the 1 hit you expect in 20 rounds.' : `one for each of the ${hf} hits you expect in 20 rounds.`);
+    const got = nb(e.dmgLine);
+    if (got !== want) record('u', p, `k ${k}: ${JSON.stringify(got)} vs ${JSON.stringify(want)}`);
+    else if ((k === 0) !== got.includes('the line is straight')) record('u', p, `k ${k} straight wording`);
+  }
+
+  // (v) solid line: the step variant, the step itself outside the bands, one sentence per band
+  {
+    const nodmg = X + D <= 0;
+    const rule = !nodmg && 2 * ex.normalNum === (X + 1 + 2 * D) * ex.normalDen;
+    if (nodmg) explainCounts.nodmg++; else if (rule) explainCounts.rule++; else explainCounts.floorBites++;
+    let bad = null;
+    for (let n = 0; n < MAXN && !bad; n++) {
+      const inBand = (b.floor !== null && n + 1 <= b.floor[1]) || (b.cap !== null && n >= b.cap[0]);
+      if (!inBand && a[n + 1] - a[n] !== ex.normalNum * X) {
+        bad = `attack step at N ${n} is ${a[n + 1] - a[n]}, not normalNum x die ${ex.normalNum * X}`;
+      }
+    }
+    const parts = [];
+    if (nodmg) {
+      parts.push(`Each +1 to hit turns one more d20 face into a hit, but at a damage bonus of ${S(D)} a normal d${X} ` +
+        'hit deals 0. So this line stays flat even outside the shaded bands, and only crits deal damage here.');
+    } else {
+      parts.push(rule
+        ? 'Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth an average ' +
+          `d${X} ${D < 0 ? '−' : '+'} ${Math.abs(D)} = ${VM.fixed(5 * (X + 1 + 2 * D), 1)}.`
+        : 'Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth ' +
+          `${VM.fixed(Math.round((100 * ex.normalNum) / ex.normalDen), 2)} on average here, since damage stops at 0.`);
+      if (b.floor) {
+        parts.push(`It is flat in the band marked ${LQ}only a nat 20 hits${RQ}, up to ${S(b.floor[1])}: a natural 20 ` +
+          `always hits, but nothing else does until ${S(b.floor[1] + 1)}.`);
+      }
+      if (b.cap && b.cap[0] === 0) {
+        parts.push(`It is flat across the whole chart, in the band marked ${LQ}95% cap${RQ}: you already hit on 2+, ` +
+          'and a natural 1 always misses, so more to-hit buys nothing.');
+      } else if (b.cap) {
+        parts.push(`It goes flat${b.floor ? ' again' : ''} in the band marked ${LQ}95% cap${RQ}, from ${S(b.cap[0])}: ` +
+          'a natural 1 always misses, so once you hit on 2+, more to-hit buys nothing.');
+      }
+    }
+    const want = parts.join(' ');
+    const got = nb(e.hitLine);
+    if (!bad && got !== want) bad = `${JSON.stringify(got)} vs ${JSON.stringify(want)}`;
+    if (!bad && got.includes('only a nat 20 hits') !== (b.floor !== null && !nodmg)) bad = 'floor sentence presence';
+    if (!bad && got.includes('95% cap') !== (b.cap !== null && !nodmg)) bad = 'cap sentence presence';
+    if (!bad && got.includes('whole chart') !== (b.cap !== null && b.cap[0] === 0 && !nodmg)) bad = 'whole-chart wording';
+    if (!bad && got.includes('flat again') !== (b.floor !== null && b.cap !== null && !nodmg)) bad = 'flat-again wording';
+    if (bad) record('v', p, bad);
+  }
+
+  // (w) crossover: the variant matches crossings, and every ring's N is the N printed
+  {
+    const [variant, want] = crossWant(c);
+    explainCounts[variant]++;
+    const got = nb(e.crossLine);
+    let bad = got !== want ? `${variant}: ${JSON.stringify(got)} vs ${JSON.stringify(want)}` : null;
+    if (!bad && markers) {
+      for (const m of markers) {
+        const N = (m.label.match(/[+−]\d+$/) || [''])[0];
+        if (!got.includes('at ' + N)) { bad = `ring "${m.label}" N not in ${JSON.stringify(got)}`; break; }
+      }
+    }
+    if (bad) record('w', p, bad);
+  }
+}
+
 const t0 = performance.now();
 for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
   for (const die of DICE_SET) {
@@ -569,10 +736,12 @@ for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
         }
 
         // Crossings (m): engine result vs an independent walk over the last non-zero sign
+        let crossRes = null, bandRes = null;
         if (!hasCross) {
           record('m', p, 'DiceMath.crossings missing');
         } else {
           const c = DiceMath.crossings(a, d);
+          crossRes = c;
           let lastSign = 0, flips = 0;
           for (let n = 1; n <= MAXN; n++) {
             const sg = Math.sign(a[n] - d[n]);
@@ -618,12 +787,20 @@ for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
           record('n', p, 'DiceMath.attackBands missing');
         } else {
           const b = DiceMath.attackBands(p, MAXN);
+          bandRes = b;
           const nodmg = die + dmg <= 0;
           for (let n = 0; n < MAXN; n++) {
             const flat = a[n + 1] === a[n];
             const banded = (b.floor !== null && n + 1 <= b.floor[1]) || (b.cap !== null && n >= b.cap[0]) || nodmg;
             if (flat !== banded) { record('n', p, `N ${n} -> ${n + 1}: flat ${flat}, banded ${banded}`); break; }
           }
+        }
+
+        // Chart explanations (u)(v)(w) from the same series, crossings and bands. Sampled combos
+        // also compare the drawn rings' N (the chartView memo already holds this setting).
+        if (crossRes && bandRes) {
+          const markers = inSample && typeof VM.chartView === 'function' ? VM.chartView(p, 5).markers : null;
+          checkExplain(p, a, d, den, s.hitFaces, view.exact, crossRes, bandRes, markers);
         }
       }
     }
@@ -671,11 +848,178 @@ if (hasFormula) {
     if (got !== want) record('t', pin, `pin ${JSON.stringify(got)} vs ${JSON.stringify(want)}`);
   }
 }
+
+// (u)(v)(w) state counts over the full domain (RESEARCH Pattern 4). A rule change that moves any
+// setting between variants fails here.
+if (hasExplain) {
+  const tally = (key, label, got, want) => {
+    if (got === want) return;
+    counts[key]++;
+    firstFailures.push(`${key}: count ${label} ${got} vs ${want}`);
+  };
+  WANT_STRAIGHT.forEach((want, k) => tally('u', `straightFrom ${k}`, explainCounts.straight[k], want));
+  tally('u', 'straightFrom > 4', explainCounts.straightOver, 0);
+  for (const [k, want] of Object.entries(WANT_HIT)) tally('v', k, explainCounts[k], want);
+  for (const [k, want] of Object.entries(WANT_CROSS)) tally('w', k, explainCounts[k], want);
+}
+
+// (x) COPY-05, D-07, D-08, success criterion 4: every preset's description re-derived from the
+// engine at its exact settings, the UI-SPEC strings, the parse round trip, and markup parity.
+const PRESET_WANT = {
+  cross: {
+    title: 'A crossover',
+    button: 'Try AC 25 with a d12',
+    desc: 'At AC 25 only a natural 20 hits, so +1 to hit buys nothing until +6. After that, each +1 to hit adds a ' +
+      'whole extra d12 hit (6.5 over 20 rounds), while +1 to damage adds just 1.0. Look for the ring at +6, where ' +
+      '+N to hit takes over.',
+    setsText: 'Sets: AC 25, d12, +0 to hit, +0 damage, compare at +6',
+    sets: { ac: 25, die: 12, atk: 0, dmg: 0, n: 6 },
+  },
+  dmg: {
+    title: 'Damage always wins',
+    button: 'Try AC 15 with a d8',
+    desc: 'At AC 15 with +0 to hit you expect 6 hits in 20 rounds, so each +1 to damage adds 6.0. Each +1 to hit ' +
+      'adds one more hit, worth only 4.5. The dashed line stays on top at every N, and there is no ring.',
+    setsText: 'Sets: AC 15, d8, +0 to hit, +0 damage, compare at +5',
+    sets: { ac: 15, die: 8, atk: 0, dmg: 0, n: 5 },
+  },
+  cap: {
+    title: 'The cap flips it',
+    button: 'Try AC 15 with a d12',
+    desc: 'With a d12, one more hit is worth 6.5 and +1 to damage adds 6.0, so +N to hit leads at first. At +13 it ' +
+      'reaches the 95% cap and goes flat, and +N to damage passes it at +15.',
+    setsText: 'Sets: AC 15, d12, +0 to hit, +0 damage, compare at +15',
+    sets: { ac: 15, die: 12, atk: 0, dmg: 0, n: 15 },
+  },
+};
+const presetFacts = [];
+{
+  const xp = (key) => ({ ac: `(preset ${key})`, atk: '', die: '', dmg: '' });
+  const bad = (key, detail) => record('x', xp(key), detail);
+  const PRESETS = VM.PRESETS;
+  if (!Array.isArray(PRESETS)) {
+    bad('all', 'VM.PRESETS missing');
+  } else {
+    if (PRESETS.map((pr) => pr.key).join(',') !== Object.keys(PRESET_WANT).join(',')) {
+      bad('all', `keys ${PRESETS.map((pr) => pr.key).join(',')}`);
+    }
+    if (!Object.isFrozen(PRESETS) || !PRESETS.every((pr) => Object.isFrozen(pr) && Object.isFrozen(pr.sets))) {
+      bad('all', 'VM.PRESETS is not deeply frozen');
+    }
+    // The static #explore markup, read from the raw file (entities decoded)
+    const dec = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+    const exStart = html.indexOf('<section id="explore"');
+    const exEnd = exStart < 0 ? -1 : html.indexOf('</section>', exStart);
+    const exHtml = exStart < 0 || exEnd < 0 ? '' : html.slice(exStart, exEnd);
+    if (!exHtml) bad('all', 'no <section id="explore"> in index.html');
+    const items = [...exHtml.matchAll(/<li class="explore-item">([\s\S]*?)<\/li>/g)].map((m) => m[1]);
+    if (exHtml && items.length !== PRESETS.length) bad('all', `${items.length} .explore-item vs ${PRESETS.length} presets`);
+    for (const pr of PRESETS) {
+      const key = pr.key, want = PRESET_WANT[key];
+      if (!want) { bad(key, 'unknown preset'); continue; }
+      const sets = pr.sets || {};
+      // UI-SPEC strings, exactly
+      for (const f of ['title', 'button', 'desc', 'setsText']) {
+        if (pr[f] !== want[f]) bad(key, `${f} ${JSON.stringify(pr[f])} vs ${JSON.stringify(want[f])}`);
+      }
+      if (JSON.stringify(sets) !== JSON.stringify(want.sets)) bad(key, `sets ${JSON.stringify(sets)}`);
+      // D-08: every value survives the one parse path unchanged
+      for (const k of ['ac', 'die', 'atk', 'dmg', 'n']) {
+        if (VM.parseControl(k, sets[k], VM.DEFAULT_STATE[k]) !== sets[k]) bad(key, `parseControl changes ${k} ${sets[k]}`);
+      }
+      // Markup parity: the item holding this key's button
+      const item = items.find((it) => it.includes(`data-preset="${key}"`));
+      if (exHtml && !item) bad(key, 'no .explore-item with this data-preset');
+      if (item) {
+        const grab = (re) => { const m = item.match(re); return m ? dec(m[1]).trim() : null; };
+        const mk = {
+          title: grab(/<h3 class="explore-title">([\s\S]*?)<\/h3>/),
+          desc: grab(new RegExp(`<p class="explore-desc" id="ex-${key}-d">([\\s\\S]*?)</p>`)),
+          setsText: grab(new RegExp(`<p class="explore-sets" id="ex-${key}-s">([\\s\\S]*?)</p>`)),
+          button: grab(new RegExp(`<button[^>]*data-preset="${key}"[^>]*>([\\s\\S]*?)</button>`)),
+        };
+        for (const f of Object.keys(mk)) {
+          if (mk[f] !== pr[f]) bad(key, `markup ${f} ${JSON.stringify(mk[f])} vs VM ${JSON.stringify(pr[f])}`);
+        }
+        const tag = (item.match(new RegExp(`<button[^>]*data-preset="${key}"[^>]*>`)) || [''])[0];
+        if (!tag.includes(`aria-describedby="ex-${key}-d ex-${key}-s"`)) bad(key, `button aria-describedby: ${tag}`);
+        if (!/\bdisabled\b/.test(tag)) bad(key, 'button does not ship disabled');
+        if (/data-key=|onclick=/.test(tag)) bad(key, 'button carries data-key or an inline handler');
+      }
+
+      // Engine facts at the exact settings (UI-SPEC Presets table, RESEARCH Reference Values)
+      const q = { ac: sets.ac, die: sets.die, atk: sets.atk, dmg: sets.dmg };
+      let sw, st, c, b, lines, cv;
+      try {
+        sw = DiceMath.sweep(q, MAXN);
+        st = DiceMath.stats(q);
+        c = DiceMath.crossings(sw.attack, sw.damage);
+        b = DiceMath.attackBands(q, MAXN);
+        lines = VM.readoutLines(sw.attack, sw.damage, sw.den);
+        cv = VM.chartView(q, sets.n);
+      } catch (err) {
+        bad(key, `engine threw at the preset: ${err && err.message}`);
+        continue;
+      }
+      const stepT = (arr, n) => VM.tenths(arr[n + 1] - arr[n], sw.den);
+      const stepsOk = (arr, f) => Array.from({ length: MAXN }, (_, n) => n).every((n) => stepT(arr, n) === f(n));
+      const labels = cv.markers.map((m) => m.label).join(' | ');
+      const facts = [];
+      const expect = (label, ok) => { facts.push(label); if (!ok) bad(key, `claim failed: ${label}`); };
+      if (key === 'cross') {
+        expect('hitFaces 1 (5%)', st.hitFaces === 1);
+        expect('floor band [+0, +5], no cap band', JSON.stringify(b) === '{"floor":[0,5],"cap":null}');
+        expect('attack steps 0.0 up to +5, then 6.5', stepsOk(sw.attack, (n) => (n < 5 ? 0 : 65)));
+        expect('damage steps 1.0', stepsOk(sw.damage, () => 10));
+        expect('one crossing, flipN 6, to attack', c.list.length === 1 && c.list[0].flipN === 6 && c.list[0].to === 'attack');
+        expect('ring label "flips at +6"', labels === 'flips at +6');
+        expect('caption: damage leads +1..+5, hit leads +6..+20, cross once', cv.caption.includes(
+          '+N to damage leads from +1 to +5, then +N to hit leads from +6 to +20. The curves cross once.'));
+        expect('readout at +6: to hit ahead by 0.5', lines[6] === 'At +6: to hit 19.5 · to damage 19.0 · to hit ahead by 0.5');
+        expect('crossover text names +6', !!cv.explain && nb(cv.explain.crossLine).includes('the lead changes once, at +6'));
+      } else if (key === 'dmg') {
+        expect('hitFaces 6 (30%)', st.hitFaces === 6);
+        expect('damage steps 6.0', stepsOk(sw.damage, () => 60));
+        expect('attack steps 4.5 up to +13, then 0.0', stepsOk(sw.attack, (n) => (n < 13 ? 45 : 0)));
+        expect('cap band [+13, +20], no floor band', JSON.stringify(b) === '{"floor":null,"cap":[13,20]}');
+        expect('no crossing, no tie, no end tie, damage first',
+          c.list.length === 0 && c.ties.length === 0 && c.endTieN === null && c.first === 'damage');
+        expect('no ring', labels === '');
+        expect('caption: damage leads at every N, never cross', cv.caption.includes(
+          '+N to damage leads at every N from +1 to +20. The curves never cross.'));
+        expect('readout at +5: to damage ahead by 7.5', lines[5].endsWith('to damage ahead by 7.5'));
+      } else if (key === 'cap') {
+        expect('hitFaces 6 (30%)', st.hitFaces === 6);
+        expect('attack steps 6.5 up to +13, then 0.0', stepsOk(sw.attack, (n) => (n < 13 ? 65 : 0)));
+        expect('damage steps 6.0', stepsOk(sw.damage, () => 60));
+        expect('cap band [+13, +20], no floor band', JSON.stringify(b) === '{"floor":null,"cap":[13,20]}');
+        expect('one crossing, flipN 15, to damage', c.list.length === 1 && c.list[0].flipN === 15 && c.list[0].to === 'damage');
+        expect('ring label "flips at +15"', labels === 'flips at +15');
+        expect('caption: hit leads +1..+14, damage leads +15..+20, cross once', cv.caption.includes(
+          '+N to hit leads from +1 to +14, then +N to damage leads from +15 to +20. The curves cross once.'));
+        expect('readout at +15: to damage ahead by 5.5', lines[15].endsWith('to damage ahead by 5.5'));
+      }
+      presetFacts.push(`${key}: ${facts.length} claims`);
+    }
+    const cross = PRESETS.find((pr) => pr.key === 'cross');
+    const statusWant = 'Set to AC 25, d12, +0 to hit, +0 damage, compare at +6. Everything above has updated.';
+    let status;
+    try { status = cross && VM.presetStatus(cross.sets); } catch (err) { status = `threw ${err && err.message}`; }
+    if (status !== statusWant) bad('cross', `presetStatus ${JSON.stringify(status)}`);
+  }
+}
+
 const extra = {
   s: ` (rule ${branchCounts.roundRule}, table ${branchCounts.roundTable})`,
   t: ` (rule/rule ${branchCounts.ruleRule}, reason ${branchCounts.reason}, table/table ${branchCounts.tableTable}, ` +
     `mixed ${branchCounts.mixed}, other ${branchCounts.other})`,
   z: ` (normal thresholds seen ${thresholdsSeen.size ? Math.min(...thresholdsSeen) + '..' + Math.max(...thresholdsSeen) : 'none'}, ${thresholdsSeen.size} values)`,
+  u: ` (straightFrom 0..4: ${explainCounts.straight.join(' / ')}, above 4: ${explainCounts.straightOver})`,
+  v: ` (nodmg ${explainCounts.nodmg}, rule ${explainCounts.rule}, floor bites ${explainCounts.floorBites})`,
+  w: ` (none-damage ${explainCounts.noneDamage}, none-attack ${explainCounts.noneAttack}, one adjacent ` +
+    `${explainCounts.oneAdjacent}, one across a tie ${explainCounts.oneTie}, end tie only ${explainCounts.endTieOnly}, ` +
+    `touch ${explainCounts.touch}, two+ ${explainCounts.multi}, identical ${explainCounts.identical})`,
+  x: ` (${presetFacts.join(', ') || 'no presets'})`,
 };
 
 // (cover) 02-REVIEW WR-03: the sample must reach every value of every control.

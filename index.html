@@ -2094,6 +2094,36 @@ const SelfTest = (() => {
       'That makes the average cell the expected damage per attack.');
   });
 
+  // Phase 4 chart explanation pins (COPY-03, COPY-04, D-05, D-06): two O(1) checks, no
+  // chartView and no new sweep (200 ms budget). The defaults reuse the chart section's SW memo;
+  // the synthetic-only wordings (two crossings, touch, identical) use short arrays. check-engine
+  // (u)(v)(w) cover every setting. Names avoid visible copy (IN-06).
+  section('explain', () => {
+    const hasE = typeof VM.explainChart === 'function';
+    const nb = (x) => String(x).replaceAll(String.fromCharCode(0xa0), ' ');
+    const DEF = { ac: 15, atk: 5, die: 8, dmg: 0 };
+    const s = SW(15, 5, 8, 0);
+    const ha = DiceMath.hitAverages(DEF);
+    const e = hasE ? VM.explainChart(DEF,
+      { ...s, crossings: DiceMath.crossings(s.attack, s.damage), bands: DiceMath.attackBands(DEF, VM.CONTROL_SPEC.n.max) },
+      { hitFaces: 11, normalNum: ha.normalNum, normalDen: ha.normalDen }) : null;
+    check('explain: three lines at the defaults', e ? [e.dmgLine, e.hitLine, e.crossLine].map(nb).join(' | ') : 'explainChart missing',
+      'Each +1 to damage adds 1 to every hit. You expect 11 hits in 20 rounds, so every step adds the same 11.0 and ' +
+      'the line is straight. | Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth an ' +
+      'average d8 + 0 = 4.5. It goes flat in the band marked “95% cap”, from +8: a natural 1 always misses, so once ' +
+      'you hit on 2+, more to-hit buys nothing. | At these settings the curves never cross, so there is no ring on ' +
+      'the chart. A higher AC leaves fewer hits for +1 damage to add to, and a bigger die makes each extra hit worth ' +
+      'more. Either can let +N to hit pull ahead.');
+    const syn = (a, d) => nb(VM.explainChart(DEF,
+      { attack: a, damage: d, den: 1, crossings: DiceMath.crossings(a, d), bands: { floor: null, cap: null } },
+      { hitFaces: 1, normalNum: 0, normalDen: 1 }).crossLine);
+    check('explain: synthetic crossing wordings', hasE ? [
+      syn([0, 1, 4, 7, 8, 9], [0, 2, 3, 4, 9, 10]).includes('lead changes ' + 'twice'),
+      syn([0, 1, 3, 3], [0, 2, 3, 4]).includes('touch ' + 'at +2'),
+      syn([0, 1, 2], [0, 1, 2]).includes('identical'),
+    ].join(' ') : 'explainChart missing', 'true true true');
+  });
+
   const failed = results.filter((r) => !r.ok);
   for (const f of failed) console.error('SELFTEST FAIL:', f.name, '| got', f.actual, '| expected', f.expected);
   const ms = (now() - t0).toFixed(1);
@@ -3348,9 +3378,10 @@ function runUiSmoke() {
     const btn = document.getElementById('roll');
     check('sim ui: button enabled after init', btn.disabled, false);
     check('sim ui: button label', btn.textContent, 'Roll 20 ' + 'rounds');
-    const secs = Array.from(document.querySelector('main').children).filter((e) => e.tagName === 'SECTION');
-    check('sim ui: section is last in main, right after the chart',
-      secs[secs.length - 1].id + ' after ' + document.getElementById('sim').previousElementSibling.id, 'sim after chart');
+    const simSec = document.getElementById('sim');
+    check('sim ui: section sits between the chart and Try this',
+      (simSec.previousElementSibling && simSec.previousElementSibling.id) + ' < sim < ' +
+      (simSec.nextElementSibling && simSec.nextElementSibling.id), 'chart < sim < explore');
 
     // Before any roll the exact figure follows the controls live (D-02)
     send(acRange, '16');
@@ -3695,6 +3726,56 @@ function runUiSmoke() {
     check('formula ui: no horizontal page scroll', root.scrollWidth <= root.clientWidth, true);
   } catch (err) {
     results.push({ name: 'formula ui smoke crashed: ' + (err && err.message), ok: false });
+  }
+
+  // Phase 4 Try this (COPY-05, D-07, D-08): a real click on a preset sets all five controls in
+  // one parse path, draws the one ring the description names, stales a rolled run, and a later
+  // control change clears the record and the status line. The status write queued by the click
+  // is cleared by an rAF registered after it (RESEARCH Pitfall 5), so the DOM dump never
+  // carries it. Names avoid visible copy; expected literals are split (IN-06).
+  try {
+    const node = (id) => document.getElementById(id);
+    const nb = (x) => String(x).replaceAll(String.fromCharCode(0xa0), ' ');
+    resetSim();
+    Object.assign(state, VM.DEFAULT_STATE);
+    renderControls();
+    render();
+    const btns = Array.from(document.querySelectorAll('button.btn-preset'));
+    check('explore ui: three preset buttons, all enabled', btns.length + ' ' + btns.every((b) => !b.disabled), '3 true');
+    const secs = Array.from(document.querySelector('main').children).filter((el) => el.tagName === 'SECTION');
+    const ex = node('explore');
+    check('explore ui: section is last in main, right after the roll section',
+      secs[secs.length - 1].id + ' after ' + (ex && ex.previousElementSibling ? ex.previousElementSibling.id : null),
+      'explore after sim');
+    const crossSpan = document.querySelector('#explain-cross span');
+    check('explore ui: crossover text equals the VM line', crossSpan ? nb(crossSpan.textContent) : null,
+      nb(VM.computeView(state).chart.explain.crossLine));
+
+    rollWith(Sim.mulberry32(1));
+    render();
+    document.querySelector('button[data-preset="cross"]').click();
+    render();
+    const dieChecked = document.querySelector('input[data-key="die"]:checked');
+    check('explore ui: preset sets the five controls',
+      [node('ac-num').value, dieChecked && dieChecked.value, node('atk-num').value, node('dmg-num').value,
+        node('n-range').value].join(' '), '25 12 0 0 6');
+    check('explore ui: one ring after the preset', document.querySelectorAll('#sweep g.crossings circle.cross').length, 1);
+    check('explore ui: crossover text names the ring',
+      (crossSpan ? nb(crossSpan.textContent) : '').includes('at ' + '+6'), true);
+    check('explore ui: a rolled run turns stale', simEl.classList.contains('is-stale'), true);
+    check('explore ui: preset record kept', lastPreset !== null && lastPreset.n === 6, true);
+
+    send(acRange, '24');
+    render();
+    check('explore ui: a control change clears the record', lastPreset, null);
+    check('explore ui: a control change clears the status', node('explore-status') ? node('explore-status').textContent : null, '');
+  } catch (err) {
+    results.push({ name: 'explore ui smoke crashed: ' + (err && err.message), ok: false });
+  } finally {
+    try { lastPreset = null; } catch { /* lastPreset missing: the crash above is already reported */ }
+    const statusEl = document.getElementById('explore-status');
+    requestAnimationFrame(() => { if (statusEl) statusEl.textContent = ''; });
+    try { resetSim(); } catch { /* resetSim missing: the crash above is already reported */ }
   }
 
   Object.assign(state, VM.DEFAULT_STATE);

@@ -21,7 +21,8 @@
 //       "visible". Inline elements join, so a sentence whose numbers sit in <b class="num">
 //       still matches.
 //   (6) the engine-error banner is still hidden after init
-//   (7) the Roll button is enabled after init (it ships disabled; init enables it last)
+//   (7) the Roll button and exactly three .btn-preset buttons are enabled after init (they
+//       ship disabled; init enables them together as its last step)
 //   (8) the sim section body is shown after init (it ships hidden)
 //   (6)-(8) guard 02-REVIEW WR-01: a caught first-render throw logs console.error('render
 //   failed'), which the console check does not match, so these are its only guard.
@@ -264,8 +265,14 @@ if (fault === 'render') {
   check('DOM has 80 <th scope="row"> headers', rowHeads === 80, `found ${rowHeads}`);
 
   check('engine-error banner stays hidden', /<div id="engine-error" role="alert" hidden/.test(rendered));
-  check('Roll button enabled after init',
-    /<button[^>]*id="roll"[^>]*>/.test(rendered) && !/<button[^>]*id="roll"[^>]*\bdisabled\b/.test(rendered));
+  // Roll and the three Try-this presets ship disabled; init enables them together, last.
+  const rollEl = byId(tree, 'roll');
+  const presetEls = [...walk(tree)].filter((el) => el.tag === 'button' && classes(el).includes('btn-preset'));
+  check('Roll and preset buttons enabled after init',
+    rollEl !== null && rollEl.tag === 'button' && !('disabled' in rollEl.attrs) &&
+      presetEls.length === 3 && presetEls.every((b) => !('disabled' in b.attrs)),
+    `roll ${rollEl ? ('disabled' in rollEl.attrs ? 'disabled' : 'enabled') : 'missing'}, ` +
+      `${presetEls.length} .btn-preset, ${presetEls.filter((b) => 'disabled' in b.attrs).length} disabled`);
   check('sim section body shown after init',
     /<div class="sim-body"/.test(rendered) && !/<div class="sim-body"[^>]*\bhidden\b/.test(rendered));
 
