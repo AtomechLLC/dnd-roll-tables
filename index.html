@@ -677,6 +677,16 @@
       </div>
     </form>
 
+    <section id="tables">
+      <h2>Outcome table</h2>
+      <p class="explain" id="two-rolls"></p>
+      <div id="legend" class="legend"></div>
+      <div class="table-wrap">
+        <table id="outcome" class="outcome"><caption></caption><thead></thead><tbody></tbody></table>
+      </div>
+      <p id="crit-note" class="footnote"></p>
+    </section>
+
     <section id="stats" aria-label="Headline numbers">
       <div class="card">
         <span class="label">Hits on</span>
@@ -750,16 +760,6 @@
           </div>
         </dl>
       </div>
-    </section>
-
-    <section id="tables">
-      <h2>Outcome table</h2>
-      <p class="explain" id="two-rolls"></p>
-      <div id="legend" class="legend"></div>
-      <div class="table-wrap">
-        <table id="outcome" class="outcome"><caption></caption><thead></thead><tbody></tbody></table>
-      </div>
-      <p id="crit-note" class="footnote"></p>
     </section>
 
     <section id="compare" aria-labelledby="compare-h">
@@ -3076,7 +3076,7 @@ function renderFootnote(view) {
     `Averaged across the row, that equals the average of a real 2${d} crit, so this table's average is exactly the expected damage.`;
   if (view.critFloorDiffers) {
     text += ' With a damage penalty this large, the 0-damage floor makes the doubled-face shortcut slightly off. ' +
-      'The stats above use the real two-dice rule.';
+      'The stat cards below use the real two-dice rule.';
   }
   critNoteEl.textContent = text;
 }
@@ -4099,7 +4099,7 @@ function showEngineError() {
 }
 
 // Sections a failed first render may have half painted; hidden under the banner.
-const PAINTED_SECTIONS = ['stats', 'tables', 'compare', 'chart', 'sim', 'explore'];
+const PAINTED_SECTIONS = ['tables', 'stats', 'compare', 'chart', 'sim', 'explore'];
 
 function init() {
   const testMode = new URLSearchParams(location.search).has('test');

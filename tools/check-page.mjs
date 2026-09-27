@@ -46,6 +46,10 @@
 //   (13) the `.series-dmg` style rule has stroke-dasharray and `.series-hit` has none
 //   (12) and (13) read the raw <style> text from the dump. A dump cannot prove real focus or
 //   rendering; the page's ?test smoke ('a11y ui:') covers that in the live DOM.
+//   (14) page order, in every mode including --fault render: main's direct children, ignoring
+//        section#selftest, div#engine-error and noscript, run header, form#controls,
+//        section#tables, section#stats, section#compare, section#chart, section#sim,
+//        section#explore (user request 260927-17o: settings and outcome table at the top).
 //
 // --fault render (02-REVIEW WR-01, 03-REVIEW WR-04): copies index.html to a temp dir, makes
 // render() throw, and appends a script that dispatches an `input` event on #ac-range after
@@ -447,7 +451,7 @@ if (fault === 'render') {
   check('fault: #roll disabled', roll !== null && 'disabled' in roll.attrs);
   const presets = [...walk(tree)].filter((el) => el.tag === 'button' && classes(el).includes('btn-preset'));
   check(`fault: every .btn-preset disabled (${presets.length})`, presets.every((b) => 'disabled' in b.attrs));
-  for (const id of ['stats', 'tables', 'compare', 'chart', 'sim', 'explore']) {
+  for (const id of ['tables', 'stats', 'compare', 'chart', 'sim', 'explore']) {
     const sec = byId(tree, id);
     if (sec === null || sec.tag !== 'section') continue;
     check(`fault: section#${id} hidden`, 'hidden' in sec.attrs);
@@ -480,6 +484,21 @@ if (fault === 'render') {
   }
 
   a11yGuards();
+}
+
+// (14) page order (260927-17o): the settings, then the outcome table, then the stat cards.
+{
+  const mainEl = [...walk(tree)].find((el) => el.tag === 'main') || null;
+  const skip = new Set(['section#selftest', 'div#engine-error', 'noscript']);
+  const actual = mainEl === null ? '(no main)' : mainEl.children
+    .filter((c) => c.text === undefined)
+    .map((c) => (c.attrs.id ? `${c.tag}#${c.attrs.id}` : c.tag))
+    .filter((k) => !skip.has(k))
+    .join(', ');
+  const expected = ['header', 'form#controls', 'section#tables', 'section#stats', 'section#compare',
+    'section#chart', 'section#sim', 'section#explore'].join(', ');
+  check('page order: header, controls, tables, stats, compare, chart, sim, explore', actual === expected,
+    'got ' + actual);
 }
 
 const mode = fault === 'render' ? ', mode: fault render' : '';
