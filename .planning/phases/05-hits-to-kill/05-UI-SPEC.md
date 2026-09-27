@@ -1,10 +1,11 @@
 ---
 phase: 5
 slug: hits-to-kill
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-09-27
+reviewed_at: 2026-09-27
 ---
 
 # Phase 5 — UI Design Contract
