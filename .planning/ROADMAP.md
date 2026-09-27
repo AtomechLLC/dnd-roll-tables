@@ -159,8 +159,13 @@ Plans:
 **Goal**: A designer can set an enemy's hit points (starting at a 40 HP enemy) and see how many hits it takes to kill it, and whether and when the attack kills it at the current settings. User request (2026-09-27): "Add support for hits-to-kill and the ability to kill an enemy, set a 40 hp enemy as the starting point". Follow-up (2026-09-27): "the ability to modify enemy health (both by individual amount and by adding a 'hit' based on likely average damage for the current attack roll)".
 **Mode:** mvp
 **Depends on**: Phase 4
-**Requirements**: TBD (defined in /gsd-discuss-phase 5)
-**Success Criteria**: TBD (defined in /gsd-discuss-phase 5)
+**Requirements**: KILL-01, KILL-02, KILL-03, KILL-04, KILL-05, KILL-06
+**Success Criteria** (what must be TRUE):
+
+  1. An "Enemy HP" box starts at 40 and accepts 1 to 500. The "−1 hit" and "+1 hit" buttons change it by the average damage when the attack hits, rounded to whole HP, and each shows the step it will apply.
+  2. Stat cards show exact hits-to-kill (8.7 at the defaults, with simple division 8.1 for contrast), exact rounds-to-kill with its median (15.8, half of fights by round 15), and the chance of a kill within 20 rounds (85%). They update live with every control, and extreme settings never hang or show a wrong number.
+  3. The 20-round roll shows enemy HP after each round, marks the round the enemy dies, and reports the kill round and hits, or the HP left if it survives. Editing HP re-scores the same rolls live without staling the run; changing the attack still stales it.
+  4. The tally shows each run's total and outcome. The kill note's numbers always equal the cards, checked against the engine, and the dev checks and accessibility guards pass with the new controls in the tab order.
 
 **Plans**: TBD
 **UI hint**: yes

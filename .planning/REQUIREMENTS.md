@@ -81,6 +81,15 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **DEPLOY-03**: GitHub Pages is enabled from the `main` branch root via the REST API (gh CLI installed and authenticated as a prerequisite), and the public URL returns HTTP 200 with the page rendering and no console errors
 - [x] **DEPLOY-04**: Controls are keyboard operable, every control has a label, and miss vs hit is not encoded by color alone
 
+### Hits-to-Kill
+
+- [ ] **KILL-01**: An "Enemy HP" control (whole number, 1 to 500, default 40) sits with the other settings and goes through the same parse path, clamping blank, non-numeric, or out-of-range input
+- [ ] **KILL-02**: "−1 hit" and "+1 hit" buttons change enemy HP by the average damage when the attack hits (crits included), rounded to the nearest whole HP and kept within 1 to 500; each button shows the step it will apply, a line shows HP in average hits, and a zero-damage attack neither loops nor divides by zero
+- [ ] **KILL-03**: Stat cards show the exact expected hits-to-kill (with the simple HP ÷ average-hit division for contrast), the exact expected rounds-to-kill with its median round, and the exact chance of a kill within 20 rounds, all computed by exact enumeration through the one damage rule (no Monte Carlo), with no hang or wrong number at extreme settings
+- [ ] **KILL-04**: A short designer-facing note explains why the exact kill numbers differ from simple division (the last hit usually overshoots), and every number in it equals the number shown on its card
+- [ ] **KILL-05**: The 20-round roll log adds an "Enemy HP" column, highlights the round the enemy dies, dims later rounds as "enemy down", and reports "Killed in round R (H hits)" or "Survived with X HP left"; changing HP re-scores the same rolls live without staling the run
+- [ ] **KILL-06**: The tally of recent runs shows each run's total and outcome (for example "61 · killed R12"), re-scored live when HP changes and cleared when the attack changes
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -168,12 +177,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEPLOY-02 | Phase 1 | Complete (verified in Phase 4, 2026-09-27, https://atomechllc.github.io/dnd-roll-tables/; public repo AtomechLLC/dnd-roll-tables on main, user's choice replacing DnD-CombatRollSimulator) |
 | DEPLOY-03 | Phase 1 | Complete (verified in Phase 4, 2026-09-27, https://atomechllc.github.io/dnd-roll-tables/; Pages deploys from main via the repo's GitHub Actions static workflow instead of legacy branch publishing, no gh auth on this machine) |
 | DEPLOY-04 | Phase 4 | Complete |
+| KILL-01 | Phase 5 | Pending |
+| KILL-02 | Phase 5 | Pending |
+| KILL-03 | Phase 5 | Pending |
+| KILL-04 | Phase 5 | Pending |
+| KILL-05 | Phase 5 | Pending |
+| KILL-06 | Phase 5 | Pending |
 
 **Coverage:**
-- v1 requirements: 47 total (the initial count of 45 was a miscount; 8 RULES + 5 CTRL + 6 TABLE + 3 STAT + 5 CHART + 5 CMP + 6 SIM + 5 COPY + 4 DEPLOY = 47)
-- Mapped to phases: 47
+- v1 requirements: 53 total (47 original, the initial count of 45 was a miscount: 8 RULES + 5 CTRL + 6 TABLE + 3 STAT + 5 CHART + 5 CMP + 6 SIM + 5 COPY + 4 DEPLOY; plus 6 KILL added 2026-09-27 for Phase 5)
+- Mapped to phases: 53
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-09-27 after Phase 4 publish (DEPLOY-02/03 verified live)*
+*Last updated: 2026-09-27 after Phase 5 discussion (KILL-01..06 added)*
