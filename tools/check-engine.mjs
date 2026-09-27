@@ -5,39 +5,52 @@
 // Extracts the pure script blocks (#dice-math, #dice-sim, #view-model, #dice-selftest)
 // from index.html, runs them in one shared Node vm context (top-level const is shared
 // across runInContext calls, like classic scripts in a page), then:
-//   0. static gates (SIM-06, D-15): no pure block mentions Math.random (comments count
-//      too), and index.html holds at most one Math.random (the Roll button's click handler),
-//   1. reads the in-page SelfTest result, and
-//   2. sweeps the full control domain (AC 10..30 x 5 dice x atk -5..20 x dmg -5..20
-//      = 70980 combos) checking invariants the in-page self-test only samples:
+//   0. static gates (SIM-06, D-15, 03 IN-02): no pure block mentions Math.random (comments
+//      count too), and index.html holds exactly one Math.random, in
+//      `const onRoll = () => handleRoll(Math.random);` (the Roll button's click handler),
+//   1. reads the in-page SelfTest result (and warns when the Node run exceeds its 200 ms budget), and
+//   2. sweeps the full control domain, taken from VM.CONTROL_SPEC (AC 10..30 x 5 dice x
+//      atk -5..20 x dmg -5..20 = 70980 combos), checking invariants the in-page self-test
+//      only samples. "Sampled" means every SAMPLE-th combo with SAMPLE = 53, which is coprime
+//      to 21, 5 and 26; the run asserts the sample reached all 21 AC values, 5 dice, 26 attack
+//      and 26 damage bonuses (02-REVIEW WR-03: stride 50 reached only 13 damage bonuses):
 //      (a)..(f) Phase 1 engine and formatting rules, plus the Phase 2 compare rules
 //      (g) shared heat domain (CMP-02): max cell over base, +N hit, +N dmg === max(1, 2X + D + N)
 //      (h) +N-to-hit threshold (CMP-03) === clamp(C - A - N, 2, 20)
-//      (i) a 1-in-50 sample of VM.compareView agrees with the engine (heatMax, hit threshold,
+//      (i) a sampled VM.compareView agrees with the engine (heatMax, hit threshold,
 //          deltas = difference of the displayed tenths)
 //      with N in {0, 5, 20}, plus the Phase 2 sweep-chart rules over N = 0..CONTROL_SPEC.n.max:
-//      (j) a 1-in-50 sample of DiceMath.sweep equals the series built from cached stats, and
+//      (j) a sampled DiceMath.sweep equals the series built from cached stats, and
 //          both series start at the same point (CHART-01/02)
 //      (k) every combo: the damage series strictly increases, the attack series never falls
-//      (l) a 1-in-50 sample of VM.chartView: y ticks cover the larger curve with at most 1.5x
+//      (l) a sampled VM.chartView: y ticks cover the larger curve with at most 1.5x
 //          headroom, 4 to 6 ticks, one readout line per N
 //      and the crossing and band rules (plan 02-03):
 //      (m) every combo: DiceMath.crossings finds at most one crossing, the same count as an
 //          independent sign-change walk, every marker lies between lastLeadN and flipN, and a
-//          1-in-50 sample of VM.chartView draws one marker per crossing plus one per end tie
+//          sampled VM.chartView draws one marker per crossing plus one per end tie
 //      (n) every combo: a flat attack step lies inside DiceMath.attackBands (floor or cap) or
 //          comes from a d4 whose normal hits deal 0 (die + dmg <= 0), and nothing else is flat
 //      and the Phase 3 simulation rules (plan 03-01):
 //      (o) every combo: DiceMath.spread's first moment equals stats().e20Num, var20Num >= 0,
 //          integers stay below 2^53, VM.simExact's SD tenths are exact (integer bracket
 //          (2t - 1)^2 * den <= 400 * num < (2t + 1)^2 * den) and >= 1, eText equals the stat
-//          card, and lopsided === (eT - sdT < 0 || only a nat 20 hits)
-//      (p) a 1-in-53 sample: the exact 20-round distribution (20-fold convolution of the
-//          one-round pmf) has variance var20, and the spread line's band is honest: "About 2
-//          runs in 3" holds 0.60..0.87 of runs, "Most runs" (lopsided) holds >= 0.80
+//          card, and lopsided === (eT - sdT <= 0 || only a nat 20 hits) (03-REVIEW WR-01)
+//      (p) every combo (exhaustive): the exact 20-round distribution (20-fold convolution of
+//          the one-round pmf, memoized per (hitFaces, die, dmg): 2,470 distributions) has
+//          variance var20, and the spread line's band is honest: "About 2 runs in 3" holds
+//          [0.60, 0.80) of runs and "Most runs" (lopsided) holds >= 0.80. The bounds come from
+//          the page's own two wordings, not from the data (03-REVIEW WR-01)
 //      (q) once: seeded 100k-round Sim.simulate samples at five settings agree with the exact
 //          mean (z <= 4), the d20 faces are uniform (5 SE), and every round obeys the rules
-//      It also prints the crossing distribution (informational, not pass/fail).
+//      and the readout rule (02-REVIEW WR-02):
+//      (y) every combo and every N: VM.readoutLines(attack, damage, den)[N] ends in 'even'
+//          exactly when attack[N] === damage[N], and otherwise names the exact leader
+//          ('to hit ahead by' / 'to damage ahead by' from sign(attack[N] - damage[N]))
+//      Zero-count asserts (02-REVIEW IN-04): no setting has a touch (a tie that is neither a
+//      crossing's tieN nor the end tie), a leading tie (tie at N = 1), or two or more
+//      crossings. The copy branches for those exist only for synthetic series; a rule change
+//      that makes one reachable fails here. It also prints the crossing distribution.
 //      Stats are cached per (ac, die), keyed by (atk, dmg), so the +N lookups reuse
 //      neighbouring combos.
 // Exit 0 only when everything passes.
@@ -45,7 +58,6 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const TOTAL_COMBOS = 70980;
 const indexUrl = new URL('../index.html', import.meta.url);
 
 function fail(msg) {
@@ -63,14 +75,18 @@ function block(id) {
 }
 
 // Static gates (SIM-06, D-15, T-03-02): randomness is always injected. No pure block may
-// mention Math.random at all (comments included), and the file holds at most one.
+// mention Math.random at all (comments included), and the file holds exactly one, in the
+// Roll button's click handler (03-REVIEW IN-02: "at most one" also passed with zero).
 const BLOCKS = ['dice-math', 'dice-sim', 'view-model', 'dice-selftest'];
 for (const id of BLOCKS) {
   const k = block(id).split('Math.random').length - 1;
   if (k !== 0) fail(`block ${id} mentions Math.random ${k} time(s); the app must inject the rng`);
 }
 const randomCount = html.split('Math.random').length - 1;
-if (randomCount > 1) fail(`index.html has ${randomCount} Math.random occurrences (at most 1: the click handler)`);
+if (randomCount !== 1) fail(`index.html has ${randomCount} Math.random occurrences (exactly 1: the click handler)`);
+if (!/const onRoll = \(\) => handleRoll\(Math\.random\);/.test(html)) {
+  fail('the one Math.random is not in `const onRoll = () => handleRoll(Math.random);`');
+}
 
 const ctx = vm.createContext({ console, performance });
 for (const id of BLOCKS) {
@@ -110,26 +126,76 @@ const names = {
   m: '(m) CHART-03: <= 1 crossing, count = independent sign walk, lastLeadN <= x <= flipN, sampled markers',
   n: '(n) CHART-04: attack[n + 1] === attack[n] exactly inside a floor/cap band or when die + dmg <= 0',
   o: '(o) SIM-05: spread s1 === e20Num, var20 >= 0 and < 2^53, SD tenths exact and >= 1, eText === stat card, lopsided rule',
-  p: '(p) SIM-05: sampled exact 20-round distribution: variance === var20, "2 in 3" band 0.60..0.87, "Most" >= 0.80',
+  p: '(p) SIM-05: exhaustive exact 20-round distribution: variance === var20, "2 in 3" band in [0.60, 0.80), "Most" >= 0.80',
   q: '(q) SIM-01: seeded 100k-round samples: mean within 4 SE, d20 faces within 5 SE, every round obeys the rules',
+  y: '(y) CHART-05: VM.readoutLines says "even" iff attack[N] === damage[N], else names the exact leader',
+  cover: '(cover) the stride-53 sample reaches 21 AC values, 5 dice, 26 attack and 26 damage bonuses',
+  zero: '(zero) no touches, no leading ties, no setting with 2+ crossings',
 };
 const NS = [0, 5, 20];
-const MAXN = (VM.CONTROL_SPEC && VM.CONTROL_SPEC.n && VM.CONTROL_SPEC.n.max) || 20;
+// 02-REVIEW IN-03: the domain comes from the page's own spec, never a second copy here.
+const CS = VM.CONTROL_SPEC;
+if (!CS || !CS.ac || !CS.die || !CS.atk || !CS.dmg || !CS.n) fail('VM.CONTROL_SPEC is missing ac, die, atk, dmg or n');
+const MAXN = CS.n.max;
+const DICE_SET = CS.die.set;
+const span = (r) => r.max - r.min + 1;
+const TOTAL_COMBOS = span(CS.ac) * DICE_SET.length * span(CS.atk) * span(CS.dmg);   // 70,980
+const SAMPLE = 53;   // coprime to 21, 5 and 26, so the sample reaches every value of every control
+const sampled = { ac: new Set(), die: new Set(), atk: new Set(), dmg: new Set() };
 const counts = Object.fromEntries(Object.keys(names).map((k) => [k, 0]));
 const firstFailures = [];
 let combos = 0;
 const dist = { damageAll: 0, hitAll: 0, hitThenDamage: 0, damageThenHit: 0, tieCross: 0, endTie: 0 };
+const zeroCounts = { touch: 0, leadingTie: 0, multiCross: 0 };
 const hasCross = typeof DiceMath.crossings === 'function';
 const hasBands = typeof DiceMath.attackBands === 'function';
+const hasReadout = typeof VM.readoutLines === 'function';
 
 function record(key, p, detail) {
   counts[key]++;
   if (firstFailures.length < 5) firstFailures.push(`${key} AC${p.ac} atk${p.atk} d${p.die} dmg${p.dmg}: ${detail}`);
 }
 
+// (p) The exact 20-round distribution depends only on the one-round pmf, which is fixed by
+// (hitFaces, die, dmg): the d20 enters only through how many faces hit. One memo entry per
+// key (2,470 keys) makes the check exhaustive at about 3 s.
+function dist20Of(p, sp) {
+  const { ac, atk, die } = p;
+  const w = new Map();   // one-round damage -> integer weight over den1 = 20 * X^2
+  const add = (dm, wt) => w.set(dm, (w.get(dm) || 0) + wt);
+  for (let r = 1; r <= 20; r++) {
+    const kind = DiceMath.outcome(r, atk, ac);
+    if (kind === 'hit') {
+      for (let k = 1; k <= die; k++) add(DiceMath.damageFor(r, [k], p), die);
+    } else if (kind === 'crit') {
+      for (let x = 1; x <= die; x++) for (let y = 1; y <= die; y++) add(DiceMath.damageFor(20, [x, y], p), 1);
+    } else {
+      add(DiceMath.damageFor(r, [], p), die * die);
+    }
+  }
+  const one = [...w].map(([dm, wt]) => [dm, wt / sp.den1]);
+  const maxDm = Math.max(...one.map((e) => e[0]));
+  let dist20 = [1];
+  for (let i = 0; i < 20; i++) {
+    const next = new Array(dist20.length + maxDm).fill(0);
+    for (let t = 0; t < dist20.length; t++) {
+      if (dist20[t] === 0) continue;
+      for (const [dm, pr] of one) next[t + dm] += dist20[t] * pr;
+    }
+    dist20 = next;
+  }
+  let mean = 0;
+  for (let t = 0; t < dist20.length; t++) mean += t * dist20[t];
+  let v = 0;
+  for (let t = 0; t < dist20.length; t++) v += (t - mean) ** 2 * dist20[t];
+  return { dist20, variance: v };
+}
+const distMemo = new Map();
+const cov = { minTwoInThree: Infinity, maxTwoInThree: -Infinity, minMost: Infinity };
+
 const t0 = performance.now();
-for (let ac = 10; ac <= 30; ac++) {
-  for (const die of DiceMath.DICE) {
+for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
+  for (const die of DICE_SET) {
     // Per-(ac, die) cache keyed `${atk},${dmg}`: invariant (d) reuses dmg + 1 and the
     // compare invariants reuse atk + N / dmg + N. Created here so memory stays bounded.
     const cache = new Map();
@@ -150,10 +216,17 @@ for (let ac = 10; ac <= 30; ac++) {
       const d = tenthsOf(v) - tenthsOf(b);
       return (d < 0 ? '−' : '+') + VM.fixed(Math.abs(d), 1);
     };
-    for (let atk = -5; atk <= 20; atk++) {
-      for (let dmg = -5; dmg <= 20; dmg++) {
+    for (let atk = CS.atk.min; atk <= CS.atk.max; atk++) {
+      for (let dmg = CS.dmg.min; dmg <= CS.dmg.max; dmg++) {
         combos++;
         const p = { ac, atk, die, dmg };
+        const inSample = combos % SAMPLE === 0;
+        if (inSample) {
+          sampled.ac.add(ac);
+          sampled.die.add(die);
+          sampled.atk.add(atk);
+          sampled.dmg.add(dmg);
+        }
         const base = statAt(atk, dmg);
         const s = base.st;
 
@@ -196,51 +269,41 @@ for (let ac = 10; ac <= 30; ac++) {
         else if (!((2 * sdT - 1) ** 2 * sp.var20Den <= v400 && v400 < (2 * sdT + 1) ** 2 * sp.var20Den)) {
           record('o', p, `SD tenths ${sdT} not exact for ${sp.var20Num} / ${sp.var20Den}`);
         } else if (ex.eText !== view.e20Text) record('o', p, `eText ${ex.eText} vs stat card ${view.e20Text}`);
-        else if (ex.lopsided !== (ex.eT - ex.sdT < 0 || s.hitFaces === 1)) {
+        else if (ex.lopsided !== (ex.eT - ex.sdT <= 0 || s.hitFaces === 1)) {
           record('o', p, `lopsided ${ex.lopsided} with eT ${ex.eT}, sdT ${ex.sdT}, hitFaces ${s.hitFaces}`);
         }
 
-        // Exact 20-round distribution (p): stride 53 is coprime to 21, 5 and 26 (02-REVIEW WR-03)
-        if (combos % 53 === 0) {
-          const w = new Map();   // one-round damage -> integer weight over den1 = 20 * X^2
-          const add = (dm, wt) => w.set(dm, (w.get(dm) || 0) + wt);
-          for (let r = 1; r <= 20; r++) {
-            const kind = DiceMath.outcome(r, atk, ac);
-            if (kind === 'hit') {
-              for (let k = 1; k <= die; k++) add(DiceMath.damageFor(r, [k], p), die);
-            } else if (kind === 'crit') {
-              for (let x = 1; x <= die; x++) for (let y = 1; y <= die; y++) add(DiceMath.damageFor(20, [x, y], p), 1);
-            } else {
-              add(DiceMath.damageFor(r, [], p), die * die);
+        // Exact 20-round distribution (p), every combo (03-REVIEW WR-01). The distribution is
+        // shared per (hitFaces, die, dmg); the band test runs per setting because lo / hi come
+        // from that setting's simExact.
+        {
+          const dk = `${s.hitFaces},${die},${dmg}`;
+          let dd = distMemo.get(dk);
+          if (!dd) {
+            dd = dist20Of(p, sp);
+            const V = sp.var20Num / sp.var20Den;
+            if (!(Math.abs(dd.variance - V) <= 1e-9 * Math.max(V, 1))) {
+              record('p', p, `convolution variance ${dd.variance} vs var20 ${V}`);
             }
+            distMemo.set(dk, dd);
           }
-          const one = [...w].map(([dm, wt]) => [dm, wt / sp.den1]);
-          const maxDm = Math.max(...one.map((e) => e[0]));
-          let dist20 = [1];
-          for (let i = 0; i < 20; i++) {
-            const next = new Array(dist20.length + maxDm).fill(0);
-            for (let t = 0; t < dist20.length; t++) {
-              if (dist20[t] === 0) continue;
-              for (const [dm, pr] of one) next[t + dm] += dist20[t] * pr;
-            }
-            dist20 = next;
-          }
-          let mean = 0;
-          for (let t = 0; t < dist20.length; t++) mean += t * dist20[t];
-          let v = 0;
-          for (let t = 0; t < dist20.length; t++) v += (t - mean) ** 2 * dist20[t];
-          const V = sp.var20Num / sp.var20Den;
-          if (!(Math.abs(v - V) <= 1e-9 * Math.max(V, 1))) record('p', p, `convolution variance ${v} vs var20 ${V}`);
+          const dist20 = dd.dist20;
           const lo = ex.loT / 10, hi = ex.hiT / 10;
           let inBand = 0, below = 0;
           for (let t = 0; t < dist20.length; t++) {
             if (t >= lo && t <= hi) inBand += dist20[t];
             if (t <= hi) below += dist20[t];
           }
-          if (!ex.lopsided && !(inBand >= 0.60 && inBand <= 0.87)) {
-            record('p', p, `"2 in 3" band ${lo}..${hi} holds ${inBand.toFixed(4)}`);
+          // The bounds are the page's own vocabulary, not a fit to the data: "About 2 runs in 3"
+          // is false below 3/5, and at 4/5 or more the page's other wording, "Most runs", applies.
+          if (!ex.lopsided) {
+            cov.minTwoInThree = Math.min(cov.minTwoInThree, inBand);
+            cov.maxTwoInThree = Math.max(cov.maxTwoInThree, inBand);
+            if (!(inBand >= 0.60 && inBand < 0.80)) record('p', p, `"2 in 3" band ${lo}..${hi} holds ${inBand.toFixed(4)}`);
+          } else {
+            cov.minMost = Math.min(cov.minMost, below);
+            if (!(below >= 0.80)) record('p', p, `"Most runs" band 0..${hi} holds ${below.toFixed(4)}`);
           }
-          if (ex.lopsided && !(below >= 0.80)) record('p', p, `"Most runs" band 0..${hi} holds ${below.toFixed(4)}`);
         }
 
         // Phase 2 compare invariants, from the engine alone (g, h)
@@ -254,7 +317,7 @@ for (let ac = 10; ac <= 30; ac++) {
         }
 
         // Sampled VM.compareView agreement (i)
-        if (combos % 50 === 0) {
+        if (inSample) {
           if (typeof VM.compareView !== 'function') {
             record('i', p, 'VM.compareView missing');
           } else {
@@ -284,7 +347,25 @@ for (let ac = 10; ac <= 30; ac++) {
           if (!(d[n] > d[n - 1])) { record('k', p, `damage not increasing at N ${n}: ${d[n - 1]} -> ${d[n]}`); break; }
           if (a[n] < a[n - 1]) { record('k', p, `attack falls at N ${n}: ${a[n - 1]} -> ${a[n]}`); break; }
         }
-        if (combos % 50 === 0) {
+
+        // Readout leader (y), 02-REVIEW WR-02: the word comes from the exact numerators, so the
+        // readout never says "even" where the ring says the curves flip.
+        if (!hasReadout) {
+          record('y', p, 'VM.readoutLines missing');
+        } else {
+          const lines = VM.readoutLines(a, d, den);
+          if (!Array.isArray(lines) || lines.length !== MAXN + 1) {
+            record('y', p, `${lines && lines.length} readout lines`);
+          } else {
+            for (let n = 0; n <= MAXN; n++) {
+              const sg = Math.sign(a[n] - d[n]), line = lines[n];
+              const ok = sg === 0 ? line.endsWith(' · even')
+                : !line.endsWith('even') && line.includes(sg > 0 ? ' · to hit ahead by ' : ' · to damage ahead by ');
+              if (!ok) { record('y', p, `N ${n} (sign ${sg}): ${line}`); break; }
+            }
+          }
+        }
+        if (inSample) {
           const sw = DiceMath.sweep(p, MAXN);
           if (sw.attack.join(',') !== a.join(',')) record('j', p, 'sweep attack differs from the cached series');
           if (sw.damage.join(',') !== d.join(',')) record('j', p, 'sweep damage differs from the cached series');
@@ -319,11 +400,23 @@ for (let ac = 10; ac <= 30; ac++) {
           for (const e of c.list) {
             if (!(e.lastLeadN <= e.x && e.x <= e.flipN)) record('m', p, `x ${e.x} outside [${e.lastLeadN}, ${e.flipN}]`);
           }
-          if (combos % 50 === 0) {
+          if (inSample) {
             const markers = (VM.chartView(p, 5).markers || []).length;
             const want = c.list.length + (c.endTieN !== null ? 1 : 0);
             if (markers !== want) record('m', p, `${markers} markers vs ${want}`);
           }
+          // Zero counts (02-REVIEW IN-04): the synthetic-only copy branches stay unreachable.
+          // A touch is a tie with the same leader on both sides (the nearest non-zero signs).
+          const signAt = (n) => Math.sign(a[n] - d[n]);
+          const isTouch = (t) => {
+            let before = 0, after = 0;
+            for (let n = t - 1; n >= 1 && before === 0; n--) before = signAt(n);
+            for (let n = t + 1; n <= MAXN && after === 0; n++) after = signAt(n);
+            return before !== 0 && before === after;
+          };
+          if ((c.ties || []).some(isTouch)) zeroCounts.touch++;
+          if ((c.ties || []).includes(1)) zeroCounts.leadingTie++;
+          if (c.list.length >= 2) zeroCounts.multiCross++;
           if (c.list.length === 0) {
             if (c.first === 'damage') dist.damageAll++;
             else if (c.first === 'attack') dist.hitAll++;
@@ -352,6 +445,32 @@ for (let ac = 10; ac <= 30; ac++) {
   }
 }
 const sweepMs = (performance.now() - t0).toFixed(0);
+
+// (y) pin: the 02-REVIEW WR-02 case. The displayed tenths are equal (12.0 and 12.0), but the
+// exact attack total is ahead by 0.0278, and the ring there says "flips at +3".
+if (hasReadout) {
+  const pin = { ac: 17, atk: -5, die: 12, dmg: -4 };
+  const sw = DiceMath.sweep(pin, MAXN);
+  const got = VM.readoutLines(sw.attack, sw.damage, sw.den)[3];
+  const want = 'At +3: to hit 12.0 · to damage 12.0 · to hit ahead by less than 0.1';
+  if (got !== want) record('y', pin, `pin N 3: ${JSON.stringify(got)} vs ${JSON.stringify(want)}`);
+}
+
+// (cover) 02-REVIEW WR-03: the sample must reach every value of every control.
+const coverWant = { ac: span(CS.ac), die: DICE_SET.length, atk: span(CS.atk), dmg: span(CS.dmg) };
+for (const k of Object.keys(coverWant)) {
+  if (sampled[k].size !== coverWant[k]) {
+    counts.cover++;
+    firstFailures.push(`cover: sample reached ${sampled[k].size} of ${coverWant[k]} ${k} values`);
+  }
+}
+// (zero) 02-REVIEW IN-04
+for (const k of Object.keys(zeroCounts)) {
+  if (zeroCounts[k] !== 0) {
+    counts.zero++;
+    firstFailures.push(`zero: ${zeroCounts[k]} settings with ${k}`);
+  }
+}
 
 // Seeded large samples (q), SIM-01 / D-14: z-score tolerances, never a relative 1% (RESEARCH).
 const tq = performance.now();
@@ -407,9 +526,17 @@ for (const r of SelfTest.results.filter((x) => !x.ok)) {
   console.log(`  selftest FAIL ${r.name}: got ${JSON.stringify(r.actual)}, expected ${JSON.stringify(r.expected)}`);
 }
 console.log(`sweep ${combos} combos in ${sweepMs} ms`);
+console.log(`sample (stride ${SAMPLE}): ${sampled.ac.size} AC, ${sampled.die.size} dice, ` +
+  `${sampled.atk.size} atk, ${sampled.dmg.size} dmg`);
+const f4 = (x) => (Number.isFinite(x) ? x.toFixed(4) : 'n/a');
+console.log(`(p) ${distMemo.size} distributions: "2 in 3" coverage min ${f4(cov.minTwoInThree)} ` +
+  `max ${f4(cov.maxTwoInThree)} (bounds [0.60, 0.80)); "Most runs" min ${f4(cov.minMost)} (bound >= 0.80)`);
 console.log(`sim samples (${R} rounds each, ${qMs} ms): ${qMeans.join('; ')}`);
 console.log(`crossings: damage-all ${dist.damageAll}, hit-all ${dist.hitAll}, hit-then-damage ${dist.hitThenDamage}, ` +
-  `damage-then-hit ${dist.damageThenHit}, tie crossings ${dist.tieCross}, end ties ${dist.endTie}`);
+  `damage-then-hit ${dist.damageThenHit}, tie crossings ${dist.tieCross}, end ties ${dist.endTie}; ` +
+  `touches ${zeroCounts.touch}, leading ties ${zeroCounts.leadingTie}, 2+ crossings ${zeroCounts.multiCross}`);
+if (Number(SelfTest.ms) > 200) console.log(`WARNING: Node self-test took ${SelfTest.ms} ms (budget 200)`);
+else console.log(`selftest time ${SelfTest.ms} ms (budget 200)`);
 
 const invariantFailures = Object.values(counts).reduce((a, b) => a + b, 0);
 if (SelfTest.failed === 0 && n > 0 && invariantFailures === 0 && combos === TOTAL_COMBOS) {
