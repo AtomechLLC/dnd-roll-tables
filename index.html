@@ -538,6 +538,9 @@
        italic, live lines in the number face. The named `formula` container keeps the unnamed
        table-tier queries from resolving against these cards. */
     .explain { margin: 0 0 var(--sp-3); max-width: 72ch; font-size: 1rem; line-height: 1.5; color: var(--ink); }
+    /* Under the sweep chart (COPY-03, COPY-04): three bold-lead-in paragraphs, spaced by the grid gap. */
+    .chart-explain { margin-top: var(--sp-3); display: grid; gap: var(--sp-2); }
+    .chart-explain .explain { margin: 0; }
     .card.formulas { grid-column: 1 / -1; container: formula / inline-size; }
     .card.formulas h2 { margin: 0; }
     dl.formulas { margin: 0; display: grid; gap: var(--sp-3); max-width: 72ch; }
@@ -765,6 +768,11 @@
         <div class="plot"><svg id="sweep" class="chart" viewBox="0 0 640 400" role="img" aria-labelledby="chart-caption" focusable="false"></svg></div>
         <p id="chart-readout" class="readout"></p>
         <p id="chart-caption" class="chart-caption"></p>
+        <div class="chart-explain">
+          <p class="explain" id="explain-dmg"><b>The dashed line (+N to damage).</b> <span></span></p>
+          <p class="explain" id="explain-hit"><b>The solid line (+N to hit).</b> <span></span></p>
+          <p class="explain" id="explain-cross"><b>What moves the crossover.</b> <span></span></p>
+        </div>
       </div>
     </section>
 
@@ -1392,6 +1400,88 @@ const VM = (() => {
     return parts.join(' ');
   }
 
+  // Chart explanations (COPY-03, COPY-04, D-05, D-06): three bodies under the chart, one per
+  // chart feature. Pure: reads only `series` (the chartBase sweep, crossings and bands that
+  // draw the lines, bands and rings) and `hits` (hitFaces and the normal-hit average), never
+  // DiceMath, so it can never name a crossing or band the chart does not draw. maxN comes from
+  // the series, so short synthetic arrays work (the self-test's two-crossing and touch cases).
+  function explainChart(p, series, hits) {
+    const { attack, damage, den, crossings: cr, bands } = series;
+    const maxN = attack.length - 1;
+    const X = p.die, D = p.dmg, hf = hits.hitFaces;
+    const step = fixed(10 * hf, 1);
+
+    // Dashed line: every step from straightFrom on adds hitFaces (damage stops at 0 below it).
+    let straightFrom = maxN;
+    for (let j = maxN - 1; j >= 0 && damage[j + 1] - damage[j] === hf * den; j--) straightFrom = j;
+    const dmgLine = straightFrom === 0
+      ? `Each +1 to damage adds 1 to every hit. You expect ${hf} ${hf === 1 ? 'hit' : 'hits'} in 20 rounds, ` +
+        `so every step adds the same ${step} and the line is straight.`
+      : `Each +1 to damage adds 1 to every hit, but damage stops at 0, so at a damage bonus of ${signed(D)} ` +
+        `the first steps add less. From ${signed(straightFrom)} on, every step adds the same ${step}: ` +
+        (hf === 1 ? 'one for the 1 hit you expect in 20 rounds.' : `one for each of the ${hf} hits you expect in 20 rounds.`);
+
+    // Solid line: the step (exact branch by integer equality), then one sentence per drawn band.
+    const hitParts = [];
+    if (X + D <= 0) {
+      hitParts.push(`Each +1 to hit turns one more d20 face into a hit, but at a damage bonus of ${signed(D)} ` +
+        `a normal d${X} hit deals 0. So this line stays flat even outside the shaded bands, and only crits deal damage here.`);
+    } else {
+      hitParts.push(2 * hits.normalNum === (X + 1 + 2 * D) * hits.normalDen
+        ? 'Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth an average ' +
+          `d${X} ${D < 0 ? '−' : '+'} ${Math.abs(D)} = ${fixed(5 * (X + 1 + 2 * D), 1)}.`
+        : 'Each +1 to hit turns one more d20 face into a hit: one more hit in 20 rounds, worth ' +
+          `${fixed(Math.round((100 * hits.normalNum) / hits.normalDen), 2)} on average here, since damage stops at 0.`);
+      if (bands.floor) {
+        const e = bands.floor[1];
+        hitParts.push(`It is flat in the band marked “only a nat 20 hits”, up to ${signed(e)}: ` +
+          `a natural 20 always hits, but nothing else does until ${signed(e + 1)}.`);
+      }
+      if (bands.cap && bands.cap[0] === 0) {
+        hitParts.push('It is flat across the whole chart, in the band marked “95% cap”: you already hit on 2+, ' +
+          'and a natural 1 always misses, so more to-hit buys nothing.');
+      } else if (bands.cap) {
+        hitParts.push(`It goes flat${bands.floor ? ' again' : ''} in the band marked “95% cap”, from ${signed(bands.cap[0])}: ` +
+          'a natural 1 always misses, so once you hit on 2+, more to-hit buys nothing.');
+      }
+    }
+
+    // Crossover: the same precedence as captionCross, every N from the ring's own fields.
+    const k = cr.list.length;
+    const ringTail = ' Change the AC or the die and watch the ring move, or disappear.';
+    const ringsTail = ' Change the AC or the die and watch the rings move, or disappear.';
+    const ringN = (e) => signed(e.tieN ?? e.flipN);
+    let crossLine;
+    if (cr.first === 'none') {
+      crossLine = 'At these settings the two curves are identical, so neither bonus is better.';
+    } else if (k === 0 && cr.endTieN !== null) {
+      crossLine = `At these settings the curves only meet at ${signed(cr.endTieN)}, at the ring on the right edge: ` +
+        'they touch but do not cross.' + ringTail;
+    } else if (k === 0 && cr.ties.length > 0) {
+      crossLine = `At these settings the curves touch at ${signed(cr.ties[0])} without crossing, so there is no ring ` +
+        'on the chart. Change the AC or the die and watch the gap open or a crossover appear.';
+    } else if (k === 0) {
+      crossLine = 'At these settings the curves never cross, so there is no ring on the chart. ' + (cr.first === 'damage'
+        ? 'A higher AC leaves fewer hits for +1 damage to add to, and a bigger die makes each extra hit worth more. ' +
+          'Either can let +N to hit pull ahead.'
+        : 'A lower AC gives +1 damage more hits to add to, and a smaller die makes each extra hit worth less. ' +
+          'Either can hand the lead to +N to damage.');
+    } else if (k === 1) {
+      const e = cr.list[0];
+      crossLine = (e.tieN === null
+        ? `At these settings the lead changes once, at ${signed(e.flipN)}: the ring on the chart.`
+        : `At these settings the two are even at ${signed(e.tieN)}, and the lead changes there: the ring on the chart.`) +
+        ringTail;
+    } else if (k === 2) {
+      crossLine = `At these settings the lead changes twice, at ${ringN(cr.list[0])} and ${ringN(cr.list[1])}: ` +
+        'the two rings on the chart.' + ringsTail;
+    } else {
+      crossLine = `At these settings the lead changes ${k} times: the rings on the chart.` + ringsTail;
+    }
+
+    return Object.freeze({ dmgLine, hitLine: hitParts.join(' '), crossLine });
+  }
+
   // Sweep chart block (CHART-01..04, D-10, D-11, D-13..D-15): both exact series for
   // N = 0..maxN, nice y ticks, precomputed readout lines, crossings, bands, markers, and the
   // generated caption. Markers, bands, and caption all come from one crossings / attackBands
@@ -1449,8 +1539,12 @@ const VM = (() => {
       captionCross(crossings),
       captionBands(bands),
     ].filter((part) => part !== '').join(' ');
+    // Chart explanations (D-05): built from these same crossings and bands, once per memo key,
+    // so an N-slider drag recomputes none of it.
+    const st = DiceMath.stats(p), ha = DiceMath.hitAverages(p);
     return {
       maxN, den, attack, damage, attackText, damageText, ticks, readout, crossings, bands, markers, caption,
+      explain: explainChart(p, { attack, damage, den, crossings, bands }, { hitFaces: st.hitFaces, normalNum: ha.normalNum, normalDen: ha.normalDen }),
     };
   }
 
@@ -1511,7 +1605,7 @@ const VM = (() => {
 
   return Object.freeze({
     CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, twoRollsText, formulaView, compareView,
-    niceTicks, captionOrder, captionCross, captionBands, readoutLines, chartView, computeView,
+    niceTicks, captionOrder, captionCross, captionBands, explainChart, readoutLines, chartView, computeView,
     settingsText, simExact, simPlacement, simStatus,
   });
 })();
@@ -2183,12 +2277,16 @@ const twoRollsEl = document.getElementById('two-rolls');
 const fPlusHitLiveEl = document.getElementById('f-plus-hit-live');
 const fPlusDmgLiveEl = document.getElementById('f-plus-dmg-live');
 const fPlusWinLiveEl = document.getElementById('f-plus-win-live');
+// Chart explanations: the generated body span after each static bold lead-in.
+const explainDmgEl = document.querySelector('#explain-dmg span');
+const explainHitEl = document.querySelector('#explain-hit span');
+const explainCrossEl = document.querySelector('#explain-cross span');
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
 const state = {};
 const RENDERERS = [renderControls, renderStats, renderFormulas, renderTable, renderTwoRolls, renderLegend,
-  renderFootnote, renderCompare, renderChart, renderSim];
+  renderFootnote, renderCompare, renderChart, renderExplain, renderSim];
 
 // The last run lives here, never in state (RESEARCH Pattern 2, Pitfall 2): a run is an event,
 // not a derivation. init() and the UI smoke do Object.assign(state, DEFAULT_STATE), which would
@@ -2788,6 +2886,15 @@ function renderChart(view) {
   }));
 
   chartCaptionEl.textContent = c.caption;
+}
+
+// Chart explanations (COPY-03, COPY-04): text only, not live regions. The object comes from the
+// chart memo, so an N drag writes nothing new (setText skips equal text).
+function renderExplain(view) {
+  const e = view.chart.explain;
+  setText(explainDmgEl, e.dmgLine);
+  setText(explainHitEl, e.hitLine);
+  setText(explainCrossEl, e.crossLine);
 }
 
 // Legend (TABLE-05): built with createElement / textContent / style.setProperty only.

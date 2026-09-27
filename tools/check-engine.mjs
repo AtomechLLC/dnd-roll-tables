@@ -863,7 +863,7 @@ if (hasExplain) {
   for (const [k, want] of Object.entries(WANT_CROSS)) tally('w', k, explainCounts[k], want);
 }
 
-// (x) COPY-05, D-07, D-08, success criterion 4: every preset's description re-derived from the
+// Presets (x): COPY-05, D-07, D-08, success criterion 4. Every preset's description re-derived from the
 // engine at its exact settings, the UI-SPEC strings, the parse round trip, and markup parity.
 const PRESET_WANT = {
   cross: {
