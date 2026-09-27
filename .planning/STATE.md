@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-09-27T06:31:41.315Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-09-27T06:46:14.453Z"
 last_activity: 2026-09-27
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 16
-  completed_plans: 12
+  completed_plans: 13
   percent: 75
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 04 (designer-explanation-final-ship) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-09-27
 
-Progress: [████████░░] 75%
+Progress: [████████░░] 81%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [████████░░] 75%
 | Phase 03 P02 | 9min | 2 tasks | 2 files |
 | Phase 03 P03 | 14min | 3 tasks | 2 files |
 | Phase 04 P01 | 10min | 2 tasks | 4 files |
+| Phase 04 P02 | 14min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,9 @@ Recent decisions affecting current work:
 - [Phase 04]: Compare-table deltas unchanged: they name no leader, so only the chart readout (VM.readoutLines, exact-sign leader) was fixed for 02 WR-02
 - [Phase 04]: check-page --expect matches visible text only (mini element tree); aria-hidden text is kept because it is shown on screen
 - [Phase 04]: check-engine (p) is exhaustive with bounds from the page's wording: 'About 2 runs in 3' in [0.60, 0.80), 'Most runs' >= 0.80
+- [Phase 04]: Which wins uses the inequality only when both +1 lines are rule branch; the 80 nat-20-only D = -2 settings compare displayed values (UI-SPEC deviation) — The inequality would print 2.5 where the real value is 2.625 (RESEARCH Pitfall 1)
+- [Phase 04]: copy branches are exact integer comparisons with statsView.exact; check-engine pins the counts (rule 60,740 / table 10,240; 36,850 / 28,100 / 5,950 / 80) — D-04: a formula never prints a number that disagrees with a card
+- [Phase 04]: NBSP is written as String.fromCharCode(0xa0) in index.html and tools — The Edit tool and Git Bash sed mangle backslash escapes
 
 ### Pending Todos
 
@@ -114,6 +118,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-27T06:31:41.306Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-09-27T06:46:14.444Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None

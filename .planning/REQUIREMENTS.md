@@ -68,8 +68,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Explanation
 
-- [ ] **COPY-01**: The page explains the two-roll structure (d20 to hit, dX for damage) and how the 2D table is the joint outcome space, in language for game designers
-- [ ] **COPY-02**: Formulas for hit chance, expected damage per round, and the value of +1 to hit vs +1 to damage are displayed with the current control values substituted live
+- [x] **COPY-01**: The page explains the two-roll structure (d20 to hit, dX for damage) and how the 2D table is the joint outcome space, in language for game designers
+- [x] **COPY-02**: Formulas for hit chance, expected damage per round, and the value of +1 to hit vs +1 to damage are displayed with the current control values substituted live
 - [ ] **COPY-03**: The crossover explanation is generated from the computed crossing list, with distinct text for no crossing, one crossing, and two crossings, and never asserts a crossover that does not exist at the current settings
 - [ ] **COPY-04**: The page explains why the attack curve plateaus (5% to 95% clamp) and why the damage curve is linear, tied to the shaded chart regions
 - [ ] **COPY-05**: A short suggested-exploration section points at settings that show a crossover (for example AC 25 with a d12) and settings where damage bonus always wins (AC 15 with a d8)
@@ -159,8 +159,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SIM-04 | Phase 3 | Complete |
 | SIM-05 | Phase 3 | Complete |
 | SIM-06 | Phase 3 | Complete |
-| COPY-01 | Phase 4 | Pending |
-| COPY-02 | Phase 4 | Pending |
+| COPY-01 | Phase 4 | Complete |
+| COPY-02 | Phase 4 | Complete |
 | COPY-03 | Phase 4 | Pending |
 | COPY-04 | Phase 4 | Pending |
 | COPY-05 | Phase 4 | Pending |
