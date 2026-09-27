@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: milestone_complete
-stopped_at: Milestone complete (Phase 04 was final phase)
+status: ready_to_plan
+stopped_at: Phase 5 (Hits-to-Kill) added; ready to discuss
 last_updated: 2026-09-27T18:26:48.101Z
 last_activity: 2026-09-27
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
   total_plans: 16
   completed_plans: 16
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** A designer can see, in one glance at a live table and a curve, why attack bonuses saturate (hit chance caps at 95%) while damage bonuses scale linearly, and why the crossover depends on AC and the damage die.
-**Current focus:** Milestone complete
+**Current focus:** Phase 5 — Hits-to-Kill
 
 ## Current Position
 
-Phase: 04
+Phase: 5 (Hits-to-Kill)
 Plan: Not started
-Status: Milestone complete
+Status: Ready to discuss
 Last activity: 2026-09-27
 
 Progress: [██████████] 100%
@@ -107,6 +107,10 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-04: a11y guards (9)-(13) live in check-page (dump structure) and the 'a11y ui' smoke (live focus and rendered labels); each guard proved to bite on a broken scratch copy; no markup change was needed
 - [Phase 04]: 04-04: guard (9) uses the screen-reader name (.vh counts), guard (10) the shown text; (13) also fails if the to-hit line becomes dashed
 - [Phase 04]: 04-05: repo is AtomechLLC/dnd-roll-tables over SSH (user's choice, replaces D-13 name); Pages deploys via the user's stock GitHub Actions static workflow, merged with --allow-unrelated-histories (no force)
+
+### Roadmap Evolution
+
+- Phase 5 added (2026-09-27): Hits-to-Kill — enemy hit points (default 40 HP), editable by amount or by whole average hits of the current attack; hits-to-kill and the chance and timing of a kill. User request after the v1 site went live.
 
 ### Pending Todos
 

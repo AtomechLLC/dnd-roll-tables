@@ -17,6 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Bonus Comparison** - N slider, three side-by-side tables (baseline / +N hit / +N damage), and the SVG sweep chart with crossover and plateau marking (completed 2026-09-25)
 - [x] **Phase 3: Roll-20-Rounds Simulation** - Real dice rolls with a per-round log, realized vs expected (with standard deviation), and stale-result handling (completed 2026-09-26)
 - [x] **Phase 4: Designer Explanation & Final Ship** - Live-substituted formulas, generated crossover/plateau copy, suggested explorations, accessibility pass, final public deploy (completed 2026-09-27)
+- [ ] **Phase 5: Hits-to-Kill** - Enemy hit points (default 40 HP, set by amount or by whole average hits), hits-to-kill, and the chance and timing of a kill
 
 ## Phase Details
 
@@ -153,10 +154,21 @@ Plans:
 - [x] 04-05-PLAN.md — Publish: user runs gh auth login (single checkpoint), then public repo, Pages from main /, live verification, DEPLOY-02/03 traceability (Wave 5)
 **UI hint**: yes
 
+### Phase 5: Hits-to-Kill
+
+**Goal**: A designer can set an enemy's hit points (starting at a 40 HP enemy) and see how many hits it takes to kill it, and whether and when the attack kills it at the current settings. User request (2026-09-27): "Add support for hits-to-kill and the ability to kill an enemy, set a 40 hp enemy as the starting point". Follow-up (2026-09-27): "the ability to modify enemy health (both by individual amount and by adding a 'hit' based on likely average damage for the current attack roll)".
+**Mode:** mvp
+**Depends on**: Phase 4
+**Requirements**: TBD (defined in /gsd-discuss-phase 5)
+**Success Criteria**: TBD (defined in /gsd-discuss-phase 5)
+
+**Plans**: TBD
+**UI hint**: yes
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase 1, but it runs after Phase 2 because every phase edits the same `index.html`.
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 3 depends only on Phase 1, but it runs after Phase 2 because every phase edits the same `index.html`.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -164,3 +176,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 | 2. Bonus Comparison | 3/3 | Complete   | 2026-09-25 |
 | 3. Roll-20-Rounds Simulation | 3/3 | Complete   | 2026-09-26 |
 | 4. Designer Explanation & Final Ship | 5/5 | Complete   | 2026-09-27 |
+| 5. Hits-to-Kill | 0/TBD | Not started | - |
