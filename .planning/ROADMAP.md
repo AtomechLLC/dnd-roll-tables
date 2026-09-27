@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Live Roll Table, Deployed** - Self-tested 5e rules engine driving a live baseline outcome table and stat cards, published to a public GitHub Pages URL (completed 2026-09-25)
 - [x] **Phase 2: Bonus Comparison** - N slider, three side-by-side tables (baseline / +N hit / +N damage), and the SVG sweep chart with crossover and plateau marking (completed 2026-09-25)
 - [x] **Phase 3: Roll-20-Rounds Simulation** - Real dice rolls with a per-round log, realized vs expected (with standard deviation), and stale-result handling (completed 2026-09-26)
-- [ ] **Phase 4: Designer Explanation & Final Ship** - Live-substituted formulas, generated crossover/plateau copy, suggested explorations, accessibility pass, final public deploy
+- [x] **Phase 4: Designer Explanation & Final Ship** - Live-substituted formulas, generated crossover/plateau copy, suggested explorations, accessibility pass, final public deploy (completed 2026-09-27)
 
 ## Phase Details
 
@@ -129,7 +129,7 @@ Plans:
   4. A suggested-exploration section points to settings that produce a crossover (for example AC 25 with a d12) and settings where the damage bonus always wins (AC 15 with a d8). Trying them shows exactly what the text describes.
   5. Every control can be reached and operated by keyboard and has a visible label. Miss vs hit can be told apart without color. The final version is live at the public GitHub Pages URL with HTTP 200 and no console errors.
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 **Wave 1**
@@ -150,7 +150,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 04-05-PLAN.md — Publish: user runs gh auth login (single checkpoint), then public repo, Pages from main /, live verification, DEPLOY-02/03 traceability (Wave 5)
+- [x] 04-05-PLAN.md — Publish: user runs gh auth login (single checkpoint), then public repo, Pages from main /, live verification, DEPLOY-02/03 traceability (Wave 5)
 **UI hint**: yes
 
 ## Progress
@@ -163,4 +163,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4. Phase 3 depends only on Phase
 | 1. Live Roll Table, Deployed | 5/5 | Complete    | 2026-09-25 |
 | 2. Bonus Comparison | 3/3 | Complete   | 2026-09-25 |
 | 3. Roll-20-Rounds Simulation | 3/3 | Complete   | 2026-09-26 |
-| 4. Designer Explanation & Final Ship | 4/5 | In Progress|  |
+| 4. Designer Explanation & Final Ship | 5/5 | Complete   | 2026-09-27 |

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 04-04-PLAN.md
-last_updated: "2026-09-27T07:18:30.475Z"
+status: verifying
+stopped_at: Completed 04-05-PLAN.md
+last_updated: "2026-09-27T18:11:22.583Z"
 last_activity: 2026-09-27
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 16
-  completed_plans: 15
-  percent: 75
+  completed_plans: 16
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 
 Phase: 04 (designer-explanation-final-ship) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-09-27 - Completed quick task 260927-1ty: Make the page more space-dense
+Status: Phase complete — ready for verification
+Last activity: 2026-09-27 - Completed 04-05: published and verified live at https://atomechllc.github.io/dnd-roll-tables/
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [█████████░] 94%
 | Phase 04 P02 | 14min | 3 tasks | 2 files |
 | Phase 04 P03 | 13min | 3 tasks | 3 files |
 | Phase 04 P04 | 14min | 2 tasks | 3 files |
+| Phase 04 P05 | 12min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,7 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-03: the solid-line math group (d8 + 0 = 4.5) uses U+00A0 like the formula cards so it never wraps mid-expression
 - [Phase 04]: 04-04: a11y guards (9)-(13) live in check-page (dump structure) and the 'a11y ui' smoke (live focus and rendered labels); each guard proved to bite on a broken scratch copy; no markup change was needed
 - [Phase 04]: 04-04: guard (9) uses the screen-reader name (.vh counts), guard (10) the shown text; (13) also fails if the to-hit line becomes dashed
+- [Phase 04]: 04-05: repo is AtomechLLC/dnd-roll-tables over SSH (user's choice, replaces D-13 name); Pages deploys via the user's stock GitHub Actions static workflow, merged with --allow-unrelated-histories (no force)
 
 ### Pending Todos
 
@@ -131,6 +133,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-27T07:18:30.466Z
-Stopped at: Completed 04-04-PLAN.md
+Last session: 2026-09-27T18:11:22.572Z
+Stopped at: Completed 04-05-PLAN.md
 Resume file: None
