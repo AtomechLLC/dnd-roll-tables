@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 Phase: 04 (designer-explanation-final-ship) — EXECUTING
 Plan: 5 of 5
 Status: Ready to execute
-Last activity: 2026-09-27 - Completed quick task 260927-17o: Move settings and outcome table to the top of the page
+Last activity: 2026-09-27 - Completed quick task 260927-1ty: Make the page more space-dense
 
 Progress: [█████████░] 94%
 
@@ -120,6 +120,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260927-17o | Move settings and outcome table to the top of the page (page order: header, controls, outcome table, stat cards, compare, chart, sim, explore; reverses Phase 1 D-01 / Phase 2 D-02 / Phase 4 D-01 at the user's request after previewing) | 2026-09-27 | 54a9add | [260927-17o-move-settings-and-outcome-table-to-the-t](./quick/260927-17o-move-settings-and-outcome-table-to-the-t/) |
+| 260927-1ty | Make the page more space-dense (spacing scale 4/8/12/16/20/24, 32px controls, 24px wide-tier rows, side columns beside the table/formulas/chart at 64rem and 72rem; page 27.6% shorter at 1366px, 10.8% at 360px; overrides Phase 1–4 UI-SPEC spacing at the user's request) | 2026-09-27 | 8886582 | [260927-1ty-make-the-page-more-space-dense](./quick/260927-1ty-make-the-page-more-space-dense/) |
 
 ## Deferred Items
 
