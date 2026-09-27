@@ -82,7 +82,7 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-03: Crossing labels carry a below/above class; each chart tier nudges them by the growth in text size and ring radius, so phone-tier labels never overlap their ring (UI-SPEC attributes unchanged)
 - [Phase 02]: 02-03: Self-test shares one IIFE-level sweep memo across the chart and cross sections; Node self-test 178-197 ms against the 200 ms budget
 - [Phase 02]: 02-03: ROADMAP Phase 2 SC1/SC3 reworded to amended CMP-04 (plain values) and zero-or-one crossing in N = 0..20 (70,980 settings checked)
-- [Phase 03]: Spread line is lopsided when E - SD < 0 OR only a nat 20 hits (honest band wording; guarded by check-engine (p))
+- [Phase 03]: Spread line is lopsided when E - SD <= 0 OR only a nat 20 hits (03 WR-01 fixed in Phase 4) (honest band wording; guarded by check-engine (p))
 - [Phase 03]: Randomness is injected: Sim.simulate requires rng; Math.random appears once, in the Roll click handler
 - [Phase 03]: WR-01 closed: first render guarded; Roll button ships disabled and is enabled as the last step of a successful render
 - [Phase 03]: Rolled-at note and log caption reserve two lines (note also in the 32rem side-by-side column) so stale never moves the pair or the log rows

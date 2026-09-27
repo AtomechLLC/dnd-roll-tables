@@ -260,7 +260,6 @@
        log carry the run for assistive tech); the first content line is the fallback for
        engines without alt-text syntax. Kept after the heat and rule styles so order never loses. */
     .outcome .roll, .swatch.roll { position: relative; }
-    .swatch.roll { flex-shrink: 0; }   /* keeps its 40px beside the long legend text */
     .outcome .roll::before, .swatch.roll::before {
       content: ""; position: absolute; inset: 0; pointer-events: none;
       border: 2px solid var(--ink); box-shadow: inset 0 0 0 1px var(--paper);
@@ -284,6 +283,9 @@
       font-size: 0.875rem; line-height: 1.4;
     }
     .legend-item { display: flex; align-items: center; gap: var(--sp-1); }
+    /* Every swatch and the ramp keep their size beside long legend text at phone width
+       (Phase 3 deferred item: the crit swatch shrank at 360px). */
+    .legend-item > .swatch, .legend-item > .ramp { flex-shrink: 0; }
     .ramp { display: flex; }
     .swatch {
       display: inline-block; width: 40px; height: 28px; line-height: 26px;
@@ -955,8 +957,13 @@ const Sim = (() => {
     };
   }
 
-  // SIM-01, D-14: a face in 1..sides from rng() in [0, 1).
-  const rollDie = (sides, rng) => 1 + Math.floor(rng() * sides);
+  // SIM-01, D-14: a face in 1..sides from rng() in [0, 1). An rng outside [0, 1) (or NaN)
+  // throws instead of producing an impossible face (03-REVIEW IN-03).
+  const rollDie = (sides, rng) => {
+    const face = 1 + Math.floor(rng() * sides);
+    if (!(face >= 1 && face <= sides)) throw new RangeError('rollDie: rng out of range');
+    return face;
+  };
   const RESULT = Object.freeze({ fumble: 'miss', miss: 'miss', hit: 'hit', crit: 'crit' });
 
   // Draw order is a contract that the pinned seeded totals depend on (RESEARCH Pitfall 8):
@@ -965,6 +972,9 @@ const Sim = (() => {
   function simulate(p, rounds, rng) {
     DiceMath.assertParams(p);
     if (typeof rng !== 'function') throw new TypeError('Sim.simulate: rng must be a function');
+    if (!(Number.isInteger(rounds) && rounds >= 0)) {
+      throw new TypeError('simulate: rounds must be a non-negative integer');
+    }
     const params = Object.freeze({ ac: p.ac, die: p.die, atk: p.atk, dmg: p.dmg });
     const list = [];
     let total = 0;
@@ -1185,9 +1195,24 @@ const VM = (() => {
   // N = 0..maxN, nice y ticks, precomputed readout lines, crossings, bands, markers, and the
   // generated caption. Markers, bands, and caption all come from one crossings / attackBands
   // result, so the caption never claims a crossing the chart does not draw.
-  // Readout gaps are the difference of the displayed tenths (RESEARCH Pitfall 7).
+  // Readout lines: the leader comes from the exact numerators and the gap from the displayed
+  // tenths (RESEARCH Pitfall 7), so the readout never says "even" where the ring says the
+  // curves flip (02-REVIEW WR-02).
   // Everything but n depends only on (ac, atk, die, dmg), so a one-entry memo keeps a slider
   // drag from recomputing the sweep (RESEARCH Anti-Patterns). Callers never mutate the arrays.
+  // One readout sentence per N. The leader is the exact sign of attack[k] - damage[k]; when
+  // the displayed tenths tie but the exact totals do not, the gap reads 'less than 0.1'.
+  function readoutLines(attack, damage, den) {
+    return attack.map((a, k) => {
+      const ta = tenths(a, den), td = tenths(damage[k], den);
+      const exact = Math.sign(a - damage[k]);
+      const gapT = Math.abs(ta - td);
+      const gap = exact === 0 ? 'even'
+        : `${exact > 0 ? 'to hit' : 'to damage'} ahead by ${gapT ? fixed(gapT, 1) : 'less than 0.1'}`;
+      return `At ${signed(k)}: to hit ${fixed(ta, 1)} · to damage ${fixed(td, 1)} · ${gap}`;
+    });
+  }
+
   let chartMemo = { key: null, base: null };
   function chartView(p, n) {
     const key = `${p.ac},${p.atk},${p.die},${p.dmg}`;
@@ -1202,12 +1227,7 @@ const VM = (() => {
     const attackText = aT.map((t) => fixed(t, 1));
     const damageText = dT.map((t) => fixed(t, 1));
     const ticks = niceTicks(Math.max(attack[maxN], damage[maxN]) / den);
-    const readout = aT.map((ta, k) => {
-      const td = dT[k];
-      const gap = ta > td ? `to hit ahead by ${fixed(ta - td, 1)}`
-        : td > ta ? `to damage ahead by ${fixed(td - ta, 1)}` : 'even';
-      return `At ${signed(k)}: to hit ${attackText[k]} · to damage ${damageText[k]} · ${gap}`;
-    });
+    const readout = readoutLines(attack, damage, den);
     const crossings = DiceMath.crossings(attack, damage);
     const bands = DiceMath.attackBands(p, CONTROL_SPEC.n.max);
     // One marker per crossing (touches get none), plus one for curves tied at the right edge.
@@ -1233,23 +1253,22 @@ const VM = (() => {
     };
   }
 
-  // The page view (D-08, D-16): stats view plus the compare and chart blocks. The big table and
-  // the one legend use the shared compare domain, so the same number is the same color everywhere.
-  // statsView stays chart-free: the grids call it per combo (RESEARCH Pitfall 4).
-  // ---- Roll-20-rounds copy (Phase 3) ----------------------------------------------------
+  // ---- Roll-20-rounds copy (Phase 3)----------------------------------------------------
   // Settings in control order, Phase 2 naming: 'AC 15, d8, +5 to hit, +0 damage'.
   const settingsText = (p) => `AC ${p.ac}, d${p.die}, ${signed(p.atk)} to hit, ${signed(p.dmg)} damage`;
 
   // SIM-02, SIM-05, D-04, D-05: the exact figure and its spread, all in displayed tenths
   // (UI-SPEC A8), so a reader can add them up by hand. eT uses the stat card's tenths (STAT-02).
-  // lopsided: E - SD < 0, or only a nat 20 hits. The second trigger departs from the UI-SPEC
-  // rule on purpose: there 35.8% of runs total 0 and "about 2 in 3" would be false (RESEARCH
-  // Pitfall 1); tools/check-engine.mjs (p) guards both wordings against the exact distribution.
+  // lopsided: E - SD <= 0, or only a nat 20 hits. At E - SD = 0 the band's low end is already
+  // the floor, so "about 2 in 3" would be false there too (03-REVIEW WR-01). The second trigger
+  // departs from the UI-SPEC rule on purpose: there 35.8% of runs total 0 and "about 2 in 3"
+  // would be false (RESEARCH Pitfall 1); tools/check-engine.mjs (p) guards both wordings
+  // against the exact distribution of every setting.
   function simExact(p) {
     const s = DiceMath.stats(p), v = DiceMath.spread(p);
     const eT = tenths(s.e20Num, s.e20Den);
     const sdT = Math.round(10 * Math.sqrt(v.var20Num / v.var20Den));
-    const lopsided = eT - sdT < 0 || s.hitFaces === 1;
+    const lopsided = eT - sdT <= 0 || s.hitFaces === 1;
     const loT = lopsided ? 0 : eT - sdT, hiT = eT + sdT;
     const loText = fixed(loT, 1), hiText = fixed(hiT, 1);
     return {
@@ -1274,6 +1293,9 @@ const VM = (() => {
   const simStatus = (total, ex) =>
     `Rolled 20 rounds: ${total} damage. Expected ${ex.eText} ± ${ex.sdText}. ` + simPlacement(total, ex);
 
+  // The page view (D-08, D-16): stats view plus the compare and chart blocks. The big table and
+  // the one legend use the shared compare domain, so the same number is the same color everywhere.
+  // statsView stays chart-free: the grids call it per combo (RESEARCH Pitfall 4).
   function computeView(state) {
     const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
     const compare = compareView(p, state.n);
@@ -1286,7 +1308,7 @@ const VM = (() => {
 
   return Object.freeze({
     CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, compareView,
-    niceTicks, captionOrder, captionCross, captionBands, chartView, computeView,
+    niceTicks, captionOrder, captionCross, captionBands, readoutLines, chartView, computeView,
     settingsText, simExact, simPlacement, simStatus,
   });
 })();
@@ -1774,6 +1796,9 @@ const SelfTest = (() => {
     check('sim: +0 to hit expected and SD', pair(VM.simExact({ ...DEF, atk: 0 })), '31.5 ± 13.0');
     check('sim: AC 30 -5 d4 -5 uses the lopsided sentence', VM.simExact({ ac: 30, atk: -5, die: 4, dmg: -5 }).spreadText,
       'Most runs land between 0.0 and 1.7 (damage cannot go below 0, so the spread is lopsided).');
+    // 03-REVIEW WR-01: E - SD = 0 exactly (2.6 - 2.6) takes the floor wording.
+    check('sim: AC 13 −5 d4 −3 uses the floor wording', VM.simExact({ ac: 13, atk: -5, die: 4, dmg: -3 }).spreadText,
+      'Most runs land between 0.0 and 5.2 (damage cannot go below 0, so the spread is lopsided).');
     // Nat-20-only rule (RESEARCH Pitfall 1): lopsided even though E - SD >= 0
     const n20 = VM.simExact({ ac: 15, atk: -5, die: 4, dmg: 4 });
     check('sim: nat-20-only AC 15 -5 d4 +4 is lopsided', n20.lopsided, true);
@@ -1913,12 +1938,14 @@ function resetSim() {
 }
 
 let pending = false;
+// Latched by a failed first render (03-REVIEW WR-04): no later render is ever scheduled.
+let broken = false;
 function setState(patch) {
   Object.assign(state, patch);
   scheduleRender();
 }
 function scheduleRender() {
-  if (pending) return;
+  if (pending || broken) return;
   pending = true;
   requestAnimationFrame(() => { pending = false; render(); });
 }
@@ -2189,17 +2216,26 @@ function renderSim(view, simCtx) {
       empty.textContent = 'Not rolled yet';
       simTotalEl.replaceChildren(empty);
     }
-    simSpreadEl.replaceChildren(...numberedParts(ex.spreadText));
-    simPlaceEl.textContent = sim.rollError ? ROLL_ERROR_TEXT : SIM_PROMPT;
+    // 03-REVIEW IN-05: rebuild the spread only when its text changes.
+    if (simSpreadEl.textContent !== ex.spreadText) simSpreadEl.replaceChildren(...numberedParts(ex.spreadText));
+    setText(simPlaceEl, sim.rollError ? ROLL_ERROR_TEXT : SIM_PROMPT);
     // No run: the log is empty again, so the DOM is back to 80 row headers (Pitfall 3).
-    simLogEl.tBodies[0].replaceChildren();
-    simLogEl.tFoot.replaceChildren();
+    // Checked by content, not shownRunId: resetSim() zeroes shownRunId before this frame.
+    if (simLogEl.tBodies[0].firstChild !== null) simLogEl.tBodies[0].replaceChildren();
+    if (simLogEl.tFoot.firstChild !== null) simLogEl.tFoot.replaceChildren();
     setText(simLogEl.caption, '');
+    // 03-REVIEW WR-02: hidden run text goes too, so the markup matches a fresh load.
+    setText(simNoteBaseEl, '');
+    simNoteStaleEl.hidden = true;
+    if (simNowEl.firstChild !== null) simNowEl.replaceChildren();
+    if (simTallyEl.firstChild !== null) simTallyEl.replaceChildren();
     simLogWrapEl.hidden = true;
     simNoteEl.hidden = true;
     simNowEl.hidden = true;
     simTallyEl.hidden = true;
     simEl.classList.remove('is-stale');
+    // classList.remove leaves class="" behind; drop it so the markup matches a fresh load.
+    if (simEl.classList.length === 0) simEl.removeAttribute('class');
     shownRunId = 0;
     return;
   }
@@ -2355,6 +2391,7 @@ function chartInit() {
   // Pointer and touch scrubbing (D-13): rAF-coalesced, early return when N is unchanged
   // (T-02-07). Leaving, lifting a finger, or a cancelled gesture returns to the slider N.
   s.addEventListener('pointermove', (e) => {
+    if (!e.isPrimary) return;                // 02-REVIEW IN-05: a second finger never scrubs
     const n = nFromPointer(e);
     if (n === hoverN) return;
     hoverN = n;
@@ -2925,8 +2962,14 @@ function runUiSmoke() {
     check('readout ui: slider 7 readout', readout.textContent.startsWith('At +' + '7:'), true);
     const before = JSON.stringify(state);
     const r = svg.getBoundingClientRect();
+    // 02-REVIEW IN-05: a secondary pointer (a second finger) is ignored.
     svg.dispatchEvent(new PointerEvent('pointermove',
-      { bubbles: true, clientX: r.left + 424 * r.width / 640, clientY: r.top + r.height / 2 }));
+      { bubbles: true, isPrimary: false, clientX: r.left + 184 * r.width / 640, clientY: r.top + r.height / 2 }));
+    if (typeof paintReadout === 'function') paintReadout();
+    check('readout ui: a secondary pointer does not scrub', readout.textContent.startsWith('At +' + '7:'), true);
+    // A synthetic PointerEvent defaults to isPrimary false; a real mouse pointer is primary.
+    svg.dispatchEvent(new PointerEvent('pointermove',
+      { bubbles: true, isPrimary: true, clientX: r.left + 424 * r.width / 640, clientY: r.top + r.height / 2 }));
     if (typeof paintReadout === 'function') paintReadout();   // the handler itself paints in rAF
     check('readout ui: pointer at x 424 reads n 15', readout.textContent.startsWith('At +' + '15:'), true);
     check('readout ui: hover guide shown at x 424',
@@ -3368,6 +3411,9 @@ function showEngineError() {
   banner.hidden = false;
 }
 
+// Sections a failed first render may have half painted; hidden under the banner.
+const PAINTED_SECTIONS = ['stats', 'tables', 'compare', 'chart', 'sim'];
+
 function init() {
   const testMode = new URLSearchParams(location.search).has('test');
   if (!engineLoaded()) {
@@ -3377,9 +3423,11 @@ function init() {
     return;
   }
 
-  // WR-01 (02-REVIEW): the first render is guarded, so a view-model or DOM throw shows the
-  // banner instead of a blank page. The Roll button ships disabled and the sim body hidden;
-  // both go live only as the last steps of a render that succeeded.
+  // WR-01 (02-REVIEW), WR-04 (03-REVIEW): the first render is guarded, so a view-model or DOM
+  // throw shows the banner instead of a blank page. Nothing is wired until that render has
+  // succeeded: the control listeners and the Roll click come after it, and the Roll button
+  // (shipped disabled) and the sim body (shipped hidden) go live as the last steps. A throw
+  // latches `broken`, hides every painted section, and leaves the controls inert.
   try {
     // The N slider's range comes only from CONTROL_SPEC.n (IN-04: no second copy in the markup).
     nRangeEl.min = String(VM.CONTROL_SPEC.n.min);
@@ -3387,17 +3435,23 @@ function init() {
     chartInit();                             // SVG skeleton once, before the first render (D-09)
     Object.assign(state, VM.DEFAULT_STATE);
     renderControls();                        // D-04: state -> controls, never the reverse
+    render();                                // guarded first render: nothing is wired yet
     for (const root of [form, compareForm]) {   // two control roots, one handler (Pattern 1)
       root.addEventListener('submit', (e) => e.preventDefault());
       root.addEventListener('input', onControl);
       root.addEventListener('change', onChange);
     }
     rollBtn.addEventListener('click', onRoll);
-    render();
     simBodyEl.hidden = false;
     rollBtn.disabled = false;
   } catch (err) {
+    broken = true;
     console.error('render failed:', err);
+    // The banner says the table and numbers are not shown, so hide every painted section.
+    for (const id of PAINTED_SECTIONS) {
+      const sec = document.getElementById(id);
+      if (sec) sec.hidden = true;
+    }
     showEngineError();
     const st = selfTestIfLoaded();
     if (testMode && st) showSelfTestPanel(st);
