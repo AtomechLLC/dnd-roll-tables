@@ -1,7 +1,7 @@
 // Dev-only headless browser check. Never required to build or deploy the site.
 //
 //   node tools/check-page.mjs [url] [--plain] [--expect TEXT]... [--width PX] [--dump FILE]
-//   node tools/check-page.mjs --fault render [--width PX] [--dump FILE]
+//   node tools/check-page.mjs --fault render|later [--width PX] [--dump FILE]
 //
 // Loads the page in headless Chrome (or Edge) with a throwaway profile, captures
 // the final DOM (--dump-dom) and the console (--enable-logging), then checks:
@@ -56,6 +56,10 @@
 // init. It loads that copy in plain mode and, instead of (3), (4), (6)-(8) and the expects,
 // checks the guarded init: SELFTEST PASSED, 'render failed' logged, no 'Uncaught', the banner
 // shown, #roll and every .btn-preset disabled, and every painted section hidden.
+// --fault later (04-REVIEW WR-03): the same, but render() throws only from its second call on,
+// so init's first render succeeds and wires everything; the appended script then moves
+// #ac-range to 20 and dispatches `input`, and the scheduled render is the one that throws.
+// Same checks as --fault render: the scheduled render must take the same failure path.
 //
 // Default url: file:// URL of ../index.html plus ?test (--plain drops ?test).
 // Test mode is on exactly when the url's query has a `test` parameter, the same rule as
@@ -84,8 +88,8 @@ for (let i = 0; i < args.length; i++) {
   else if (a.startsWith('--')) { console.log(`CHECK-PAGE FAIL: unknown option ${a}`); process.exit(1); }
   else url = a;
 }
-if (fault !== null && fault !== 'render') {
-  console.log(`CHECK-PAGE FAIL: unknown fault ${JSON.stringify(fault)} (only "render")`);
+if (fault !== null && fault !== 'render' && fault !== 'later') {
+  console.log(`CHECK-PAGE FAIL: unknown fault ${JSON.stringify(fault)} (only "render" or "later")`);
   process.exit(1);
 }
 
@@ -96,7 +100,7 @@ if (!fs.existsSync(indexPath) && (url === null || fault !== null)) {
 
 // Fault mode: a temp copy whose render() throws, plus a synthetic input after init.
 let faultDir = null;
-if (fault === 'render') {
+if (fault !== null) {
   const src = fs.readFileSync(indexPath, 'utf8');
   const anchor = 'function render() {';
   const at = src.indexOf(anchor);
@@ -105,9 +109,15 @@ if (fault === 'render') {
     console.log('CHECK-PAGE FAIL: fault injection anchors not found (function render() { / </body>)');
     process.exit(1);
   }
-  const poke = '<script>setTimeout(() => document.getElementById(\'ac-range\')' +
-    '.dispatchEvent(new Event(\'input\', { bubbles: true })), 0);</script>\n';
-  let out = src.slice(0, at) + anchor + " throw new Error('injected render fault');" + src.slice(at + anchor.length);
+  // 'later' moves the slider first, so the input is a real change and schedules a render.
+  const poke = '<script>setTimeout(() => { const el = document.getElementById(\'ac-range\');' +
+    (fault === 'later' ? ' el.value = \'20\';' : '') +
+    ' el.dispatchEvent(new Event(\'input\', { bubbles: true })); }, 0);</script>\n';
+  const thrower = fault === 'later'
+    ? " if (++faultRenders >= 2) throw new Error('injected later render fault');"
+    : " throw new Error('injected render fault');";
+  let out = src.slice(0, at) + (fault === 'later' ? 'let faultRenders = 0;\n' : '') + anchor + thrower +
+    src.slice(at + anchor.length);
   const end2 = out.lastIndexOf('</body>');
   out = out.slice(0, end2) + poke + out.slice(end2);
   faultDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crs-fault-'));
@@ -441,7 +451,12 @@ const budget = consoleText.match(/SELFTEST PASSED: (\d+)\/(\d+) \(([\d.]+) ms\)/
 check('self-test within 200 ms (Chrome)', budget !== null && Number(budget[3]) <= 200,
   budget ? `${budget[3]} ms` : 'no SELFTEST PASSED timing line');
 
-if (fault === 'render') {
+if (fault !== null) {
+  if (fault === 'later') {
+    // The first render painted all four tables before the scheduled one threw.
+    const rowHeads = rendered.split('<th scope="row"').length - 1;
+    check('fault later: the first render painted (80 <th scope="row">)', rowHeads === 80, `found ${rowHeads}`);
+  }
   check('fault: console has "render failed"', consoleText.includes('render failed'));
   check('fault: console has no "Uncaught"', !consoleText.includes('Uncaught'),
     consoleText.split(/\r?\n/).filter((l) => l.includes('Uncaught')).slice(0, 3).join('\n      '));
@@ -501,7 +516,7 @@ if (fault === 'render') {
     'got ' + actual);
 }
 
-const mode = fault === 'render' ? ', mode: fault render' : '';
+const mode = fault !== null ? `, mode: fault ${fault}` : '';
 console.log(`url: ${url} (${testMode ? 'test' : 'plain'} mode, ${width}px, ${path.basename(browser)})${mode}`);
 console.log(`console lines: ${consoleLines.length}`);
 for (const l of consoleLines.filter((x) => /SELFTEST|render failed/.test(x)).slice(0, 5)) console.log(`  ${l.trim().slice(0, 200)}`);

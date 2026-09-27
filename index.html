@@ -2559,16 +2559,27 @@ let lastPreset = null;
 const PRESET_KEYS = ['ac', 'die', 'atk', 'dmg', 'n'];
 
 let pending = false;
-// Latched by a failed first render (03-REVIEW WR-04): no later render is ever scheduled.
+// Latched by any failed render (03-REVIEW WR-04, 04-REVIEW WR-03): no later render is ever scheduled.
 let broken = false;
 function setState(patch) {
   Object.assign(state, patch);
   scheduleRender();
 }
+// Every scheduled render is guarded like the first one in init() (04-REVIEW WR-03): a throw at
+// one setting would otherwise leave a half-painted page (new stats beside an old table or
+// chart) with no banner, and throw again on every input.
 function scheduleRender() {
   if (pending || broken) return;
   pending = true;
-  requestAnimationFrame(() => { pending = false; render(); });
+  requestAnimationFrame(() => {
+    pending = false;
+    if (broken) return;
+    try {
+      render();
+    } catch (err) {
+      failPage(err);
+    }
+  });
 }
 function render() {
   const view = VM.computeView(state);
@@ -4252,8 +4263,24 @@ function showEngineError() {
   banner.hidden = false;
 }
 
-// Sections a failed first render may have half painted; hidden under the banner.
+// Sections a failed render may have half painted; hidden under the banner.
 const PAINTED_SECTIONS = ['tables', 'stats', 'compare', 'chart', 'sim', 'explore'];
+
+// The one failure path for a render that throws, first or later (04-REVIEW WR-03): latch
+// `broken` so nothing repaints, hide every painted section, show the banner, and disable Roll
+// and the presets (a later failure finds them enabled).
+function failPage(err) {
+  broken = true;
+  console.error('render failed:', err);
+  // The banner says the table and numbers are not shown, so hide every painted section.
+  for (const id of PAINTED_SECTIONS) {
+    const sec = document.getElementById(id);
+    if (sec) sec.hidden = true;
+  }
+  rollBtn.disabled = true;
+  for (const b of presetBtns) b.disabled = true;
+  showEngineError();
+}
 
 function init() {
   const testMode = new URLSearchParams(location.search).has('test');
@@ -4289,14 +4316,7 @@ function init() {
     rollBtn.disabled = false;
     for (const b of presetBtns) b.disabled = false;          // enabled with Roll, last (D-09)
   } catch (err) {
-    broken = true;
-    console.error('render failed:', err);
-    // The banner says the table and numbers are not shown, so hide every painted section.
-    for (const id of PAINTED_SECTIONS) {
-      const sec = document.getElementById(id);
-      if (sec) sec.hidden = true;
-    }
-    showEngineError();
+    failPage(err);
     const st = selfTestIfLoaded();
     if (testMode && st) showSelfTestPanel(st);
     return;
