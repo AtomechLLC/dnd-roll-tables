@@ -2704,6 +2704,12 @@ const SelfTest = (() => {
       k ? [k.heading, ...k.cards.flatMap((c) => [c.value, c.sub])].join('|') : 'killView missing',
       'Killing a 40 ' + 'HP enemy|8.7|on average (simple division says 8.1)|15.8|on average, half of fights by round 15|' +
       '85%|fastest possible: round 3');
+    // D-07: the note under the cards (a memo hit, O(1)). Split literals keep the copy out of names.
+    check('kill: default note', k ? k.note : 'killView missing',
+      'Simple division (40 ' + 'HP ÷ the average hit) says 8.1 hits, but the exact average is 8.7. ' +
+      'The enemy drops only on the hit that takes it to 0 ' + 'HP or below, and whatever that last hit deals ' +
+      'past 0 is wasted, so on average the hits needed add up to more than 40 ' + 'HP. ' +
+      'Misses come between the hits: at a 55% hit chance, the kill takes 15.8 rounds on average.');
   });
 
   const failed = results.filter((r) => !r.ok);
@@ -4475,6 +4481,62 @@ function runUiSmoke() {
       '2.0|on average, half of fights by round 1');
   } catch (err) {
     results.push({ name: 'hp ui smoke crashed: ' + (err && err.message), ok: false });
+  } finally {
+    Object.assign(state, VM.DEFAULT_STATE);
+    renderControls();
+    render();
+  }
+
+  // Phase 5 kill note (KILL-04, D-07): the three sentences under the cards, and every number in
+  // them read back from the DOM equals the card it names (E[H] and simple from card 1, the Hit
+  // chance card, E[R] from card 2). Names avoid visible copy; literals are split (IN-06).
+  try {
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); render(); };
+    const node = (id) => document.getElementById(id);
+    const nb = (x) => String(x).replaceAll(String.fromCharCode(0xa0), ' ');
+    const txt = (id) => (node(id) ? nb(node(id).textContent) : null);
+    const note = () => txt('kill-note') ?? '';
+    const sentences = () => note().split(/(?<=\.) /);
+    const pick = (s, re) => { const m = re.exec(s); return m ? m[1] : null; };
+    const agree = (label) => {
+      const n = note(), sub = txt('stat-khits-sub') ?? '';
+      check(`kill note ui: ${label}, hits equal card 1`,
+        pick(n, /exact average (?:is|rounds to the same) ([0-9.,]+)\./), txt('stat-khits'));
+      check(`kill note ui: ${label}, simple equals card 1 sub`,
+        pick(n, /says (.+?) hits/), pick(sub, /\(simple division says (.+)\)/));
+      check(`kill note ui: ${label}, percent equals the Hit chance card`,
+        pick(n, /at a (\d+)% hit chance/) + '%', txt('stat-hit'));
+      check(`kill note ui: ${label}, rounds equal card 2`, pick(n, /takes ([0-9.,]+) rounds/), txt('stat-krounds'));
+    };
+
+    show({});
+    check('kill note ui: the note exists', node('kill-note') !== null, true);
+    check('kill note ui: defaults read the three sentences', note(),
+      'Simple division (40 ' + 'HP ÷ the average hit) says 8.1 hits, but the exact average is 8.7. ' +
+      'The enemy drops only on the hit that takes it to 0 ' + 'HP or below, and whatever that last hit deals ' +
+      'past 0 is wasted, so on average the hits needed add up to more than 40 ' + 'HP. ' +
+      'Misses come between the hits: at a 55% hit chance, the kill takes 15.8 rounds on average.');
+    agree('defaults');
+
+    show({ hp: 1 });
+    check('kill note ui: one HP, first sentence', sentences()[0],
+      'Simple division (1 ' + 'HP ÷ the average hit) says 0.2 hits, but the exact average is 1.0.');
+    agree('one HP');
+
+    show({ hp: 500 });
+    agree('500 HP');
+
+    show({ ac: 25, die: 12, atk: 0, dmg: 0 });
+    check('kill note ui: nat-20 only, third sentence', sentences()[2],
+      'Misses come between the hits: at a 5% hit chance, the kill takes 72.2 ' + 'rounds on average.');
+    agree('nat-20 only');
+
+    show({ die: 4, dmg: -5 });
+    check('kill note ui: past the cap, grouped rounds', note().endsWith('the kill takes 1,296 ' + 'rounds on average.'),
+      true);
+    agree('past the cap');
+  } catch (err) {
+    results.push({ name: 'kill note ui smoke crashed: ' + (err && err.message), ok: false });
   } finally {
     Object.assign(state, VM.DEFAULT_STATE);
     renderControls();
