@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-09-28T05:28:10.463Z"
-last_activity: 2026-09-28 -- Phase 05 execution started
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-09-28T05:38:02.006Z"
+last_activity: 2026-09-28
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 20
-  completed_plans: 16
+  completed_plans: 17
   percent: 80
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 05 (hits-to-kill) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 05
-Last activity: 2026-09-28 -- Phase 05 execution started
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-09-28
 
-Progress: [██████████] 100%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [██████████] 100%
 | Phase 04 P03 | 13min | 3 tasks | 3 files |
 | Phase 04 P04 | 14min | 2 tasks | 3 files |
 | Phase 04 P05 | 12min | 3 tasks | 5 files |
+| Phase 05 P01 | 8 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,9 @@ Recent decisions affecting current work:
 - [Phase 04]: 04-04: a11y guards (9)-(13) live in check-page (dump structure) and the 'a11y ui' smoke (live focus and rendered labels); each guard proved to bite on a broken scratch copy; no markup change was needed
 - [Phase 04]: 04-04: guard (9) uses the screen-reader name (.vh counts), guard (10) the shown text; (13) also fails if the to-hit line becomes dashed
 - [Phase 04]: 04-05: repo is AtomechLLC/dnd-roll-tables over SSH (user's choice, replaces D-13 name); Pages deploys via the user's stock GitHub Actions static workflow, merged with --allow-unrelated-histories (no force)
+- [Phase 05]: 05-01: Kill median/P10/P20 use the thinning DP (cap 1,000 rounds); the round-by-round DP is kept as the check-engine oracle
+- [Phase 05]: 05-01: Displayed kill numbers use float rounding with an exact BigInt tie-break within 1e-6 of a .5 boundary; median tie rule P >= 0.5 - 1e-9
+- [Phase 05]: 05-01: One kill table per (hitFaces, die, dmg) covers HP 1..500 in an LRU of 8, so HP edits and N drags are lookups
 
 ### Roadmap Evolution
 
@@ -138,6 +142,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-27T23:48:40.433Z
-Stopped at: Phase 5 UI-SPEC approved
-Resume file: .planning/phases/05-hits-to-kill/05-UI-SPEC.md
+Last session: 2026-09-28T05:38:01.997Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None
