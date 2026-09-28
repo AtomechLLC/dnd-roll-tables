@@ -5031,6 +5031,14 @@ function runUiSmoke() {
     check('kill note ui: past the cap, grouped rounds', note().endsWith('the kill takes 1,296 ' + 'rounds on average.'),
       true);
     agree('past the cap');
+
+    // 05-REVIEW WR-03: the "rounds to the same" branch, at the whole-number display tie that
+    // check-engine pins against the exact rationals (both numbers print 1,258).
+    show({ ac: 10, atk: 7, die: 4, dmg: -3, hp: 441 });
+    check('kill note ui: whole-number tie, first sentence', sentences()[0],
+      'Simple division (441 ' + 'HP ÷ the average hit) says 1,258 hits, and the exact average rounds to ' +
+      'the same 1,258.');
+    agree('whole-number tie');
   } catch (err) {
     results.push({ name: 'kill note ui smoke crashed: ' + (err && err.message), ok: false });
   } finally {

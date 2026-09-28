@@ -1340,11 +1340,14 @@ function exactHalf(o, hp, t) {
 }
 
 const kKeys = new Map();   // key -> { p, o, tab, ehT, ehW, erT, erW } (K6 reuses these)
+// 05-REVIEW WR-03: the K4 whole-number display ties ('key|hp'), and the HPs per key, so K6 can
+// add them to its HP sample and prove the note's "rounds to the same" branch against the oracle.
+const kTiePairs = new Set(), kTieHps = new Map(), kTieSame = new Set();
 const kc = {
   pairs: 0, pastCap: 0, erRelMax: 0, fbCalls: 0, fbPairs: 0, mmH: 0, mmR: 0, nearTies: 0, tieMaxT: 0,
   gapMin: Infinity, everyHitKills: 0, under01: 0, zeroPct: 0, p20Trunc: 0, pins: 0,
   wholeTies: 0, nearTiesBelow: 0, fbH: 0, fbR: 0, mmHd: 0, mmRd: 0,
-  wald: 0, noteSettings: 0, notePairs: 0, noteBut: 0, noteSame: 0,
+  wald: 0, noteSettings: 0, notePairs: 0, noteBut: 0, noteSame: 0, tieKeys: 0, tiePin: 0,
   stepSettings: 0, stepZero: 0, stepTies: 0, stepPairs: 0, stepParity: 0,
 };
 let kWorstMs = 0, kWorstKey = '';
@@ -1460,7 +1463,12 @@ if (!kHave) {
       // K6); in print the two can only meet when both round to the same whole number (>= 1,000),
       // where the note takes its "rounds to the same" branch. Those ties are counted and pinned.
       const eD = numOf(v.cards[0].value), sD = numOf(sm ? sm[1] : NaN);
-      if (eD === sD && ehT[hp] >= 10000 && simT >= 10000) kc.wholeTies++;
+      if (eD === sD && ehT[hp] >= 10000 && simT >= 10000) {
+        kc.wholeTies++;
+        kTiePairs.add(`${key}|${hp}`);
+        if (!kTieHps.has(key)) kTieHps.set(key, []);
+        kTieHps.get(key).push(hp);
+      }
       else if (!(eD > sD)) record('K4', p, `${at}: displayed E[H] ${v.cards[0].value} is not above simple ${sm && sm[1]}`);
     }
   }
@@ -1541,7 +1549,7 @@ if (!kHave) {
       for (let atk = CS.atk.min; atk <= CS.atk.max; atk++) {
         for (let dmg = CS.dmg.min; dmg <= CS.dmg.max; dmg++) {
           const p = { ac, die, atk, dmg };
-          const e = kKeys.get(`${21 - DiceMath.threshold(p)},${die},${dmg}`);
+          const ekey = `${21 - DiceMath.threshold(p)},${die},${dmg}`, e = kKeys.get(ekey);
           if (!e || !e.tab) { record('K6', p, 'no kill table for this key'); continue; }
           kc.noteSettings++;
           const o = e.o, sv = VM.statsView(p), best = 2 * die + dmg;
@@ -1562,6 +1570,7 @@ if (!kHave) {
           }
           const hps = new Set([1, 2, 3, 5, 40, 45, 100, 499, 500, 1 + dmg, 2 + dmg, 3 + dmg, 20 * best, 20 * best + 1]);
           for (let m = 1; m <= 3; m++) for (const d of [-1, 0, 1]) hps.add(m * step + d);
+          for (const h of kTieHps.get(ekey) ?? []) hps.add(h);   // WR-03: the K4 whole-number ties
           for (const hp of new Set([...hps].map(clampHp))) {
             kc.notePairs++;
             const v = VM.killViewFrom(e.tab, sv, hp), at = `HP ${hp}`;
@@ -1601,7 +1610,7 @@ if (!kHave) {
             if (!n) { record('K6', p, `${at}: note does not parse: ${v.note}`); continue; }
             const ehS = kText(e.ehT[hp], e.ehW[hp]), erS = kText(e.erT[hp], e.erW[hp]), simS = kSimple(o, hp).text;
             const same = ehS === simS;
-            if (same) kc.noteSame++; else kc.noteBut++;
+            if (same) { kc.noteSame++; kTieSame.add(`${ekey}|${hp}`); } else kc.noteBut++;
             const bad = [];
             if (Number(n[1]) !== hp) bad.push(`sentence 1 HP ${n[1]}`);
             if (n[2] !== simS) bad.push(`simple ${n[2]} vs ${simS}`);
@@ -1624,6 +1633,45 @@ if (!kHave) {
   }
   if (kc.noteSettings !== TOTAL_COMBOS) record('K6', kx('note'), `${kc.noteSettings} settings, want ${TOTAL_COMBOS}`);
   if (kc.stepSettings !== TOTAL_COMBOS) record('K7', kx('step'), `${kc.stepSettings} settings, want ${TOTAL_COMBOS}`);
+  // 05-REVIEW WR-03: the note's "rounds to the same" branch is taken at exactly the K4
+  // whole-number ties (all added to the HP sample above, so every one was checked by the note
+  // assertions against the oracle), and at no other sampled pair.
+  {
+    const ties = [...kTiePairs].sort().join(' '), same = [...kTieSame].sort().join(' ');
+    kc.tieKeys = kTieHps.size;
+    if (kTiePairs.size !== 6 || same !== ties) {
+      record('K6', kx('note ties'), `"rounds to the same" at ${same || 'no pair'}; K4 whole-number ties ${ties || 'none'}`);
+    }
+  }
+  // WR-03 pin: AC 10 / +7 / d4 / -3 at HP 441, where the note says both numbers print 1,258. The
+  // claim is checked against the exact rationals (BigInt, this file's weights), not a rebuilt
+  // string: simple division HP x den / A and exact E[H] = N / c^n both round half up to the
+  // printed whole number, and E[H] is still strictly above simple division (they only round
+  // to the same number).
+  {
+    const p = { ac: 10, atk: 7, die: 4, dmg: -3 }, hp = 441;
+    const e = kKeys.get(`${21 - DiceMath.threshold(p)},${p.die},${p.dmg}`);
+    const bad = [];
+    if (!e || !e.tab) {
+      bad.push('no kill table for this key');
+    } else {
+      const { N, cp } = exactOracle(e.o), AB = BigInt(e.o.A), denB = BigInt(e.o.den);
+      const eWhole = rhuB(N[hp], cp[hp], 1n), sWhole = rhuB(BigInt(hp) * denB, AB, 1n);
+      const n = NOTE_RE.exec(VM.killViewFrom(e.tab, VM.statsView(p), hp).note);
+      const whole = (x) => (/^[0-9]{1,3}(,[0-9]{3})+$/.test(x) ? BigInt(x.replaceAll(',', '')) : null);
+      if (!n) {
+        bad.push('note does not parse');
+      } else {
+        if (n[3] !== 'and the exact average rounds to the same') bad.push(`branch "${n[3]}"`);
+        if (whole(n[2]) !== sWhole) bad.push(`simple ${n[2]} vs exact ${sWhole}`);
+        if (whole(n[4]) !== eWhole) bad.push(`E[H] ${n[4]} vs exact ${eWhole}`);
+      }
+      if (eWhole !== 1258n || sWhole !== 1258n) bad.push(`exact whole values ${eWhole} / ${sWhole}, pinned 1258`);
+      if (!(N[hp] * AB > BigInt(hp) * cp[hp] * denB)) bad.push('exact E[H] is not above simple division');
+      kc.tiePin++;
+    }
+    if (bad.length) record('K6', p, `HP ${hp} tie pin: ${bad.join('; ')}`);
+  }
   // K7 counts (RESEARCH): average hit under 0.5 HP, and exact .5 averages (which step up).
   for (const [what, got, want] of [['step-0 settings', kc.stepZero, 1412], ['exact .5 ties', kc.stepTies, 99]]) {
     if (got !== want) record('K7', kx('counts'), `${what}: ${got}, pinned ${want}`);
@@ -1670,7 +1718,8 @@ const extra = {
     `p20 truncated to 0 where a kill is possible ${kc.p20Trunc}, whole-number display ties ${kc.wholeTies})`,
   K5: ` (${kc.pins} pins)`,
   K6: ` (Wald ${kc.wald} pairs; note ${kc.noteSettings} settings x HP sample = ${kc.notePairs} checked; ` +
-    `sentence 1 "but" ${kc.noteBut}, tie branch ${kc.noteSame})`,
+    `sentence 1 "but" ${kc.noteBut}, tie branch ${kc.noteSame} at the ${kTiePairs.size} K4 ties over ${kc.tieKeys} keys; ` +
+    `tie pin ${kc.tiePin})`,
   K7: ` (${kc.stepSettings} settings: step 0 ${kc.stepZero}, exact .5 ties ${kc.stepTies}; ` +
     `${kc.stepPairs} HP-sample pairs; markup ${kc.stepParity} strings)`,
 };
