@@ -2984,6 +2984,7 @@ function resetSim() {
   sim.rollError = false;
   shownRunId = 0;
   killShown = { runId: 0, hp: 0 };
+  rollStatusHp = null;   // declared below; resetSim only runs after init, never at load
 }
 
 // The last applied preset lives here, never in state (like `sim`): a click is an event, not a
@@ -2992,6 +2993,13 @@ function resetSim() {
 // settings it announced. The UI smoke resets it to null.
 let lastPreset = null;
 const PRESET_KEYS = ['ac', 'die', 'atk', 'dmg', 'n'];
+
+// The Enemy HP the kill sentence in #sim-status was scored at (05-REVIEW WR-01), or null when
+// the status makes no HP claim. Only handleRoll writes it; render() only clears it (with the
+// status text) once state.hp moves on, so the live region never keeps a kill sentence the
+// re-scored run contradicts. The clear is silent (UI-SPEC: HP re-scoring announces nothing),
+// and returning to the rolled-at HP by hand does not bring the sentence back.
+let rollStatusHp = null;
 
 let pending = false;
 // Latched by any failed render (03-REVIEW WR-04, 04-REVIEW WR-03): no later render is ever scheduled.
@@ -3028,6 +3036,12 @@ function render() {
   if (lastPreset && PRESET_KEYS.some((k) => state[k] !== lastPreset[k])) {
     lastPreset = null;
     setText(exploreStatusEl, '');
+  }
+  // 05-REVIEW WR-01: the same guard for the Roll status's kill sentence, keyed on Enemy HP only
+  // (an attack change stales the run but does not change which round the rolled dice kill in).
+  if (rollStatusHp !== null && state.hp !== rollStatusHp) {
+    rollStatusHp = null;
+    setText(simStatusEl, '');
   }
   for (const r of RENDERERS) r(view, simCtx);
   lastView = view;
@@ -3327,25 +3341,33 @@ function rollWith(rng) {
   return sim.run;
 }
 
-// One activation, one run. The status region is written here and never by render(): clear it,
-// then write in the next frame so an identical sentence is announced again.
+// One activation, one run. The status region is written here, never by render() (which only
+// clears it, below): clear it, then write in the next frame so an identical sentence is
+// announced again.
+// Phase 5 (05-REVIEW WR-01): the kill sentence is true only at the HP it was scored at, so that
+// HP goes to rollStatusHp. The write is dropped if render() cleared the record in between (an HP
+// edit in the same frame), the same guard applyPreset uses; the error sentence makes no HP claim.
 function handleRoll(rng) {
   let msg;
+  let scoredHp = null;
   try {
     const run = rollWith(rng);
     // Phase 5 (D-08): the same sentence plus the kill line at the HP rolled against.
-    msg = VM.simStatus(run.total, sim.exact) + ' ' + VM.killLine(VM.killTrack(run.rounds, state.hp));
+    scoredHp = state.hp;
+    msg = VM.simStatus(run.total, sim.exact) + ' ' + VM.killLine(VM.killTrack(run.rounds, scoredHp));
   } catch (err) {
     console.error('roll failed:', err);
     sim.run = null;
     sim.exact = null;
     sim.tally = [];
     sim.rollError = true;
+    scoredHp = null;
     msg = ROLL_ERROR_TEXT;
   }
+  rollStatusHp = scoredHp;
   scheduleRender();
   simStatusEl.textContent = '';
-  requestAnimationFrame(() => { simStatusEl.textContent = msg; });
+  requestAnimationFrame(() => { if (rollStatusHp === scoredHp) simStatusEl.textContent = msg; });
 }
 
 // The page's live dice: the one place a random source is chosen (SIM-06, D-15).
@@ -4666,6 +4688,29 @@ function runUiSmoke() {
     for (const cb of queued) cb(performance.now());
     check('sim kill ui: roll status adds the kill sentence', txt($('#sim-status')),
       VM.simStatus(71, sim.exact) + ' Killed in round 15 ' + '(9 hits).');
+    // 05-REVIEW WR-01: an HP edit re-scores the run silently, so the status drops the kill
+    // sentence instead of keeping one the log now contradicts (seed 6 survives at HP 72), and
+    // going back to the rolled-at HP does not bring it back. The status was written above, so
+    // these checks can fail.
+    check('sim kill ui: roll status record holds the rolled-at HP', rollStatusHp, 40);
+    show({ hp: 72 });
+    check('sim kill ui: an HP edit clears the roll status', txt($('#sim-status')), '');
+    check('sim kill ui: an HP edit drops the roll status record', rollStatusHp, null);
+    show({});
+    check('sim kill ui: the rolled-at HP again leaves the roll status clear', txt($('#sim-status')), '');
+    // An HP edit that lands before the click's frame: the queued write must not restore it.
+    const queued2 = [];
+    window.requestAnimationFrame = (cb) => { queued2.push(cb); return 0; };
+    try {
+      handleRoll(Sim.mulberry32(6));
+      setState({ hp: 72 });
+    } finally {
+      window.requestAnimationFrame = realRaf;
+    }
+    render();   // the frame's render runs before the queued write (as above; a render may already be pending)
+    for (const cb of queued2) cb(performance.now());
+    check('sim kill ui: an HP edit in the roll frame drops the kill sentence', txt($('#sim-status')), '');
+    check('sim kill ui: the HP edit in the roll frame still re-scores', txt(killEl()), 'Survived with 1 ' + 'HP left.');
 
     // 8. Reset: the kill line is hidden and empty, and the load count of 80 row headers holds
     resetSim();
