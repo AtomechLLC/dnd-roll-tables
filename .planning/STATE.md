@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Awaiting next milestone
-stopped_at: Completed 05-04-PLAN.md (Phase 5 verified)
+stopped_at: Milestone v1.0 complete and archived
 last_updated: "2026-09-28T14:42:12.045Z"
 last_activity: 2026-09-28 — Milestone v1.0 completed and archived
 progress:
@@ -18,10 +18,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-24)
+See: .planning/PROJECT.md (updated 2026-09-28)
 
 **Core value:** A designer can see, in one glance at a live table and a curve, why attack bonuses saturate (hit chance caps at 95%) while damage bonuses scale linearly, and why the crossover depends on AC and the damage die.
-**Current focus:** Milestone complete
+**Current focus:** Planning next milestone (v1.0 MVP shipped 2026-09-28)
 
 ## Current Position
 
@@ -74,54 +74,7 @@ Last activity: 2026-09-28 — Milestone v1.0 completed and archived
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [Roadmap]: 4 coarse phases. Research's Phase 2 (tables + chart + simulation, 17 requirements) was split into Bonus Comparison (Phase 2) and Simulation (Phase 3) so each is a separately verifiable vertical slice.
-- [Roadmap]: A minimal skeleton deploys to GitHub Pages in Phase 1 (DEPLOY-01..03). Phase 4 re-verifies the final URL.
-- [Roadmap]: CMP-04 (diff highlighting) sits with the other side-by-side table work in Phase 2, not in the copy/polish phase. The crit-row convention (2 x face + D) is already settled in PROJECT.md, so nothing blocks it.
-- [Roadmap]: STAT-03 (marginal +1 readout) is in Phase 1 with the other stat cards because it only needs the Phase 1 math core.
-- [Phase 02]: 02-01: shared heatMax is the true max cell across the three compact tables; 2X+D+N is only the oracle
-- [Phase 02]: 02-01: compact-table deltas are displayed variant tenths minus displayed baseline tenths
-- [Phase 02]: 02-01: page computeView = statsView + compareView; grids and check-engine call VM.statsView
-- [Phase 02]: 02-01: check-page --expect matches visible text only (self-test panel stripped, entities decoded)
-- [Phase 02]: chartView memoizes its N-independent block per (ac, atk, die, dmg) so N slider drags reuse one sweep
-- [Phase 02]: Chart readout gap is the difference of displayed tenths; caption order compares exact integer numerators
-- [Phase 02]: Direct labels de-collide to 22 units apart (to hit on top on a tie) and shift together into the plot
-- [Phase 02]: 02-03: Crossing labels carry a below/above class; each chart tier nudges them by the growth in text size and ring radius, so phone-tier labels never overlap their ring (UI-SPEC attributes unchanged)
-- [Phase 02]: 02-03: Self-test shares one IIFE-level sweep memo across the chart and cross sections; Node self-test 178-197 ms against the 200 ms budget
-- [Phase 02]: 02-03: ROADMAP Phase 2 SC1/SC3 reworded to amended CMP-04 (plain values) and zero-or-one crossing in N = 0..20 (70,980 settings checked)
-- [Phase 03]: Spread line is lopsided when E - SD <= 0 OR only a nat 20 hits (03 WR-01 fixed in Phase 4) (honest band wording; guarded by check-engine (p))
-- [Phase 03]: Randomness is injected: Sim.simulate requires rng; Math.random appears once, in the Roll click handler
-- [Phase 03]: WR-01 closed: first render guarded; Roll button ships disabled and is enabled as the last step of a successful render
-- [Phase 03]: Rolled-at note and log caption reserve two lines (note also in the 32rem side-by-side column) so stale never moves the pair or the log rows
-- [Phase 03]: Stale is pure CSS off one #sim.is-stale toggle; dimming covers every log th/td, caption/note/Now: stay ink as word cues
-- [Phase 03]: 03-03: Label badges in an unbroken marked run from row 1 drop to the bottom edge (data-down) so row 1 and row 2 badges never share an edge — UI-SPEC first-row exception collided with row 2's top badge in most default runs
-- [Phase 03]: 03-03: Only the attack controls (AC, die, attack bonus, damage bonus) stale a run; the compare +N slider keeps the run, marks, and tally (ROADMAP SC3 'any control' interpreted per CONTEXT discretion) — +N does not change the attack, so marks still point at the right cells
-- [Phase 04]: Compare-table deltas unchanged: they name no leader, so only the chart readout (VM.readoutLines, exact-sign leader) was fixed for 02 WR-02
-- [Phase 04]: check-page --expect matches visible text only (mini element tree); aria-hidden text is kept because it is shown on screen
-- [Phase 04]: check-engine (p) is exhaustive with bounds from the page's wording: 'About 2 runs in 3' in [0.60, 0.80), 'Most runs' >= 0.80
-- [Phase 04]: Which wins uses the inequality only when both +1 lines are rule branch; the 80 nat-20-only D = -2 settings compare displayed values (UI-SPEC deviation) — The inequality would print 2.5 where the real value is 2.625 (RESEARCH Pitfall 1)
-- [Phase 04]: copy branches are exact integer comparisons with statsView.exact; check-engine pins the counts (rule 60,740 / table 10,240; 36,850 / 28,100 / 5,950 / 80) — D-04: a formula never prints a number that disagrees with a card
-- [Phase 04]: NBSP is written as String.fromCharCode(0xa0) in index.html and tools — The Edit tool and Git Bash sed mangle backslash escapes
-- [Phase 04]: 04-03: three Try-this presets (cross / dmg / cap) that also set N (6 / 5 / 15); a click neither scrolls nor moves focus, and static jump links go to #chart / #controls
-- [Phase 04]: 04-03: chart explanations are built by VM.explainChart inside chartBase from the same crossings and bands that draw the rings; the singular bent dashed-line sentence reads ': one for the 1 hit you expect in 20 rounds.'
-- [Phase 04]: 04-03: the solid-line math group (d8 + 0 = 4.5) uses U+00A0 like the formula cards so it never wraps mid-expression
-- [Phase 04]: 04-04: a11y guards (9)-(13) live in check-page (dump structure) and the 'a11y ui' smoke (live focus and rendered labels); each guard proved to bite on a broken scratch copy; no markup change was needed
-- [Phase 04]: 04-04: guard (9) uses the screen-reader name (.vh counts), guard (10) the shown text; (13) also fails if the to-hit line becomes dashed
-- [Phase 04]: 04-05: repo is AtomechLLC/dnd-roll-tables over SSH (user's choice, replaces D-13 name); Pages deploys via the user's stock GitHub Actions static workflow, merged with --allow-unrelated-histories (no force)
-- [Phase 05]: 05-01: Kill median/P10/P20 use the thinning DP (cap 1,000 rounds); the round-by-round DP is kept as the check-engine oracle
-- [Phase 05]: 05-01: Displayed kill numbers use float rounding with an exact BigInt tie-break within 1e-6 of a .5 boundary; median tie rule P >= 0.5 - 1e-9
-- [Phase 05]: 05-01: One kill table per (hitFaces, die, dmg) covers HP 1..500 in an LRU of 8, so HP edits and N drags are lookups
-- [Phase 05]: 05-02: the kill note's numbers are the card strings themselves, so D-07 holds by construction; check-engine K6 still proves them against independent oracles at all 70,980 settings
-- [Phase 05]: 05-02: displayed E[H] can equal displayed simple division only at the whole-number scale (6 pairs >= 1,000); K4 pins them and the note's 'rounds to the same' branch covers them
-- [Phase 05]: 05-02: check-engine now takes about 113 s (kill section 66 s); accepted as dev-only (T-05-07)
-- [Phase 05]: 05-03: the hit step is round-half-up of the exact average hit (the card value); labels show the clamped change and inert buttons use aria-disabled so focus and tab order stay; only an active click announces
-- [Phase 05]: 05-03: simpleHits(sv, hp) is shared by the kill cards and the step status, so the status needs no kill table; check-engine K7 proves step = card rounding at all 70,980 settings
-- [Phase 05]: 05-04: Kill tracking lives in VM (killTrack / killLine / tallyEntry); #dice-sim is byte-identical and seeds 1/5/6 still total 47/54/71
-- [Phase 05]: 05-04: sim.tally holds the frozen runs, so tally outcomes re-score with Enemy HP; entries 'total · outcome' joined by '; '
-- [Phase 05]: 05-04: renderSim re-scores the log in place per (run id, HP) via killShown; HP never stales a run and never rebuilds rows
-- [Phase 05]: 05-04: log Result-column rules scoped to thead/tbody and .hp-down/.hp-kill line-height 1, so the tfoot HP cell stays numeric and an HP edit never moves the foot
+Cleared at the v1.0 milestone close. The full decision log with outcomes is in PROJECT.md (Key Decisions), and per-phase decisions are in each phase's CONTEXT.md and SUMMARY.md files.
 
 ### Roadmap Evolution
 
@@ -133,8 +86,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Resolved 2026-09-27: repo public at github.com/AtomechLLC/dnd-roll-tables on main (pushed over SSH; the user chose this remote instead of gh auth login), Pages live at https://atomechllc.github.io/dnd-roll-tables/ via the repo's GitHub Actions static workflow (Phase 4).
-- REQUIREMENTS.md header said 45 v1 requirements, but 47 are listed (RULES 8, CTRL 5, TABLE 6, STAT 3, CHART 5, CMP 5, SIM 6, COPY 5, DEPLOY 4). The coverage count is corrected to 47.
+None open. Known tech debt (Phase 1 review WR-01, the per-round third decimal) is recorded in PROJECT.md under Context.
 
 ### Quick Tasks Completed
 
@@ -154,7 +106,7 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-09-28T06:51:31.076Z
-Stopped at: Completed 05-04-PLAN.md (Phase 5 verified)
+Stopped at: Milestone v1.0 complete and archived
 Resume file: None
 
 ## Operator Next Steps
