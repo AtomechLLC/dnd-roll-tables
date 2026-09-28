@@ -82,6 +82,25 @@
 //      (x) once: every VM.PRESETS entry re-run through the engine at its exact settings: bands,
 //          steps, crossings, caption and readout claims (UI-SPEC Presets table), parseControl
 //          round trip, the UI-SPEC strings, and parity with the static #explore markup
+//      and the Phase 5 kill math (plan 05-02), in its own pass over the 2,470 attack keys
+//      (hitFaces, die, dmg) x HP 1..500 = 1,235,000 pairs. Per key it builds the page's
+//      DiceMath.killTable once (timed; a WARNING above 8 ms, never a failure) and two oracles
+//      that share no code path with the page's thinning method, both from this file's own
+//      weights (DiceMath.outcome / damageFor, as dist20Of): a round-by-round float DP over
+//      cumulative damage, and a BigInt N_n recurrence for exact E[H] and E[R]. The page's
+//      strings come from the pure VM.killViewFrom with this file's tables, never the memo:
+//      (K1) medianRound, p10 and p20 equal the round DP (median first t <= 1,000 with
+//          P >= 1/2 - 1e-9; 0 = past the cap), and E[R] = 20 E[H] / hitFaces equals an
+//          independent per-round recursion (1e-9 relative)
+//      (K2) the Hits and Rounds card values equal round-half-up of the exact rationals
+//      (K3) every P within 1e-9 of 1/2 at a median step is an exact 1/2 (BigInt round DP)
+//      (K4) every-hit-kills iff E[H] = 1 exactly; the simple number is the integer ratio; the
+//          median or past-cap wording; '0%' iff the fastest kill is past round 20, else the
+//          UI-SPEC percent rule on the oracle P20, never '100%'; the fastest round; and the
+//          displayed E[H] is strictly above the displayed simple number
+//      (K5) the D-05 reference values at the defaults, from the oracles
+//      The research counts (past the cap, near-ties, every hit kills, under 0.1, fallbacks,
+//      float-only mismatches, p20 truncated to 0) are pinned as equality checks.
 //      Zero-count asserts (02-REVIEW IN-04): no setting has a touch (a tie that is neither a
 //      crossing's tieN nor the end tie), a leading tie (tie at N = 1), or two or more
 //      crossings. The copy branches for those exist only for synthetic series; a rule change
@@ -172,6 +191,11 @@ const names = {
   v: '(v) COPY-04 solid-line explanation and bands',
   w: '(w) COPY-03 crossover explanation',
   x: '(x) COPY-05 preset claims and markup',
+  K1: '(K1) KILL-03 medians, P10 and P20 equal a round-by-round DP; E[R] x hitFaces = 20 E[H], every key x HP 1..500',
+  K2: '(K2) KILL-03 Hits and Rounds card values equal exact BigInt rounding, every key x HP 1..500',
+  K3: '(K3) KILL-03 every |P - 1/2| < 1e-9 at a median step is an exact 1/2 tie',
+  K4: '(K4) KILL-03 sub-lines and Kill-within-20: every-hit-kills iff E[H] = 1, median or past-cap wording, 0% iff fastest > 20, never 100%, displayed E[H] > simple except pinned whole-number ties',
+  K5: '(K5) D-05 reference values at the defaults',
   cover: '(cover) the stride-53 sample reaches 21 AC values, 5 dice, 26 attack and 26 damage bonuses',
   zero: '(zero) no touches, no leading ties, no setting with 2+ crossings',
 };
@@ -1138,6 +1162,329 @@ const presetFacts = [];
   }
 }
 
+// ---- Phase 5 kill math (KILL-03, D-05, D-06) ----------------------------------
+// The kill numbers depend on the attack only through (hitFaces, die, dmg), so this pass walks
+// the 2,470 keys once, with the first p seen as the representative. It keeps its own Map of
+// DiceMath.killTable results and calls the pure VM.killViewFrom; it never calls VM.killView or
+// VM.killTableFor in a loop (their 8-entry LRU would thrash, RESEARCH Pattern 2). The oracles
+// use this file's own weights, never DiceMath.hitPmf or the page's thinning.
+const K_KEYS_WANT = 2470;
+const K_CAP = 1000;                // UI-SPEC: the median search stops at 1,000 rounds
+const K_EPS = 1e-9;                // exact 1/2 median ties; K3 proves each use is a real tie
+const K_PAST_CAP = 'on average; half of fights last over 1,000 rounds';
+const kHave = typeof DiceMath.killTable === 'function' && typeof VM.killViewFrom === 'function' && !!CS.hp;
+const HPN = CS.hp ? CS.hp.max : 0;   // 500
+const kx = (what) => ({ ac: `(kill ${what})`, atk: '', die: '', dmg: '' });
+const kfmt = new Intl.NumberFormat('en-US');
+// Oracle display format (UI-SPEC Number formats), chosen by the rounded tenths: under 10,000
+// tenths 'int.d', else the rounded whole value with commas.
+const kText = (ten, whole) => (ten < 10000 ? `${Math.floor(ten / 10)}.${ten % 10}` : kfmt.format(whole));
+// Round-half-up of num / den at scale s, exact (BigInt; num, den > 0).
+const rhuB = (num, den, s) => (2n * s * num + den) / (2n * den);
+// UI-SPEC "Kill within 20" percent rule, applied to the oracle P20 (the '0%' branch is the
+// integer fastest-kill test, decided by the caller).
+const kTenthPct = (p) => { const r = Math.round(p * 1000); return `${Math.floor(r / 10)}.${r % 10}%`; };
+function kPct(p) {
+  if (p < 0.001) return '<0.1%';
+  if (p < 0.01) return kTenthPct(p);
+  if (p < 0.99) return `${Math.round(p * 100)}%`;
+  if (p < 0.999) return kTenthPct(p);
+  return '>99.9%';
+}
+
+// Own weights, enumerated like dist20Of. Hit weights over den = hitFaces * X^2 (X per normal
+// face and die face, 1 per crit pair); a round adds (20 - hitFaces) * X^2 of misses at 0, over
+// den1 = 20 * X^2. ds / ks are the damaging (d >= 1) hit weights.
+function killWeightsOf(p) {
+  const X = p.die, hit = new Map();
+  const add = (d, k) => hit.set(d, (hit.get(d) || 0) + k);
+  let hf = 0, missW = 0, missBad = false;
+  for (let r = 1; r <= 20; r++) {
+    const kind = DiceMath.outcome(r, p.atk, p.ac);
+    if (kind === 'hit') {
+      hf++;
+      for (let k = 1; k <= X; k++) add(DiceMath.damageFor(r, [k], p), X);
+    } else if (kind === 'crit') {
+      hf++;
+      for (let a = 1; a <= X; a++) for (let b = 1; b <= X; b++) add(DiceMath.damageFor(20, [a, b], p), 1);
+    } else {
+      if (DiceMath.damageFor(r, [], p) !== 0) missBad = true;
+      missW += X * X;
+    }
+  }
+  const hitW = [...hit].sort((x, y) => x[0] - y[0]);
+  let A = 0, w0 = 0, maxD = 0, sum = 0;
+  for (const [d, k] of hitW) { A += d * k; sum += k; if (d === 0) w0 = k; if (d > maxD) maxD = d; }
+  const pos = hitW.filter(([d]) => d > 0);
+  return {
+    X, hf, den: hf * X * X, den1: 20 * X * X, missW, w0, A, maxD, sum, missBad,
+    ds: Int32Array.from(pos, ([d]) => d), ks: Float64Array.from(pos, ([, k]) => k),
+  };
+}
+
+// Round-by-round DP (the UI-SPEC's method) over cumulative damage 0..HPN-1 plus an absorbing
+// ">= HPN" bucket; suffix sums give P(dead by t) for every hp. The median pointer only moves
+// forward (medians are non-decreasing in HP). pMed / pPrev keep P at the median step and the
+// step before (at the cap for past-cap HP) for K3. traceHp records P(dead by t) at one hp.
+function roundOracle(o, traceHp) {
+  const H = HPN, K = o.ds.length, ds = o.ds;
+  const q0 = (o.missW + o.w0) / o.den1, qs = Float64Array.from(o.ks, (k) => k / o.den1);
+  let cur = new Float64Array(H + 1), nxt = new Float64Array(H + 1);
+  let suf = new Float64Array(H + 1), prev = new Float64Array(H + 1);
+  cur[0] = 1;
+  const med = new Int32Array(H + 1), p10 = new Float64Array(H + 1), p20 = new Float64Array(H + 1);
+  const pMed = new Float64Array(H + 1).fill(NaN), pPrev = new Float64Array(H + 1);
+  const trace = [];
+  let open = 1;
+  for (let t = 1; t <= K_CAP; t++) {
+    nxt.fill(0);
+    nxt[H] = cur[H];
+    for (let s = 0; s < H; s++) {
+      const c = cur[s];
+      if (c === 0) continue;
+      nxt[s] += c * q0;
+      for (let k = 0; k < K; k++) { const j = s + ds[k]; nxt[j < H ? j : H] += c * qs[k]; }
+    }
+    let x = cur; cur = nxt; nxt = x;
+    x = prev; prev = suf; suf = x;
+    suf[H] = cur[H];
+    for (let s = H - 1; s >= 1; s--) suf[s] = suf[s + 1] + cur[s];
+    if (t === 10) p10.set(suf);
+    if (t === 20) p20.set(suf);
+    if (traceHp) trace.push(suf[traceHp]);
+    while (open <= H && suf[open] >= 0.5 - K_EPS) { med[open] = t; pMed[open] = suf[open]; pPrev[open] = prev[open]; open++; }
+    if (open > H && t >= 20) break;
+  }
+  for (let hp = open; hp <= H; hp++) pPrev[hp] = suf[hp];   // past the cap: P(dead by 1,000)
+  return { med, p10, p20, pMed, pPrev, trace };
+}
+
+// Independent E[rounds] by a per-round recursion (misses included in the zero weight):
+// r(n) = (den1 + sum_{d>=1} w1_d r(n - d)) / (den1 - w1_0), r(n <= 0) = 0.
+function roundsOracle(o) {
+  const H = HPN, K = o.ds.length, r = new Float64Array(H + 1), z = o.missW + o.w0;
+  for (let n = 1; n <= H; n++) {
+    let s = o.den1;
+    for (let k = 0; k < K; k++) if (n > o.ds[k]) s += o.ks[k] * r[n - o.ds[k]];
+    r[n] = s / (o.den1 - z);
+  }
+  return r;
+}
+
+// Exact E[H](n) = N_n / c^n with c = den - w0 (RESEARCH Pattern 3), from this file's weights:
+// N_n = den c^(n-1) + sum_{d>=1} w_d c^(d-1) N_(n-d).
+function exactOracle(o) {
+  const H = HPN, denB = BigInt(o.den), c = denB - BigInt(o.w0);
+  const a = Array.from(o.ds, (d, i) => [d, BigInt(o.ks[i]) * c ** BigInt(d - 1)]);
+  const N = new Array(H + 1), cp = new Array(H + 1);
+  N[0] = 0n; cp[0] = 1n;
+  for (let n = 1; n <= H; n++) {
+    let s = denB * cp[n - 1];
+    for (const [d, x] of a) if (n > d) s += x * N[n - d];
+    N[n] = s; cp[n] = cp[n - 1] * c;
+  }
+  return { N, cp };
+}
+
+// K3: P(dead by t) at hp as an exact BigInt over den1^t; true iff it is exactly 1/2.
+function exactHalf(o, hp, t) {
+  const den1 = BigInt(o.den1);
+  const w = [[0, BigInt(o.missW + o.w0)], ...Array.from(o.ds, (d, i) => [d, BigInt(o.ks[i])])];
+  let cur = new Array(hp + 1).fill(0n);
+  cur[0] = 1n;
+  for (let i = 0; i < t; i++) {
+    const nxt = new Array(hp + 1).fill(0n);
+    nxt[hp] = cur[hp] * den1;
+    for (let s = 0; s < hp; s++) {
+      const c = cur[s];
+      if (c === 0n) continue;
+      for (const [d, k] of w) nxt[s + d < hp ? s + d : hp] += c * k;
+    }
+    cur = nxt;
+  }
+  return 2n * cur[hp] === den1 ** BigInt(t);
+}
+
+const kKeys = new Map();   // key -> { p, o, tab, ehT, ehW, erT, erW } (K6 reuses these)
+const kc = {
+  pairs: 0, pastCap: 0, erRelMax: 0, fbCalls: 0, fbPairs: 0, mmH: 0, mmR: 0, nearTies: 0, tieMaxT: 0,
+  gapMin: Infinity, everyHitKills: 0, under01: 0, zeroPct: 0, p20Trunc: 0, pins: 0,
+  wholeTies: 0, nearTiesBelow: 0, fbH: 0, fbR: 0, mmHd: 0, mmRd: 0,
+};
+let kWorstMs = 0, kWorstKey = '';
+const tk = performance.now();
+if (!kHave) {
+  record('K1', kx('all'), 'DiceMath.killTable, VM.killViewFrom or VM.CONTROL_SPEC.hp missing');
+} else {
+  if (HPN !== 500 || DiceMath.KILL_HP_MAX !== HPN) record('K1', kx('all'), `HP max ${HPN} / KILL_HP_MAX ${DiceMath.KILL_HP_MAX}`);
+  for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
+    for (const die of DICE_SET) {
+      for (let atk = CS.atk.min; atk <= CS.atk.max; atk++) {
+        for (let dmg = CS.dmg.min; dmg <= CS.dmg.max; dmg++) {
+          const p = { ac, die, atk, dmg };
+          const key = `${21 - DiceMath.threshold(p)},${die},${dmg}`;
+          if (!kKeys.has(key)) kKeys.set(key, { p });
+        }
+      }
+    }
+  }
+  if (kKeys.size !== K_KEYS_WANT) record('K1', kx('all'), `${kKeys.size} attack keys, want ${K_KEYS_WANT}`);
+  const inWin = (y) => Math.abs(y - Math.floor(y) - 0.5) < 1e-6;   // the page's ROUND_WINDOW, for the count only
+  const numOf = (s) => (s === 'under 0.1' ? 0 : Number(String(s).replaceAll(',', '')));
+  // All tables first, timed on their own (the BigInt oracles below churn the heap). Each key is
+  // built twice and the faster build counts, so a GC pause in this large heap does not pose as
+  // an algorithmic slowdown; the worst over keys is the RESEARCH Pitfall 3 signal.
+  const killTabs = new Map();
+  for (const [key, e] of kKeys) {
+    let ms = Infinity, tab = null;
+    for (let i = 0; i < 2; i++) {
+      const t1 = performance.now();
+      tab = DiceMath.killTable(e.p);
+      ms = Math.min(ms, performance.now() - t1);
+    }
+    killTabs.set(key, tab);
+    if (ms > kWorstMs) { kWorstMs = ms; kWorstKey = key; }
+  }
+  for (const [key, e] of kKeys) {
+    const p = e.p, sv = VM.statsView(p), tab = killTabs.get(key);
+    const o = killWeightsOf(p);
+    if (o.hf !== sv.hitFaces || o.hf !== tab.hitFaces || `${o.hf},${p.die},${p.dmg}` !== key || o.sum !== o.den || o.missBad) {
+      record('K1', p, `weights: hitFaces ${o.hf} / ${sv.hitFaces} / ${tab.hitFaces}, sum ${o.sum} vs ${o.den}, miss damage ${o.missBad}`);
+      continue;
+    }
+    const ro = roundOracle(o, 0), rr = roundsOracle(o), { N, cp } = exactOracle(o), hfB = BigInt(o.hf);
+    const ehT = new Float64Array(HPN + 1), ehW = new Float64Array(HPN + 1);
+    const erT = new Float64Array(HPN + 1), erW = new Float64Array(HPN + 1);
+    Object.assign(e, { o, tab, ehT, ehW, erT, erW });
+    for (let hp = 1; hp <= HPN; hp++) {
+      kc.pairs++;
+      const at = `HP ${hp}`, m = ro.med[hp];
+      // K1: the round DP and the per-round recursion
+      if (m === 0) kc.pastCap++;
+      if (tab.medianRound[hp] !== m) record('K1', p, `${at}: medianRound ${tab.medianRound[hp]} vs round DP ${m}`);
+      if (!(Math.abs(tab.p10[hp] - ro.p10[hp]) <= 1e-12)) record('K1', p, `${at}: p10 ${tab.p10[hp]} vs round DP ${ro.p10[hp]}`);
+      if (!(Math.abs(tab.p20[hp] - ro.p20[hp]) <= 1e-12)) record('K1', p, `${at}: p20 ${tab.p20[hp]} vs round DP ${ro.p20[hp]}`);
+      const erF = (20 * tab.eHits[hp]) / tab.hitFaces, rel = Math.abs(erF - rr[hp]) / rr[hp];
+      if (rel > kc.erRelMax) kc.erRelMax = rel;
+      if (!(rel <= 1e-9)) record('K1', p, `${at}: 20 E[H] / hitFaces ${erF} vs per-round recursion ${rr[hp]}`);
+
+      // K2: the card values against round-half-up of the exact rationals
+      const Nn = N[hp], cn = cp[hp], rd = hfB * cn;
+      ehT[hp] = Number(rhuB(Nn, cn, 10n)); ehW[hp] = Number(rhuB(Nn, cn, 1n));
+      erT[hp] = Number(rhuB(20n * Nn, rd, 10n)); erW[hp] = Number(rhuB(20n * Nn, rd, 1n));
+      const ehS = kText(ehT[hp], ehW[hp]), erS = kText(erT[hp], erW[hp]);
+      const v = VM.killViewFrom(tab, sv, hp);
+      if (v.cards[0].value !== ehS) record('K2', p, `${at}: Hits to kill ${v.cards[0].value} vs exact ${ehS}`);
+      if (v.cards[1].value !== erS) record('K2', p, `${at}: Rounds to kill ${v.cards[1].value} vs exact ${erS}`);
+      const fh = 10 * tab.eHits[hp], fr = 10 * erF;
+      if (Math.round(fh) !== ehT[hp]) kc.mmH++;
+      if (Math.round(fr) !== erT[hp]) kc.mmR++;
+      if ((ehT[hp] < 10000 ? Math.round(fh) !== ehT[hp] : Math.round(tab.eHits[hp]) !== ehW[hp])) kc.mmHd++;
+      if ((erT[hp] < 10000 ? Math.round(fr) !== erT[hp] : Math.round(erF) !== erW[hp])) kc.mmRd++;
+      const fbH = inWin(fh) + (ehT[hp] >= 10000 && inWin(tab.eHits[hp]));
+      const fbR = inWin(fr) + (erT[hp] >= 10000 && inWin(erF));
+      kc.fbH += fbH; kc.fbR += fbR; kc.fbCalls += fbH + fbR;
+      if (fbH + fbR) kc.fbPairs++;
+
+      // K3: a float P within 1e-9 of 1/2 at the median step (or the step before) is exact
+      for (const [x, tt] of [[ro.pMed[hp], m], [ro.pPrev[hp], m === 0 ? K_CAP : m - 1]]) {
+        if (!Number.isFinite(x) || tt < 1) continue;
+        const g = Math.abs(x - 0.5);
+        if (g < K_EPS) {
+          kc.nearTies++;
+          if (x < 0.5) kc.nearTiesBelow++;
+          if (tt > kc.tieMaxT) kc.tieMaxT = tt;
+          if (!exactHalf(o, hp, tt)) record('K3', p, `${at}: P(dead by ${tt}) = ${x} is not exactly 1/2`);
+        } else if (g < kc.gapMin) kc.gapMin = g;
+      }
+
+      // K4: sub-lines and the percent card, from the oracles
+      const exactOne = Nn === cn, sub0 = v.cards[0].sub;
+      if (exactOne) kc.everyHitKills++;
+      if (sub0.startsWith('every hit kills') !== exactOne) record('K4', p, `${at}: "${sub0}" but E[H] = 1 is ${exactOne}`);
+      const simT = Math.floor((20 * hp * o.den + o.A) / (2 * o.A));
+      const simS = simT === 0 ? 'under 0.1' : kText(simT, Math.floor((2 * hp * o.den + o.A) / (2 * o.A)));
+      if (simT === 0) kc.under01++;
+      const sm = /^(?:every hit kills|on average) \(simple division says (.+)\)$/.exec(sub0);
+      if (!sm || sm[1] !== simS) record('K4', p, `${at}: "${sub0}" vs simple ${simS}`);
+      const sub1 = m === 0 ? K_PAST_CAP : `on average, half of fights by round ${kfmt.format(m)}`;
+      if (v.cards[1].sub !== sub1) record('K4', p, `${at}: "${v.cards[1].sub}" vs "${sub1}"`);
+      const fastest = Math.ceil(hp / o.maxD);
+      if ((ro.p20[hp] === 0) !== (fastest > 20)) record('K4', p, `${at}: round-DP P20 ${ro.p20[hp]} with fastest ${fastest}`);
+      if (fastest > 20) kc.zeroPct++;
+      if (tab.p20[hp] === 0 && fastest <= 20) kc.p20Trunc++;
+      const pct = fastest > 20 ? '0%' : kPct(ro.p20[hp]);
+      if (v.cards[2].value !== pct || v.cards[2].value === '100%') record('K4', p, `${at}: Kill within 20 ${v.cards[2].value} vs ${pct}`);
+      if (v.cards[2].sub !== `fastest possible: round ${fastest}`) record('K4', p, `${at}: "${v.cards[2].sub}" vs fastest ${fastest}`);
+      // Displayed E[H] above the displayed simple number. Exactly, E[H] > simple always (Wald,
+      // K6); in print the two can only meet when both round to the same whole number (>= 1,000),
+      // where the note takes its "rounds to the same" branch. Those ties are counted and pinned.
+      const eD = numOf(v.cards[0].value), sD = numOf(sm ? sm[1] : NaN);
+      if (eD === sD && ehT[hp] >= 10000 && simT >= 10000) kc.wholeTies++;
+      else if (!(eD > sD)) record('K4', p, `${at}: displayed E[H] ${v.cards[0].value} is not above simple ${sm && sm[1]}`);
+    }
+  }
+
+  // K5: the D-05 reference values at the defaults, from the oracles (not the page's table).
+  const D5 = VM.DEFAULT_STATE, dp = { ac: D5.ac, die: D5.die, atk: D5.atk, dmg: D5.dmg }, hp = D5.hp;
+  const o = killWeightsOf(dp), ro = roundOracle(o, hp), { N, cp } = exactOracle(o), sv = VM.statsView(dp);
+  const dec = (q, places) => { const s = String(q).padStart(places + 1, '0'); return `${s.slice(0, -places)}.${s.slice(-places)}`; };
+  let hc = new Float64Array(hp + 1), medHits = 0, minHits = 0;   // hit-count DP: P(S_j >= hp)
+  hc[0] = 1;
+  for (let j = 1; j <= K_CAP && !medHits; j++) {
+    const nx = new Float64Array(hp + 1);
+    nx[hp] = hc[hp];
+    for (let s = 0; s < hp; s++) {
+      if (hc[s] === 0) continue;
+      nx[s] += (hc[s] * o.w0) / o.den;
+      for (let k = 0; k < o.ds.length; k++) nx[Math.min(hp, s + o.ds[k])] += (hc[s] * o.ks[k]) / o.den;
+    }
+    hc = nx;
+    if (!minHits && hc[hp] > 0) minHits = j;
+    if (hc[hp] >= 0.5) medHits = j;
+  }
+  const { e20Num, e20Den } = sv.exact;
+  const pins = [
+    ['average hit', dec(rhuB(BigInt(o.A), BigInt(o.den), 1000n), 3), '4.909'],
+    ['simple hits', dec(rhuB(BigInt(hp * o.den), BigInt(o.A), 1000n), 3), '8.148'],
+    ['exact expected hits', dec(rhuB(N[hp], cp[hp], 1000n), 3), '8.700'],
+    ['median hits', medHits, 9],
+    ['minimum hits', minHits, 3],
+    ['per attack', dec(rhuB(BigInt(e20Num), BigInt(20 * e20Den), 100n), 2), '2.70'],
+    ['simple rounds', dec(rhuB(BigInt(20 * hp * e20Den), BigInt(e20Num), 100n), 2), '14.81'],
+    ['exact expected rounds', dec(rhuB(20n * N[hp], BigInt(o.hf) * cp[hp], 1000n), 3), '15.818'],
+    ['median round', ro.med[hp], 15],
+    ['minimum round', ro.trace.findIndex((x) => x > 0) + 1, 3],
+    ['P20', ro.p20[hp].toFixed(4), '0.8466'],
+    ['P10', ro.p10[hp].toFixed(4), '0.1114'],
+  ];
+  for (const [what, got, want] of pins) {
+    kc.pins++;
+    if (got !== want) record('K5', dp, `HP ${hp} ${what}: ${got} vs ${want}`);
+  }
+
+  // Pinned counts (first passing run, 05-02; the SUMMARY compares them with the research
+  // counts). The float-only counts depend on the engine's float operation order at exact .x5
+  // ties, so a float refactor that moves them must be re-proven here, not re-pinned blindly.
+  const K_WANT = [
+    ['K1', 'past the cap', kc.pastCap, 40163],
+    ['K2', 'E[H] float-window fallbacks', kc.fbH, 1523],
+    ['K2', 'E[R] float-window fallbacks', kc.fbR, 4897],
+    ['K2', 'E[H] float-only tenths mismatches', kc.mmH, 559],
+    ['K2', 'E[R] float-only tenths mismatches', kc.mmR, 1195],
+    ['K3', 'near-ties', kc.nearTies, 1424],
+    ['K3', 'near-ties below 1/2 in the float', kc.nearTiesBelow, 878],
+    ['K3', 'largest near-tie round', kc.tieMaxT, 5],
+    ['K4', 'every hit kills', kc.everyHitKills, 22055],
+    ['K4', 'simple under 0.1', kc.under01, 539],
+    ['K4', '0% (fastest past round 20)', kc.zeroPct, 229900],
+    ['K4', 'p20 truncated to 0 where a kill is possible', kc.p20Trunc, 190],
+    ['K4', 'whole-number display ties', kc.wholeTies, 6],
+  ];
+  for (const [k, what, got, want] of K_WANT) if (got !== want) record(k, kx('counts'), `${what}: ${got}, pinned ${want}`);
+}
+const kMs = (performance.now() - tk).toFixed(0);
+
 const extra = {
   s: ` (rule ${branchCounts.roundRule}, table ${branchCounts.roundTable})`,
   t: ` (rule/rule ${branchCounts.ruleRule}, reason ${branchCounts.reason}, table/table ${branchCounts.tableTable}, ` +
@@ -1151,6 +1498,14 @@ const extra = {
     `touch ${explainCounts.touch}, two+ ${explainCounts.multi}, identical ${explainCounts.identical}; levers ` +
     ['damage', 'attack'].map((f) => `${f}-first ${Object.entries(leverCounts[f]).map(([k, v]) => `${k} ${v}`).join(' / ')}`).join(', ') + ')',
   x: ` (${presetFacts.join(', ') || 'no presets'})`,
+  K1: ` (${kKeys.size} keys, ${kc.pairs} pairs; past the cap ${kc.pastCap}; E[R] worst relative gap ${kc.erRelMax.toExponential(1)})`,
+  K2: ` (float-window fallbacks ${kc.fbPairs} pairs / ${kc.fbCalls} calls, E[H] ${kc.fbH} + E[R] ${kc.fbR}; ` +
+    `float-only tenths mismatches E[H] ${kc.mmH}, E[R] ${kc.mmR}; at the displayed scale ${kc.mmHd} / ${kc.mmRd})`,
+  K3: ` (near-ties ${kc.nearTies}, ${kc.nearTiesBelow} of them below 1/2 in the float, all exact, max t ${kc.tieMaxT}; ` +
+    `smallest non-tie gap ${kc.gapMin.toExponential(2)})`,
+  K4: ` (every hit kills ${kc.everyHitKills}, simple under 0.1 ${kc.under01}, 0% ${kc.zeroPct}, ` +
+    `p20 truncated to 0 where a kill is possible ${kc.p20Trunc}, whole-number display ties ${kc.wholeTies})`,
+  K5: ` (${kc.pins} pins)`,
 };
 
 // (cover) 02-REVIEW WR-03: the sample must reach every value of every control.
@@ -1236,6 +1591,9 @@ console.log(`crossings: damage-all ${dist.damageAll}, hit-all ${dist.hitAll}, hi
   `touches ${zeroCounts.touch}, leading ties ${zeroCounts.leadingTie}, 2+ crossings ${zeroCounts.multiCross}`);
 if (Number(SelfTest.ms) > 200) console.log(`WARNING: Node self-test took ${SelfTest.ms} ms (budget 200)`);
 else console.log(`selftest time ${SelfTest.ms} ms (budget 200)`);
+// RESEARCH Pitfall 3: 8 ms in Node is about 16 ms (one frame) in Chrome. A warning, never a failure.
+const kWorst = `killTable worst ${kWorstMs.toFixed(1)} ms over ${kKeys.size} keys (${kWorstKey}, best of 2 builds); kill section ${kMs} ms`;
+console.log(kWorstMs > 8 ? `WARNING: ${kWorst} (budget 8 ms in Node)` : kWorst);
 
 const invariantFailures = Object.values(counts).reduce((a, b) => a + b, 0);
 if (SelfTest.failed === 0 && n > 0 && invariantFailures === 0 && combos === TOTAL_COMBOS) {
