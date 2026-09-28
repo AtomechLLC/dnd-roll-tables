@@ -115,6 +115,13 @@
 //          avgPerHitText, with the 'rounds to 0 HP' clause iff the step is 0, and VM.hpStatus
 //          names the oracle simple string with the bound sentence iff HP is 1 / 500. Once: the
 //          static #hp-minus / #hp-plus / #hp-hits markup equals the VM strings at the defaults
+//      (K8) KILL-05 / KILL-06 run re-scoring (D-08, D-10): for seeds 1..300 at four settings
+//          (the defaults, AC 25 / d12 / +0 / +0, AC 15 / d4 / +5 / -4, AC 10 / d12 / +20 / +20)
+//          and an HP sample (1, 2, 3, 5, 40, 47, 48, 71, 72, 500, total - 1, total, total + 1,
+//          clamped to 1..500), VM.killTrack, VM.killLine and VM.tallyEntry equal this file's own
+//          re-scoring from cumulative damage (kill round = first round with cum >= HP, hits =
+//          non-miss rounds up to it, HP left per round then null, HP left after round 20).
+//          The seeded table (seeds 1 / 5 / 6 at HP 40 / 47 / 48 / 71 / 72) is pinned verbatim
 //      The research counts (past the cap, near-ties, every hit kills, under 0.1, fallbacks,
 //      float-only mismatches, p20 truncated to 0) are pinned as equality checks.
 //      Zero-count asserts (02-REVIEW IN-04): no setting has a touch (a tie that is neither a
@@ -216,6 +223,7 @@ const names = {
   K5: '(K5) D-05 reference values at the defaults',
   K6: '(K6) KILL-04 note numbers equal the cards and the oracles; E[H] x average hit > HP exactly',
   K7: '(K7) KILL-02 step = round(exact average hit) = round(card), labels, inert flags, hits line and status; static markup parity',
+  K8: '(K8) KILL-05/06 killTrack, kill line and tally entry equal an independent re-scoring of seeded runs; seeded pins',
   cover: '(cover) the stride-53 sample reaches 21 AC values, 5 dice, 26 attack and 26 damage bonuses',
   zero: '(zero) no touches, no leading ties, no setting with 2+ crossings',
 };
@@ -1728,6 +1736,96 @@ for (const p of QSET) {
   }
 }
 const qMs = (performance.now() - tq).toFixed(0);
+
+// (K8) KILL-05 / KILL-06: re-scoring a stored run against Enemy HP (D-08, D-10). The page's
+// VM.killTrack / killLine / tallyEntry against this file's own walk over cumulative damage and
+// its own copy templates. Sim.simulate is the page's (the dice are the input, not the claim).
+const k8 = { pairs: 0, runs: 0, pins: 0, kills: 0, survived: 0, lastRound: 0 };
+const k8Have = typeof VM.killTrack === 'function' && typeof VM.killLine === 'function' &&
+  typeof VM.tallyEntry === 'function';
+const K8_SET = [
+  { ac: 15, atk: 5, die: 8, dmg: 0 },
+  { ac: 25, atk: 0, die: 12, dmg: 0 },
+  { ac: 15, atk: 5, die: 4, dmg: -4 },
+  { ac: 10, atk: 20, die: 12, dmg: 20 },
+];
+// Own re-scoring: kill round K = the first round whose cumulative damage reaches HP.
+function k8Oracle(rounds, hp) {
+  let cum = 0, K = null, hits = 0;
+  const hpAfter = [];
+  for (let i = 0; i < rounds.length; i++) {
+    if (K !== null) { hpAfter.push(null); continue; }
+    cum += rounds[i].damage;
+    if (rounds[i].result !== 'miss') hits++;
+    hpAfter.push(Math.max(0, hp - cum));
+    if (cum >= hp) K = i + 1;
+  }
+  const total = rounds.reduce((a, r) => a + r.damage, 0);
+  return { hpAfter, K, hits: K === null ? null : hits, left: Math.max(0, hp - total) };
+}
+const k8Line = (o) => (o.K === null ? `Survived with ${o.left} HP left.`
+  : `Killed in round ${o.K} (${o.hits} ${o.hits === 1 ? 'hit' : 'hits'}).`);
+const k8Entry = (total, o) => (o.K === null ? `${total} · ${o.left} HP left` : `${total} · killed R${o.K}`);
+if (!k8Have) {
+  record('K8', kx('track'), 'VM.killTrack, VM.killLine or VM.tallyEntry missing');
+} else {
+  for (const p of K8_SET) {
+    for (let seed = 1; seed <= 300; seed++) {
+      const run = Sim.simulate(p, 20, Sim.mulberry32(seed));
+      k8.runs++;
+      const hps = [...new Set([1, 2, 3, 5, 40, 47, 48, 71, 72, 500, run.total - 1, run.total, run.total + 1]
+        .map((h) => Math.min(500, Math.max(1, h))))];
+      for (const hp of hps) {
+        k8.pairs++;
+        const o = k8Oracle(run.rounds, hp);
+        const at = `seed ${seed} HP ${hp}`;
+        let t, line, entry;
+        try {
+          t = VM.killTrack(run.rounds, hp);
+          line = VM.killLine(t);
+          entry = VM.tallyEntry(run, hp);
+        } catch (err) {
+          record('K8', p, `${at}: threw ${err && err.message}`);
+          continue;
+        }
+        const bad = [];
+        if (!Object.isFrozen(t)) bad.push('track not frozen');
+        const got = (t.hpAfter || []).map((x) => (x === null ? '-' : x)).join(',');
+        const want = o.hpAfter.map((x) => (x === null ? '-' : x)).join(',');
+        if (got !== want) bad.push(`hpAfter ${got} vs ${want}`);
+        if (t.killRound !== o.K) bad.push(`kill round ${t.killRound} vs ${o.K}`);
+        if (t.hits !== o.hits) bad.push(`hits ${t.hits} vs ${o.hits}`);
+        if (t.leftAfter !== o.left) bad.push(`left ${t.leftAfter} vs ${o.left}`);
+        if (line !== k8Line(o)) bad.push(`line "${line}" vs "${k8Line(o)}"`);
+        if (entry !== k8Entry(run.total, o)) bad.push(`entry "${entry}" vs "${k8Entry(run.total, o)}"`);
+        if (bad.length) record('K8', p, `${at}: ${bad.join('; ')}`);
+        if (o.K === null) k8.survived++; else k8.kills++;
+        if (o.K === 20) k8.lastRound++;
+      }
+    }
+  }
+  // The seeded table (RESEARCH Pitfall 6), verbatim at the defaults.
+  const K8_PINS = {
+    1: { 40: 'Killed in round 16 (8 hits).', 47: 'Killed in round 20 (10 hits).', 48: 'Survived with 1 HP left.',
+      71: 'Survived with 24 HP left.', 72: 'Survived with 25 HP left.' },
+    5: { 40: 'Killed in round 11 (9 hits).', 47: 'Killed in round 17 (11 hits).', 48: 'Killed in round 17 (11 hits).',
+      71: 'Survived with 17 HP left.', 72: 'Survived with 18 HP left.' },
+    6: { 40: 'Killed in round 15 (9 hits).', 47: 'Killed in round 16 (10 hits).', 48: 'Killed in round 16 (10 hits).',
+      71: 'Killed in round 18 (12 hits).', 72: 'Survived with 1 HP left.' },
+  };
+  const K8_TOTALS = { 1: 47, 5: 54, 6: 71 };
+  for (const [seed, row] of Object.entries(K8_PINS)) {
+    const run = Sim.simulate(K8_SET[0], 20, Sim.mulberry32(Number(seed)));
+    if (run.total !== K8_TOTALS[seed]) record('K8', K8_SET[0], `seed ${seed} total ${run.total}, pinned ${K8_TOTALS[seed]}`);
+    for (const [hp, want] of Object.entries(row)) {
+      k8.pins++;
+      const got = VM.killLine(VM.killTrack(run.rounds, Number(hp)));
+      if (got !== want) record('K8', K8_SET[0], `pin seed ${seed} HP ${hp}: "${got}" vs "${want}"`);
+    }
+  }
+}
+extra.K8 = ` (${k8.runs} seeded runs x HP sample = ${k8.pairs} pairs checked: killed ${k8.kills}, ` +
+  `survived ${k8.survived}, killed in round 20 ${k8.lastRound}; ${k8.pins} seeded pins)`;
 
 // ---- report -----------------------------------------------------------------
 for (const k of Object.keys(names)) {

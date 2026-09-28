@@ -2810,6 +2810,28 @@ const SelfTest = (() => {
       k && 'hitsLine' in k ? [k.step, k.minusApplied, k.plusApplied, k.minusLabel, k.plusLabel, k.hitsLine].join('|')
         : 'step fields missing',
       '5|5|5|−1 hit (−5 ' + 'HP)|+1 hit (+5 ' + 'HP)|≈ 8.1 average hits (1 hit ≈ 4.91 ' + 'HP)');
+    // D-08, D-10: re-scoring a hand-made 3-round run (hit 5, miss, crit 9) at HP 10 / 20 / 5.
+    // O(1). A kill on the last round, a survivor, and a kill on round 1 (then nulls, '1 hit').
+    const R = Object.freeze([
+      Object.freeze({ round: 1, result: 'hit', damage: 5 }),
+      Object.freeze({ round: 2, result: 'miss', damage: 0 }),
+      Object.freeze({ round: 3, result: 'crit', damage: 9 }),
+    ]);
+    const hasTrack = typeof VM.killTrack === 'function';
+    // String() on each field: Array join would print a null kill round or hit count as ''.
+    const fmt = (t) => [t.hpAfter.map((x) => (x === null ? '-' : x)).join(','), t.killRound, t.hits, t.leftAfter]
+      .map(String).join('|');
+    check('kill: hand-made track',
+      hasTrack ? [fmt(VM.killTrack(R, 10)), fmt(VM.killTrack(R, 20)), fmt(VM.killTrack(R, 5))].join(' ; ')
+        : 'killTrack missing',
+      '5,5,0|3|2|0 ; 15,15,6|null|null|6 ; 0,-,-|1|1|0');
+    check('kill: line and tally entry',
+      hasTrack && typeof VM.killLine === 'function' && typeof VM.tallyEntry === 'function'
+        ? [VM.killLine(VM.killTrack(R, 10)), VM.killLine(VM.killTrack(R, 20)), VM.killLine(VM.killTrack(R, 5)),
+          VM.tallyEntry({ total: 14, rounds: R }, 10), VM.tallyEntry({ total: 14, rounds: R }, 20)].join('|')
+        : 'killLine or tallyEntry missing',
+      'Killed in round 3 (2 ' + 'hits).|Survived with 6 ' + 'HP left.|Killed in round 1 (1 ' + 'hit).|' +
+      '14 · killed R3|14 · 6 ' + 'HP left');
   });
 
   const failed = results.filter((r) => !r.ok);
@@ -4260,7 +4282,8 @@ function runUiSmoke() {
     check('sim log ui: one foot row', logEl.tFoot.rows.length, 1);
     check('sim log ui: 21 row headers in the log', logEl.querySelectorAll('th[scope="row"]').length, 21);
     const footCells = logEl.tFoot.rows.length ? logEl.tFoot.rows[0].cells : [];
-    const footTotal = footCells.length ? footCells[footCells.length - 1].textContent : null;
+    // Phase 5: 'Total' spans 4 columns, so cell 1 is the damage total; the new last cell is HP left.
+    const footTotal = footCells.length > 1 ? footCells[1].textContent : null;
     check('sim log ui: seed 6 foot total', footTotal, '71');
     check('sim log ui: foot total equals the simulated figure', footTotal, txt($('#sim-total')));
     const dmgs = body().rows.length ? cellsAt(4) : [];
@@ -4348,7 +4371,9 @@ function runUiSmoke() {
     rollWith(Sim.mulberry32(5));
     rollWith(Sim.mulberry32(6));
     render();
-    const tallyWant = 'Last 3 runs ' + 'at these settings, newest first: 71 · 54 · 47 (expected 54.0)';
+    // Phase 5 (D-10): each entry carries its outcome at HP 40, and entries are separated by '; '.
+    const tallyWant = 'Last 3 runs ' +
+      'at these settings, newest first: 71 · killed R15; 54 · killed R11; 47 · killed R16 (expected 54.0)';
     check('sim log ui: tally shown after three runs', hid($('#sim-tally')), false);
     check('sim log ui: tally text', txt($('#sim-tally')), tallyWant);
     check('sim log ui: newest tally total is bold', txt($('#sim-tally b.num')), '71');
@@ -4387,6 +4412,151 @@ function runUiSmoke() {
     results.push({ name: 'sim log ui smoke crashed: ' + (err && err.message), ok: false });
   } finally {
     try { resetSim(); } catch { /* resetSim missing: the crash above is already reported */ }
+  }
+
+  // Phase 5 kill tracking in the 20-round roll (KILL-05, KILL-06, D-08..D-11). Seeded pins at
+  // the defaults (RESEARCH Pitfall 6): seed 6 totals 71 and dies in round 15 at HP 40 (9 hits),
+  // survives with 1 HP left at HP 72. An HP edit re-scores the same rows in place: same run id,
+  // same row nodes, never stale. Names avoid displayed strings; visible copy is split (IN-06).
+  try {
+    const $ = (sel) => document.querySelector(sel);
+    const txt = (el) => (el ? el.textContent : null);
+    const hid = (el) => (el ? el.hidden : null);
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); renderControls(); render(); };
+    const logEl = document.getElementById('sim-log');
+    const body = () => logEl.tBodies[0];
+    const cellsAt = (i) => Array.from(body().rows, (row) => (row.cells[i] ? row.cells[i].textContent : null));
+    const isStale = () => document.getElementById('sim').classList.contains('is-stale');
+    const kills = () => Array.from(body().querySelectorAll('tr.kill'));
+    const downs = () => Array.from(body().querySelectorAll('tr.down'));
+    const killIdx = () => kills().map((r) => r.sectionRowIndex).join(',');
+    const footCell = (i) => (logEl.tFoot.rows.length && logEl.tFoot.rows[0].cells[i]
+      ? logEl.tFoot.rows[0].cells[i].textContent : null);
+    const killEl = () => document.getElementById('sim-kill');
+    const roll = (seed) => { rollWith(Sim.mulberry32(seed)); render(); };
+
+    // 1. Seed 6 at the defaults (HP 40): killed in round 15 with 9 hits
+    resetSim();
+    show({});
+    roll(6);
+    const row0 = body().rows[0];
+    const id = sim.run.id;
+    const heads = logEl.tHead ? logEl.tHead.rows[0].cells : [];
+    check('sim kill ui: six header cells', heads.length, 6);
+    const h6 = heads[5];
+    check('sim kill ui: sixth header visible label',
+      txt(h6 && h6.querySelector('span[aria-hidden="true"]')), 'Enemy ' + 'HP');
+    check('sim kill ui: sixth header accessible name', txt(h6 && h6.querySelector('.vh')), 'Enemy ' + 'HP left');
+    check('sim kill ui: every body row has six cells',
+      Array.from(body().rows).every((r) => r.cells.length === 6), true);
+    check('sim kill ui: seed 6 one kill row, round 15', killIdx(), '14');
+    const kc5 = body().rows[14] && body().rows[14].cells[5] ? body().rows[14].cells[5] : null;
+    check('sim kill ui: kill cell text', txt(kc5), '0 ← ' + 'killed');
+    check('sim kill ui: kill cell word in italics', txt(kc5 && kc5.querySelector('i')), 'killed');
+    check('sim kill ui: kill cell arrow is hidden from readers',
+      txt(kc5 && kc5.querySelector('span[aria-hidden="true"]')), '←');
+    check('sim kill ui: rounds after the kill are down',
+      downs().map((r) => r.sectionRowIndex).join(','), '15,16,17,18,19');
+    check('sim kill ui: down cells say so', cellsAt(5).slice(15).join('|'), Array(5).fill('enemy ' + 'down').join('|'));
+    check('sim kill ui: rows before the kill carry no kill or down class',
+      Array.from(body().rows).slice(0, 14).every((r) => !r.classList.contains('kill') && !r.classList.contains('down')),
+      true);
+    let cum = 0;
+    const wantLeft = cellsAt(4).slice(0, 14).map((d) => { cum += Number(d); return String(Math.max(0, 40 - cum)); });
+    check('sim kill ui: HP left before the kill follows the damage column', cellsAt(5).slice(0, 14).join(','),
+      wantLeft.join(','));
+    check('sim kill ui: foot damage total', footCell(1), '71');
+    check('sim kill ui: foot HP left when killed', footCell(2), '0');
+    check('sim kill ui: kill line shown', hid(killEl()), false);
+    check('sim kill ui: kill line killed', txt(killEl()), 'Killed in round 15 ' + '(9 hits).');
+    check('sim kill ui: kill line numbers are bold', killEl() ? killEl().querySelectorAll('b.num').length : null, 2);
+
+    // 2. HP 72 re-scores the same rolls: same run, same rows, never stale (D-09)
+    show({ hp: 72 });
+    check('sim kill ui: HP edit keeps the run id', sim.run.id, id);
+    check('sim kill ui: HP edit does not rebuild rows', body().rows[0] === row0, true);
+    check('sim kill ui: HP edit does not stale the run', isStale(), false);
+    check('sim kill ui: HP 72 no kill row', kills().length, 0);
+    check('sim kill ui: HP 72 no down rows', downs().length, 0);
+    check('sim kill ui: HP 72 last row left', cellsAt(5)[19], '1');
+    check('sim kill ui: HP 72 foot left', footCell(2), '1');
+    check('sim kill ui: kill line survived', txt(killEl()), 'Survived with 1 ' + 'HP left.');
+    show({ hp: 71 });
+    check('sim kill ui: HP 71 kill row moves to round 18', killIdx(), '17');
+    check('sim kill ui: HP 71 kill line', txt(killEl()), 'Killed in round 18 ' + '(12 hits).');
+    check('sim kill ui: HP 71 rows still not rebuilt', body().rows[0] === row0, true);
+
+    // 3. Seed 1 (total 47): R16 at HP 40, the last-round edge at HP 47, survived at HP 48
+    resetSim();
+    show({});
+    roll(1);
+    check('sim kill ui: seed 1 kill line', txt(killEl()), 'Killed in round 16 ' + '(8 hits).');
+    show({ hp: 47 });
+    check('sim kill ui: seed 1 HP 47 kill row is round 20', killIdx(), '19');
+    check('sim kill ui: seed 1 HP 47 no down rows', downs().length, 0);
+    show({ hp: 48 });
+    check('sim kill ui: seed 1 HP 48 survived', txt(killEl()), 'Survived with 1 ' + 'HP left.');
+
+    // 4. A stale run still re-scores with HP (UI-SPEC States)
+    resetSim();
+    show({});
+    roll(6);
+    show({ ac: 16 });
+    check('sim kill ui: attack change stales the run', isStale(), true);
+    check('sim kill ui: stale run keeps the kill row', killIdx(), '14');
+    show({ ac: 16, hp: 72 });
+    check('sim kill ui: HP edit leaves it stale', isStale(), true);
+    check('sim kill ui: stale run re-scores (no kill row)', kills().length, 0);
+    check('sim kill ui: stale kill line survived', txt(killEl()), 'Survived with 1 ' + 'HP left.');
+    check('sim kill ui: stale tally hidden', hid($('#sim-tally')), true);
+
+    // 5. The tally re-scores its stored runs with HP (D-10, KILL-06)
+    resetSim();
+    show({});
+    rollWith(Sim.mulberry32(1));
+    rollWith(Sim.mulberry32(5));
+    roll(6);
+    show({ hp: 72 });
+    check('sim kill ui: tally outcomes at HP 72', txt($('#sim-tally')), 'Last 3 runs ' +
+      'at these settings, newest first: 71 · 1 ' + 'HP left; 54 · 18 ' + 'HP left; 47 · 25 ' + 'HP left (expected 54.0)');
+    check('sim kill ui: tally newest total bold', txt($('#sim-tally b.num')), '71');
+
+    // 6. D-11: the outcome-table marks ignore HP
+    resetSim();
+    show({});
+    roll(6);
+    check('sim kill ui: seed 6 marks at HP 40', tableEl.querySelectorAll('.roll').length, 15);
+    show({ hp: 72 });
+    check('sim kill ui: seed 6 marks at HP 72', tableEl.querySelectorAll('.roll').length, 15);
+
+    // 7. The Roll status carries the kill sentence (written only by the click path)
+    resetSim();
+    show({});
+    const queued = [];
+    const realRaf = window.requestAnimationFrame;
+    window.requestAnimationFrame = (cb) => { queued.push(cb); return 0; };
+    try {
+      handleRoll(Sim.mulberry32(6));
+    } finally {
+      window.requestAnimationFrame = realRaf;
+    }
+    render();
+    for (const cb of queued) cb(performance.now());
+    check('sim kill ui: roll status adds the kill sentence', txt($('#sim-status')),
+      VM.simStatus(71, sim.exact) + ' Killed in round 15 ' + '(9 hits).');
+
+    // 8. Reset: the kill line is hidden and empty, and the load count of 80 row headers holds
+    resetSim();
+    show({});
+    check('sim kill ui: kill line hidden after reset', hid(killEl()), true);
+    check('sim kill ui: kill line empty after reset', killEl() ? killEl().childNodes.length : null, 0);
+    check('sim kill ui: page row headers after reset', document.querySelectorAll('th[scope="row"]').length, 80);
+  } catch (err) {
+    results.push({ name: 'sim kill ui smoke crashed: ' + (err && err.message), ok: false });
+  } finally {
+    try { resetSim(); } catch { /* resetSim missing: the crash above is already reported */ }
+    // Clears the Roll status after any queued write, so the DOM dump never carries it.
+    requestAnimationFrame(() => { document.getElementById('sim-status').textContent = ''; });
   }
 
   // Phase 3 table marks (D-11..D-13): rings and ×N badges on #outcome only, counted d20
