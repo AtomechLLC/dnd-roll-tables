@@ -556,6 +556,10 @@
        Under the sweep chart; at page width >= 72rem in the notes column beside it (260927-1ty). */
     .chart-explain { margin-top: var(--sp-3); display: grid; gap: var(--sp-2); }
     .chart-explain .explain { margin: 0; }
+    /* Kill note (D-07): a full row under the kill cards (beside them at >= 64rem, in the page
+       container block below). After .explain so the equal-specificity margin override wins;
+       the #stats grid gap spaces it. */
+    .kill-note { grid-column: 1 / -1; margin: 0; }
     .card.formulas { grid-column: 1 / -1; container: formula / inline-size; }
     .card.formulas h2 { margin: 0; }
     dl.formulas { margin: 0; display: grid; gap: var(--sp-3); max-width: 72ch; }
@@ -644,6 +648,9 @@
          share one row at equal height. */
       .card.formulas { grid-column: 1 / span 3; }
       .card.marginal { grid-column: 4 / -1; }
+      /* The three kill cards take columns 1-3 and the note sits beside them in the same three
+         subgrid rows; padding-top lines its first line up with the card labels. */
+      .kill-note { grid-column: 4 / -1; grid-row: span 3; align-self: start; padding-top: var(--sp-3); }
       /* The compare intro and the N strip share a row; #compare keeps its inline size, so the
          77rem three-up rule is unaffected. */
       #compare { display: flex; flex-wrap: wrap; align-items: flex-end; column-gap: var(--sp-4); }
@@ -797,6 +804,7 @@
         <span class="value" id="stat-k20"></span>
         <span class="sub" id="stat-k20-sub"></span>
       </div>
+      <p class="explain kill-note" id="kill-note"></p>
       <div class="card formulas" id="formulas">
         <h2>How these numbers are worked out</h2>
         <dl class="formulas">
@@ -1990,6 +1998,16 @@ const VM = (() => {
     const fastest = Math.ceil(hp / (2 * X + D));        // the best crit, 2X + D >= 3
     // E[H] = 1 exactly: every normal hit (when any) and every crit kills.
     const everyHitKills = 2 + D >= hp && (hf < 2 || 1 + D >= hp);
+    // D-07 note: every number is a card string (hp, card 1 value and sub, Hit chance, card 2),
+    // so the note cannot disagree with the cards. Sentence 2 states the mechanism (Wald:
+    // E[H] x average hit > HP), never a frequency (UI-SPEC A8); the divisor is named in words.
+    const note = [
+      ehText === simpleText
+        ? `Simple division (${hp} HP ÷ the average hit) says ${simpleText} hits, and the exact average rounds to the same ${simpleText}.`
+        : `Simple division (${hp} HP ÷ the average hit) says ${simpleText} hits, but the exact average is ${ehText}.`,
+      `The enemy drops only on the hit that takes it to 0 HP or below, and whatever that last hit deals past 0 is wasted, so on average the hits needed add up to more than ${hp} HP.`,
+      `Misses come between the hits: at a ${sv.hitPct}% hit chance, the kill takes ${erText} rounds on average.`,
+    ].join(' ');
     return Object.freeze({
       hp, heading: `Killing a ${hp} HP enemy`,
       cards: Object.freeze([
@@ -2004,7 +2022,7 @@ const VM = (() => {
         }),
         Object.freeze({ value: pctText(T.p20[hp], fastest), sub: `fastest possible: round ${fastest}` }),
       ]),
-      ehText, erText, simpleText, median, fastest,
+      note, ehText, erText, simpleText, median, fastest,
     });
   }
 
@@ -2781,6 +2799,8 @@ const presetBtns = Array.from(document.querySelectorAll('#explore button.btn-pre
 const exploreStatusEl = document.getElementById('explore-status');
 // Kill heading over the three kill cards (Phase 5); the cards go through setCard.
 const killHeadEl = document.getElementById('kill-h');
+// The kill note beside / under the kill cards (D-07); written from view.kill.note only.
+const killNoteEl = document.getElementById('kill-note');
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
@@ -2950,6 +2970,7 @@ function renderStats(view) {
   setCard('stat-khits', k.cards[0].value, k.cards[0].sub);
   setCard('stat-krounds', k.cards[1].value, k.cards[1].sub);
   setCard('stat-k20', k.cards[2].value, k.cards[2].sub);
+  setText(killNoteEl, k.note);
 }
 
 // A formula line from a VM segment: pre text, the card's result in bold (num face), post text.
