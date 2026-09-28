@@ -557,8 +557,10 @@
     .sim-log thead th:nth-child(5) { width: 44px; }
     .sim-log thead th:nth-child(6) { width: 88px; text-align: right; }
     /* Column 3 is the Result word: left-aligned prose. Accent only on crit (accent item 7). */
-    .sim-log th:nth-child(3), .sim-log td:nth-child(3) { text-align: left; }
-    .sim-log td:nth-child(3) { font-family: var(--font-prose); }
+    /* Scoped to thead / tbody: in the tfoot, 'Total' spans 4 columns, so its third cell is the
+       Enemy HP left (Phase 5), which stays right-aligned in the number face. */
+    .sim-log thead th:nth-child(3), .sim-log tbody td:nth-child(3) { text-align: left; }
+    .sim-log tbody td:nth-child(3) { font-family: var(--font-prose); }
     .sim-log .res-hit { color: var(--ink); }
     .sim-log .res-miss { color: var(--ink-muted); }
     .sim-log .res-crit { font-weight: 700; color: var(--accent); }
@@ -573,6 +575,9 @@
        apart from a stale log. */
     .sim-log tbody tr.kill > * { font-weight: 700; box-shadow: inset 0 -2px 0 0 var(--ink); }
     .sim-log tbody tr.down > *, .sim-log tbody tr.down .res-crit { color: var(--ink-muted); }
+    /* line-height: 1 keeps these mixed-face inline boxes inside the cell's 24px strut, so a kill
+       or down row is exactly as tall as the others and an HP edit never moves the rows below. */
+    .hp-down, .hp-kill { line-height: 1; }
     .hp-down {
       font-family: var(--font-prose); font-style: italic; font-size: 0.75rem; white-space: nowrap;
     }
@@ -4564,6 +4569,11 @@ function runUiSmoke() {
     check('sim kill ui: rounds after the kill are down',
       downs().map((r) => r.sectionRowIndex).join(','), '15,16,17,18,19');
     check('sim kill ui: down cells say so', cellsAt(5).slice(15).join('|'), Array(5).fill('enemy ' + 'down').join('|'));
+    // The 12px words must not make a row taller: an HP edit never moves the rows below (SC3).
+    // Row 20 is left out: its collapsed bottom border is the tfoot's 2px rule (half counts).
+    const rowHs = new Set(Array.from(body().rows, (r) => r.getBoundingClientRect().height.toFixed(1)).slice(0, 19));
+    check('sim kill ui: kill and down rows keep the row height', [...rowHs].join(','), [...rowHs][0]);
+    const footTop = logEl.tFoot.getBoundingClientRect().top;
     check('sim kill ui: rows before the kill carry no kill or down class',
       Array.from(body().rows).slice(0, 14).every((r) => !r.classList.contains('kill') && !r.classList.contains('down')),
       true);
@@ -4573,6 +4583,11 @@ function runUiSmoke() {
       wantLeft.join(','));
     check('sim kill ui: foot damage total', footCell(1), '71');
     check('sim kill ui: foot HP left when killed', footCell(2), '0');
+    // The foot HP cell is the tfoot's third cell: it must not take the Result column's rules.
+    const fc = logEl.tFoot.rows.length ? logEl.tFoot.rows[0].cells : [];
+    check('sim kill ui: foot HP cell right-aligned in the number face',
+      fc.length === 3 ? [getComputedStyle(fc[2]).textAlign, getComputedStyle(fc[2]).fontFamily ===
+        getComputedStyle(fc[1]).fontFamily].join('|') : 'foot cells missing', 'right|true');
     check('sim kill ui: kill line shown', hid(killEl()), false);
     check('sim kill ui: kill line killed', txt(killEl()), 'Killed in round 15 ' + '(9 hits).');
     check('sim kill ui: kill line numbers are bold', killEl() ? killEl().querySelectorAll('b.num').length : null, 2);
@@ -4582,6 +4597,7 @@ function runUiSmoke() {
     check('sim kill ui: HP edit keeps the run id', sim.run.id, id);
     check('sim kill ui: HP edit does not rebuild rows', body().rows[0] === row0, true);
     check('sim kill ui: HP edit does not stale the run', isStale(), false);
+    check('sim kill ui: HP edit does not move the foot', logEl.tFoot.getBoundingClientRect().top, footTop);
     check('sim kill ui: HP 72 no kill row', kills().length, 0);
     check('sim kill ui: HP 72 no down rows', downs().length, 0);
     check('sim kill ui: HP 72 last row left', cellsAt(5)[19], '1');
