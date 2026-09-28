@@ -167,7 +167,25 @@ Plans:
   3. The 20-round roll shows enemy HP after each round, marks the round the enemy dies, and reports the kill round and hits, or the HP left if it survives. Editing HP re-scores the same rolls live without staling the run; changing the attack still stales it.
   4. The tally shows each run's total and outcome. The kill note's numbers always equal the cards, checked against the engine, and the dev checks and accessibility guards pass with the new controls in the tab order.
 
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — Enemy HP box + exact kill cards: thinning-DP engine, tie-safe BigInt rounding, edge wordings (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05-02-PLAN.md — Kill note tied to the cards + exhaustive check-engine proofs K1–K6 against round-DP and BigInt oracles (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 05-03-PLAN.md — ±1 average-hit buttons, hits line, status, a11y guards and K7 step proofs (Wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 05-04-PLAN.md — 20-round roll tracks the enemy (HP column, kill row, kill line, tally outcomes, live re-score), K8, phase verification (Wave 4)
+
 **UI hint**: yes
 
 ## Progress
@@ -181,4 +199,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 3 depends only on 
 | 2. Bonus Comparison | 3/3 | Complete   | 2026-09-25 |
 | 3. Roll-20-Rounds Simulation | 3/3 | Complete   | 2026-09-26 |
 | 4. Designer Explanation & Final Ship | 5/5 | Complete   | 2026-09-27 |
-| 5. Hits-to-Kill | 0/TBD | Not started | - |
+| 5. Hits-to-Kill | 0/4 | Planned | - |
