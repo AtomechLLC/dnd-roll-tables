@@ -1,6 +1,7 @@
 ---
 phase: quick-260927-1ty
 plan: 01
+status: complete
 subsystem: page layout (index.html <style>, #chart markup)
 tags: [density, layout, container-queries, css]
 requires: []
