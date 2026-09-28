@@ -99,6 +99,12 @@
 //          UI-SPEC percent rule on the oracle P20, never '100%'; the fastest round; and the
 //          displayed E[H] is strictly above the displayed simple number
 //      (K5) the D-05 reference values at the defaults, from the oracles
+//      (K6) the kill note (D-07): sentence 2's claim, E[H] x average hit > HP (Wald), exactly in
+//          BigInt at every key x HP; and at all 70,980 settings over an HP sample (1, 2, 3, 5,
+//          40, 45, 100, 499, 500, 1..3 + D, 20 x best crit and one more, m x step - 1..+1 for
+//          m = 1..3) every number parsed from VM.killViewFrom(...).note equals the oracle value
+//          (HP, integer simple division, exact E[H], hitFaces x 5, exact E[R]) and the card
+//          it names; the sentence-1 branch follows the oracle strings
 //      The research counts (past the cap, near-ties, every hit kills, under 0.1, fallbacks,
 //      float-only mismatches, p20 truncated to 0) are pinned as equality checks.
 //      Zero-count asserts (02-REVIEW IN-04): no setting has a touch (a tie that is neither a
@@ -196,6 +202,7 @@ const names = {
   K3: '(K3) KILL-03 every |P - 1/2| < 1e-9 at a median step is an exact 1/2 tie',
   K4: '(K4) KILL-03 sub-lines and Kill-within-20: every-hit-kills iff E[H] = 1, median or past-cap wording, 0% iff fastest > 20, never 100%, displayed E[H] > simple except pinned whole-number ties',
   K5: '(K5) D-05 reference values at the defaults',
+  K6: '(K6) KILL-04 note numbers equal the cards and the oracles; E[H] x average hit > HP exactly',
   cover: '(cover) the stride-53 sample reaches 21 AC values, 5 dice, 26 attack and 26 damage bonuses',
   zero: '(zero) no touches, no leading ties, no setting with 2+ crossings',
 };
@@ -1184,6 +1191,12 @@ const rhuB = (num, den, s) => (2n * s * num + den) / (2n * den);
 // UI-SPEC "Kill within 20" percent rule, applied to the oracle P20 (the '0%' branch is the
 // integer fastest-kill test, decided by the caller).
 const kTenthPct = (p) => { const r = Math.round(p * 1000); return `${Math.floor(r / 10)}.${r % 10}%`; };
+// Simple division hp / average hit from this file's integers (average hit = A / den): tenths
+// round half up, 'under 0.1' when they round to 0, the kill number format otherwise.
+function kSimple(o, hp) {
+  const t = Math.floor((20 * hp * o.den + o.A) / (2 * o.A));
+  return { t, text: t === 0 ? 'under 0.1' : kText(t, Math.floor((2 * hp * o.den + o.A) / (2 * o.A))) };
+}
 function kPct(p) {
   if (p < 0.001) return '<0.1%';
   if (p < 0.01) return kTenthPct(p);
@@ -1310,6 +1323,7 @@ const kc = {
   pairs: 0, pastCap: 0, erRelMax: 0, fbCalls: 0, fbPairs: 0, mmH: 0, mmR: 0, nearTies: 0, tieMaxT: 0,
   gapMin: Infinity, everyHitKills: 0, under01: 0, zeroPct: 0, p20Trunc: 0, pins: 0,
   wholeTies: 0, nearTiesBelow: 0, fbH: 0, fbR: 0, mmHd: 0, mmRd: 0,
+  wald: 0, noteSettings: 0, notePairs: 0, noteBut: 0, noteSame: 0,
 };
 let kWorstMs = 0, kWorstKey = '';
 const tk = performance.now();
@@ -1353,6 +1367,7 @@ if (!kHave) {
       continue;
     }
     const ro = roundOracle(o, 0), rr = roundsOracle(o), { N, cp } = exactOracle(o), hfB = BigInt(o.hf);
+    const AB = BigInt(o.A), denB = BigInt(o.den);
     const ehT = new Float64Array(HPN + 1), ehW = new Float64Array(HPN + 1);
     const erT = new Float64Array(HPN + 1), erW = new Float64Array(HPN + 1);
     Object.assign(e, { o, tab, ehT, ehW, erT, erW });
@@ -1399,11 +1414,14 @@ if (!kHave) {
       }
 
       // K4: sub-lines and the percent card, from the oracles
+      // K6 (sentence 2): E[H] x A / den > hp, i.e. N_n x A > hp x c^n x den, exactly.
+      kc.wald++;
+      if (!(Nn * AB > BigInt(hp) * cn * denB)) record('K6', p, `${at}: Wald E[H] x average hit is not above HP`);
+
       const exactOne = Nn === cn, sub0 = v.cards[0].sub;
       if (exactOne) kc.everyHitKills++;
       if (sub0.startsWith('every hit kills') !== exactOne) record('K4', p, `${at}: "${sub0}" but E[H] = 1 is ${exactOne}`);
-      const simT = Math.floor((20 * hp * o.den + o.A) / (2 * o.A));
-      const simS = simT === 0 ? 'under 0.1' : kText(simT, Math.floor((2 * hp * o.den + o.A) / (2 * o.A)));
+      const { t: simT, text: simS } = kSimple(o, hp);
       if (simT === 0) kc.under01++;
       const sm = /^(?:every hit kills|on average) \(simple division says (.+)\)$/.exec(sub0);
       if (!sm || sm[1] !== simS) record('K4', p, `${at}: "${sub0}" vs simple ${simS}`);
@@ -1482,6 +1500,57 @@ if (!kHave) {
     ['K4', 'whole-number display ties', kc.wholeTies, 6],
   ];
   for (const [k, what, got, want] of K_WANT) if (got !== want) record(k, kx('counts'), `${what}: ${got}, pinned ${want}`);
+
+  // K6: the note's claims at every attack setting over an HP sample (Phase 4 D-04, 04-REVIEW
+  // IN-02). The numbers are parsed from the note and compared with this file's oracles, never
+  // with a string rebuilt by the VM's own formatter; card agreement is checked on top.
+  const NOTE_RE = new RegExp('^Simple division \\((\\d+) HP ÷ the average hit\\) says (.+?) hits, ' +
+    '(but the exact average is|and the exact average rounds to the same) ([0-9.,]+)\\. ' +
+    'The enemy drops only on the hit that takes it to 0 HP or below, and whatever that last hit deals past 0 ' +
+    'is wasted, so on average the hits needed add up to more than (\\d+) HP\\. ' +
+    'Misses come between the hits: at a (\\d+)% hit chance, the kill takes ([0-9.,]+) rounds on average\\.$');
+  const clampHp = (h) => Math.min(HPN, Math.max(CS.hp.min, h));
+  for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
+    for (const die of DICE_SET) {
+      for (let atk = CS.atk.min; atk <= CS.atk.max; atk++) {
+        for (let dmg = CS.dmg.min; dmg <= CS.dmg.max; dmg++) {
+          const p = { ac, die, atk, dmg };
+          const e = kKeys.get(`${21 - DiceMath.threshold(p)},${die},${dmg}`);
+          if (!e || !e.tab) { record('K6', p, 'no kill table for this key'); continue; }
+          kc.noteSettings++;
+          const o = e.o, sv = VM.statsView(p), best = 2 * die + dmg;
+          const step = Math.floor((2 * o.A + o.den) / (2 * o.den));   // average hit, round half up
+          const hps = new Set([1, 2, 3, 5, 40, 45, 100, 499, 500, 1 + dmg, 2 + dmg, 3 + dmg, 20 * best, 20 * best + 1]);
+          for (let m = 1; m <= 3; m++) for (const d of [-1, 0, 1]) hps.add(m * step + d);
+          for (const hp of new Set([...hps].map(clampHp))) {
+            kc.notePairs++;
+            const v = VM.killViewFrom(e.tab, sv, hp), at = `HP ${hp}`;
+            const n = NOTE_RE.exec(v.note);
+            if (!n) { record('K6', p, `${at}: note does not parse: ${v.note}`); continue; }
+            const ehS = kText(e.ehT[hp], e.ehW[hp]), erS = kText(e.erT[hp], e.erW[hp]), simS = kSimple(o, hp).text;
+            const same = ehS === simS;
+            if (same) kc.noteSame++; else kc.noteBut++;
+            const bad = [];
+            if (Number(n[1]) !== hp) bad.push(`sentence 1 HP ${n[1]}`);
+            if (n[2] !== simS) bad.push(`simple ${n[2]} vs ${simS}`);
+            if (n[3] !== (same ? 'and the exact average rounds to the same' : 'but the exact average is')) bad.push(`branch "${n[3]}"`);
+            if (n[4] !== ehS) bad.push(`E[H] ${n[4]} vs exact ${ehS}`);
+            if (Number(n[5]) !== hp) bad.push(`sentence 2 HP ${n[5]}`);
+            if (Number(n[6]) !== 5 * o.hf) bad.push(`hit chance ${n[6]}% vs ${5 * o.hf}%`);
+            if (n[7] !== erS) bad.push(`E[R] ${n[7]} vs exact ${erS}`);
+            // Card agreement: the note prints the cards' own numbers.
+            const sub = /\(simple division says (.+)\)$/.exec(v.cards[0].sub);
+            if (n[4] !== v.cards[0].value) bad.push(`E[H] ${n[4]} vs card ${v.cards[0].value}`);
+            if (!sub || n[2] !== sub[1]) bad.push(`simple ${n[2]} vs card sub "${v.cards[0].sub}"`);
+            if (Number(n[6]) !== sv.hitPct) bad.push(`hit chance ${n[6]}% vs card ${sv.hitPct}%`);
+            if (n[7] !== v.cards[1].value) bad.push(`E[R] ${n[7]} vs card ${v.cards[1].value}`);
+            if (bad.length) record('K6', p, `${at}: ${bad.join('; ')}`);
+          }
+        }
+      }
+    }
+  }
+  if (kc.noteSettings !== TOTAL_COMBOS) record('K6', kx('note'), `${kc.noteSettings} settings, want ${TOTAL_COMBOS}`);
 }
 const kMs = (performance.now() - tk).toFixed(0);
 
@@ -1506,6 +1575,8 @@ const extra = {
   K4: ` (every hit kills ${kc.everyHitKills}, simple under 0.1 ${kc.under01}, 0% ${kc.zeroPct}, ` +
     `p20 truncated to 0 where a kill is possible ${kc.p20Trunc}, whole-number display ties ${kc.wholeTies})`,
   K5: ` (${kc.pins} pins)`,
+  K6: ` (Wald ${kc.wald} pairs; note ${kc.noteSettings} settings x HP sample = ${kc.notePairs} checked; ` +
+    `sentence 1 "but" ${kc.noteBut}, tie branch ${kc.noteSame})`,
 };
 
 // (cover) 02-REVIEW WR-03: the sample must reach every value of every control.
