@@ -105,6 +105,16 @@
 //          m = 1..3) every number parsed from VM.killViewFrom(...).note equals the oracle value
 //          (HP, integer simple division, exact E[H], hitFaces x 5, exact E[R]) and the card
 //          it names; the sentence-1 branch follows the oracle strings
+//      (K7) KILL-02 hit steps (D-02, D-03): at all 70,980 settings, the step from the exact
+//          average hit (sv.exact integers in BigInt, round half up), the step from this file's
+//          own weights, the step from the card's 2-decimal avgPerHitText (an exact .50 goes up)
+//          and VM.hpStep are equal; step-0 settings and exact .5 ties are counted and pinned.
+//          Over the K6 HP sample, the applied changes are min(step, hp - 1) / min(step, 500 -
+//          hp), a button is inert iff its change is 0, both labels name that change, the hits
+//          line names the oracle simple string (or 'under 0.1'), the card's simple string and
+//          avgPerHitText, with the 'rounds to 0 HP' clause iff the step is 0, and VM.hpStatus
+//          names the oracle simple string with the bound sentence iff HP is 1 / 500. Once: the
+//          static #hp-minus / #hp-plus / #hp-hits markup equals the VM strings at the defaults
 //      The research counts (past the cap, near-ties, every hit kills, under 0.1, fallbacks,
 //      float-only mismatches, p20 truncated to 0) are pinned as equality checks.
 //      Zero-count asserts (02-REVIEW IN-04): no setting has a touch (a tie that is neither a
@@ -127,6 +137,8 @@ function fail(msg) {
 
 if (!fs.existsSync(indexUrl)) fail('index.html not found');
 const html = fs.readFileSync(indexUrl, 'utf8');
+// Entity decoding for text sliced from the raw markup ((x) presets, K7 step buttons).
+const decHtml = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
 
 function block(id) {
   const m = html.match(new RegExp(`<script id="${id}">([\\s\\S]*?)</script>`));
@@ -203,6 +215,7 @@ const names = {
   K4: '(K4) KILL-03 sub-lines and Kill-within-20: every-hit-kills iff E[H] = 1, median or past-cap wording, 0% iff fastest > 20, never 100%, displayed E[H] > simple except pinned whole-number ties',
   K5: '(K5) D-05 reference values at the defaults',
   K6: '(K6) KILL-04 note numbers equal the cards and the oracles; E[H] x average hit > HP exactly',
+  K7: '(K7) KILL-02 step = round(exact average hit) = round(card), labels, inert flags, hits line and status; static markup parity',
   cover: '(cover) the stride-53 sample reaches 21 AC values, 5 dice, 26 attack and 26 damage bonuses',
   zero: '(zero) no touches, no leading ties, no setting with 2+ crossings',
 };
@@ -1067,7 +1080,7 @@ const presetFacts = [];
       bad('all', 'VM.PRESETS is not deeply frozen');
     }
     // The static #explore markup, read from the raw file (entities decoded)
-    const dec = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+    const dec = decHtml;
     const exStart = html.indexOf('<section id="explore"');
     const exEnd = exStart < 0 ? -1 : html.indexOf('</section>', exStart);
     const exHtml = exStart < 0 || exEnd < 0 ? '' : html.slice(exStart, exEnd);
@@ -1324,6 +1337,7 @@ const kc = {
   gapMin: Infinity, everyHitKills: 0, under01: 0, zeroPct: 0, p20Trunc: 0, pins: 0,
   wholeTies: 0, nearTiesBelow: 0, fbH: 0, fbR: 0, mmHd: 0, mmRd: 0,
   wald: 0, noteSettings: 0, notePairs: 0, noteBut: 0, noteSame: 0,
+  stepSettings: 0, stepZero: 0, stepTies: 0, stepPairs: 0, stepParity: 0,
 };
 let kWorstMs = 0, kWorstKey = '';
 const tk = performance.now();
@@ -1510,6 +1524,10 @@ if (!kHave) {
     'is wasted, so on average the hits needed add up to more than (\\d+) HP\\. ' +
     'Misses come between the hits: at a (\\d+)% hit chance, the kill takes ([0-9.,]+) rounds on average\\.$');
   const clampHp = (h) => Math.min(HPN, Math.max(CS.hp.min, h));
+  // K7 parsers: the hits line ('under 0.1' or '≈ simple', the average hit, the optional step-0
+  // clause) and the click status (HP, simple or 'under 0.1', the optional bound sentence).
+  const HITS_RE = /^(?:under 0\.1|≈ (.+?)) average hits \(1 hit ≈ (.+?) HP(, which rounds to 0 HP, so the hit buttons are off)?\)$/;
+  const STATUS_RE = /^Enemy HP (\d+): (?:about (.+?)|under 0\.1) average hits\.( That is the lowest it goes\.| That is the highest it goes\.)?$/;
   for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
     for (const die of DICE_SET) {
       for (let atk = CS.atk.min; atk <= CS.atk.max; atk++) {
@@ -1520,11 +1538,57 @@ if (!kHave) {
           kc.noteSettings++;
           const o = e.o, sv = VM.statsView(p), best = 2 * die + dmg;
           const step = Math.floor((2 * o.A + o.den) / (2 * o.den));   // average hit, round half up
+          // K7 (setting level): the step from the exact card rational (DiceMath.stats integers via
+          // sv.exact, BigInt), from this file's own weights, from the card's 2-decimal string, and
+          // from the page's VM.hpStep must all agree.
+          kc.stepSettings++;
+          const sN = BigInt(sv.exact.e20Num), sD = BigInt(sv.exact.e20Den) * BigInt(sv.hitFaces);
+          const exStep = Number(rhuB(sN, sD, 1n));
+          if ((2n * sN) % sD === 0n && ((2n * sN) / sD) % 2n === 1n) kc.stepTies++;   // exact x.5
+          if (exStep === 0) kc.stepZero++;
+          const cm = /^(\d+)\.(\d\d)$/.exec(sv.avgPerHitText);
+          const cardStep = cm ? Math.floor((100 * Number(cm[1]) + Number(cm[2]) + 50) / 100) : NaN;
+          const vmStep = typeof VM.hpStep === 'function' ? VM.hpStep(sv, 40).step : NaN;
+          if (!(exStep === step && exStep === cardStep && exStep === vmStep)) {
+            record('K7', p, `step exact ${exStep}, own weights ${step}, card ${sv.avgPerHitText} -> ${cardStep}, VM ${vmStep}`);
+          }
           const hps = new Set([1, 2, 3, 5, 40, 45, 100, 499, 500, 1 + dmg, 2 + dmg, 3 + dmg, 20 * best, 20 * best + 1]);
           for (let m = 1; m <= 3; m++) for (const d of [-1, 0, 1]) hps.add(m * step + d);
           for (const hp of new Set([...hps].map(clampHp))) {
             kc.notePairs++;
             const v = VM.killViewFrom(e.tab, sv, hp), at = `HP ${hp}`;
+            // K7 (HP sample): applied changes, inert flags, labels, the hits line and the status.
+            kc.stepPairs++;
+            {
+              const simS = kSimple(o, hp).text, tinyO = simS === 'under 0.1';
+              const mA = Math.min(exStep, hp - CS.hp.min), pA = Math.min(exStep, CS.hp.max - hp);
+              const bad = [];
+              if (v.step !== exStep) bad.push(`step ${v.step} vs ${exStep}`);
+              if (v.minusApplied !== mA || v.plusApplied !== pA) bad.push(`applied ${v.minusApplied} / ${v.plusApplied} vs ${mA} / ${pA}`);
+              if (v.minusInert !== (mA === 0) || v.plusInert !== (pA === 0)) bad.push(`inert ${v.minusInert} / ${v.plusInert}`);
+              if (v.minusLabel !== (mA === 0 ? '−1 hit (0 HP)' : '−1 hit (−' + mA + ' HP)')) bad.push(`minus label "${v.minusLabel}"`);
+              if (v.plusLabel !== (pA === 0 ? '+1 hit (0 HP)' : '+1 hit (+' + pA + ' HP)')) bad.push(`plus label "${v.plusLabel}"`);
+              const h = HITS_RE.exec(v.hitsLine);
+              const cs = /\(simple division says (.+)\)$/.exec(v.cards[0].sub);
+              if (!h) {
+                bad.push(`hits line does not parse: ${v.hitsLine}`);
+              } else {
+                if ((h[1] === undefined) !== tinyO) bad.push(`hits line under-0.1 branch vs oracle ${simS}`);
+                if (!tinyO && (h[1] !== simS || !cs || h[1] !== cs[1])) bad.push(`hits line ${h[1]} vs oracle ${simS} / card ${cs && cs[1]}`);
+                if (h[2] !== sv.avgPerHitText) bad.push(`hits line average hit ${h[2]} vs card ${sv.avgPerHitText}`);
+                if ((h[3] !== undefined) !== (exStep === 0)) bad.push(`hits line step-0 clause with step ${exStep}`);
+              }
+              const s = STATUS_RE.exec(typeof VM.hpStatus === 'function' ? VM.hpStatus(sv, hp) : '');
+              if (!s) {
+                bad.push('status does not parse');
+              } else {
+                if (Number(s[1]) !== hp) bad.push(`status HP ${s[1]}`);
+                if ((s[2] === undefined) !== tinyO || (!tinyO && s[2] !== simS)) bad.push(`status simple ${s[2]} vs oracle ${simS}`);
+                if ((s[3] === ' That is the lowest it goes.') !== (hp === CS.hp.min)) bad.push('status lowest sentence');
+                if ((s[3] === ' That is the highest it goes.') !== (hp === CS.hp.max)) bad.push('status highest sentence');
+              }
+              if (bad.length) record('K7', p, `${at}: ${bad.join('; ')}`);
+            }
             const n = NOTE_RE.exec(v.note);
             if (!n) { record('K6', p, `${at}: note does not parse: ${v.note}`); continue; }
             const ehS = kText(e.ehT[hp], e.ehW[hp]), erS = kText(e.erT[hp], e.erW[hp]), simS = kSimple(o, hp).text;
@@ -1551,6 +1615,28 @@ if (!kHave) {
     }
   }
   if (kc.noteSettings !== TOTAL_COMBOS) record('K6', kx('note'), `${kc.noteSettings} settings, want ${TOTAL_COMBOS}`);
+  if (kc.stepSettings !== TOTAL_COMBOS) record('K7', kx('step'), `${kc.stepSettings} settings, want ${TOTAL_COMBOS}`);
+  // K7 counts (RESEARCH): average hit under 0.5 HP, and exact .5 averages (which step up).
+  for (const [what, got, want] of [['step-0 settings', kc.stepZero, 1412], ['exact .5 ties', kc.stepTies, 99]]) {
+    if (got !== want) record('K7', kx('counts'), `${what}: ${got}, pinned ${want}`);
+  }
+  // K7 markup parity: the no-JS labels and hits line are the VM's strings at the defaults. The
+  // defaults' table comes from this file's own kKeys map, never through the page memo.
+  {
+    const dsv = VM.statsView(VM.DEFAULT_STATE);
+    const de = kKeys.get(`${dsv.hitFaces},${dsv.params.die},${dsv.params.dmg}`);
+    const dv = de && de.tab ? VM.killViewFrom(de.tab, dsv, VM.DEFAULT_STATE.hp) : null;
+    const grab = (re) => { const m = re.exec(html); return m ? decHtml(m[1]) : null; };
+    const pairs = [
+      ['#hp-minus', grab(/<button\b[^>]*\bid="hp-minus"[^>]*>([^<]*)<\/button>/), dv && dv.minusLabel],
+      ['#hp-plus', grab(/<button\b[^>]*\bid="hp-plus"[^>]*>([^<]*)<\/button>/), dv && dv.plusLabel],
+      ['#hp-hits', grab(/<p\b[^>]*\bid="hp-hits"[^>]*>([^<]*)<\/p>/), dv && dv.hitsLine],
+    ];
+    for (const [id, got, want] of pairs) {
+      kc.stepParity++;
+      if (got === null || got !== want) record('K7', kx('markup'), `${id} markup "${got}" vs VM "${want}"`);
+    }
+  }
 }
 const kMs = (performance.now() - tk).toFixed(0);
 
@@ -1577,6 +1663,8 @@ const extra = {
   K5: ` (${kc.pins} pins)`,
   K6: ` (Wald ${kc.wald} pairs; note ${kc.noteSettings} settings x HP sample = ${kc.notePairs} checked; ` +
     `sentence 1 "but" ${kc.noteBut}, tie branch ${kc.noteSame})`,
+  K7: ` (${kc.stepSettings} settings: step 0 ${kc.stepZero}, exact .5 ties ${kc.stepTies}; ` +
+    `${kc.stepPairs} HP-sample pairs; markup ${kc.stepParity} strings)`,
 };
 
 // (cover) 02-REVIEW WR-03: the sample must reach every value of every control.
