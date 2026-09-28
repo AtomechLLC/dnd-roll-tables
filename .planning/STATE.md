@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-09-28T05:27:57.035Z"
-last_activity: 2026-09-28 -- Phase 5 planning complete
+last_updated: "2026-09-28T05:28:10.463Z"
+last_activity: 2026-09-28 -- Phase 05 execution started
 progress:
   total_phases: 5
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** A designer can see, in one glance at a live table and a curve, why attack bonuses saturate (hit chance caps at 95%) while damage bonuses scale linearly, and why the crossover depends on AC and the damage die.
-**Current focus:** Phase 5 — Hits-to-Kill
+**Current focus:** Phase 05 — hits-to-kill
 
 ## Current Position
 
-Phase: 5 (Hits-to-Kill)
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-09-28 -- Phase 5 planning complete
+Phase: 05 (hits-to-kill) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 05
+Last activity: 2026-09-28 -- Phase 05 execution started
 
 Progress: [██████████] 100%
 
