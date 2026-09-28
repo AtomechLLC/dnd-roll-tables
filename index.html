@@ -1238,10 +1238,25 @@ const DiceMath = (() => {
     return { hitFaces: hf, den, w0, pos: ds.map((d, i) => [d, ws[i]]), eHits, p10, p20, medianRound };
   }
 
+  // Exact E[H] at hp as BigInt num / den, for the display tie-breaker only (RESEARCH Pattern 3):
+  // with c = den - w0, N_n = den * c^(n-1) + sum_{d>=1} w_d * c^(d-1) * N_(n-d) and E[H](n) = N_n / c^n
+  // (the eHits recursion multiplied by c^n). Bounded work: hp <= KILL_HP_MAX.
+  function killHitsExact(t, hp) {
+    const den = BigInt(t.den), c = den - BigInt(t.w0);
+    const a = t.pos.map(([d, w]) => [d, BigInt(w) * c ** BigInt(d - 1)]);
+    const N = [0n]; let cn = 1n;
+    for (let n = 1; n <= hp; n++) {
+      let s = den * cn;
+      for (const [d, x] of a) if (n > d) s += x * N[n - d];
+      N.push(s); cn *= c;
+    }
+    return { num: N[hp], den: cn };                    // E[H] = num / den
+  }
+
   return Object.freeze({
     DICE, avg, assertParams, outcome, isHit, damageFor, threshold,
     outcomeTable, stats, closedFormPerRound, marginals, hitAverages, sweep, crossings, attackBands,
-    spread, hitPmf, killTable, KILL_HP_MAX, KILL_MEDIAN_CAP, KILL_TIE_EPS, KILL_TINY,
+    spread, hitPmf, killTable, killHitsExact, KILL_HP_MAX, KILL_MEDIAN_CAP, KILL_TIE_EPS, KILL_TINY,
   });
 })();
   </script>
@@ -1923,25 +1938,71 @@ const VM = (() => {
     return t;
   }
 
+  // Displayed kill numbers never disagree with the exact rational (RESEARCH Pattern 3, Pitfall 2).
+  const ROUND_WINDOW = 1e-6;   // display units; >= 50x the worst float error measured (1.7e-8)
+  // Round-half-up of x * scale. Within ROUND_WINDOW of a .5 boundary the float cannot decide,
+  // so exact() supplies { num, den } (BigInt) and the integer division decides.
+  function roundKill(x, scale, exact) {
+    const y = x * scale, f = y - Math.floor(y);
+    if (Math.abs(f - 0.5) >= ROUND_WINDOW) return Math.round(y);
+    const { num, den } = exact(), S = BigInt(scale);
+    return Number((2n * S * num + den) / (2n * den));
+  }
+  // Thousands commas without the locale (a locale-aware format prints 1.296 in de-DE).
+  const group3 = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  // "8.7", "652.0", "1,296", "15,215": one decimal under 1,000, else a whole number with commas.
+  // The format is chosen by the rounded tenths, never the raw value (999.96 must not print 1000.0).
+  function killNumText(x, exact) {
+    const t = roundKill(x, 10, exact);
+    return t < 10000 ? fixed(t, 1) : group3(roundKill(x, 1, exact));
+  }
+  // Kill within 20 rounds (UI-SPEC Number formats). '0%' only from the integer test fastest > 20
+  // (a float p20 can be 0 where a kill is possible but below 1e-30). Never '100%': a natural 1
+  // can miss every round, so a kill is never certain.
+  function pctText(p, fastest) {
+    if (fastest > 20) return '0%';
+    if (p < 0.001) return '<0.1%';
+    if (p < 0.01) return fixed(Math.round(p * 1000), 1) + '%';
+    if (p < 0.99) return Math.round(p * 100) + '%';
+    if (p < 0.999) return fixed(Math.round(p * 1000), 1) + '%';
+    return '>99.9%';
+  }
+
   // Pure: the kill heading and three cards (D-04) from one table, a statsView result and an HP.
   // check-engine calls this with its own tables, never through the memo (RESEARCH Pattern 2).
+  // Every copy branch is an exact integer test: every hit kills, under 0.1, past the cap, 0%.
   function killViewFrom(T, sv, hp) {
     const hf = sv.hitFaces, X = sv.params.die, D = sv.params.dmg;
     const { e20Num, e20Den } = sv.exact;
-    const eh = T.eHits[hp], er = (20 * eh) / T.hitFaces;
-    const ehText = fixed(Math.round(10 * eh), 1);
-    const erText = fixed(Math.round(10 * er), 1);
-    // Simple division hp / avg hit, avg hit = e20Num / (e20Den * hf): integer round-half-up tenths.
-    const simpleText = fixed(Math.floor((20 * hp * e20Den * hf + e20Num) / (2 * e20Num)), 1);
+    const eh = T.eHits[hp];
+    const exH = () => DiceMath.killHitsExact(T, hp);
+    const exR = () => { const e = exH(); return { num: 20n * e.num, den: BigInt(T.hitFaces) * e.den }; };
+    const ehText = killNumText(eh, exH);
+    const erText = killNumText((20 * eh) / T.hitFaces, exR);
+    // Simple division hp / avg hit, avg hit = e20Num / (e20Den * hf): integer round-half-up,
+    // in the same format as the kill numbers (numerators stay below 2^53).
+    const simpleNum = hp * e20Den * hf;
+    const simpleT = Math.floor((20 * simpleNum + e20Num) / (2 * e20Num));
+    const simpleText = 20 * simpleNum < e20Num ? 'under 0.1'
+      : simpleT < 10000 ? fixed(simpleT, 1)
+        : group3(Math.floor((2 * simpleNum + e20Num) / (2 * e20Num)));
     const median = T.medianRound[hp];
     const fastest = Math.ceil(hp / (2 * X + D));        // the best crit, 2X + D >= 3
-    const pctText = `${Math.round(T.p20[hp] * 100)}%`;
+    // E[H] = 1 exactly: every normal hit (when any) and every crit kills.
+    const everyHitKills = 2 + D >= hp && (hf < 2 || 1 + D >= hp);
     return Object.freeze({
       hp, heading: `Killing a ${hp} HP enemy`,
       cards: Object.freeze([
-        Object.freeze({ value: ehText, sub: `on average (simple division says ${simpleText})` }),
-        Object.freeze({ value: erText, sub: `on average, half of fights by round ${median}` }),
-        Object.freeze({ value: pctText, sub: `fastest possible: round ${fastest}` }),
+        Object.freeze({
+          value: ehText,
+          sub: `${everyHitKills ? 'every hit kills' : 'on average'} (simple division says ${simpleText})`,
+        }),
+        Object.freeze({
+          value: erText,
+          sub: median === 0 ? `on average; half of fights last over ${group3(DiceMath.KILL_MEDIAN_CAP)} rounds`
+            : `on average, half of fights by round ${group3(median)}`,
+        }),
+        Object.freeze({ value: pctText(T.p20[hp], fastest), sub: `fastest possible: round ${fastest}` }),
       ]),
       ehText, erText, simpleText, median, fastest,
     });
@@ -2011,7 +2072,7 @@ const VM = (() => {
     CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, twoRollsText, formulaView, compareView,
     niceTicks, captionOrder, captionCross, captionBands, explainChart, crossLevers, readoutLines, chartView, computeView,
     settingsText, simExact, simPlacement, simStatus, PRESETS, presetStatus,
-    killTableFor, killViewFrom, killView,
+    killTableFor, killViewFrom, killView, roundKill, group3, killNumText, pctText,
   });
 })();
   </script>
