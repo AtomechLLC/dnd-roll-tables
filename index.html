@@ -3001,6 +3001,14 @@ const PRESET_KEYS = ['ac', 'die', 'atk', 'dmg', 'n'];
 // and returning to the rolled-at HP by hand does not bring the sentence back.
 let rollStatusHp = null;
 
+// What the last active hit step click announced in #hp-status (05-REVIEW WR-02): the HP and the
+// attack its average-hit figure came from, or null. Only onStepClick writes it; render() only
+// clears it (with the status text) once any of those keys no longer matches, so the region never
+// states an HP or an average-hit figure that disagrees with the box, the hits line or the cards.
+// The clear is silent, like the preset status. The UI smoke resets it to null.
+let lastHpStatus = null;
+const HP_STATUS_KEYS = ['ac', 'die', 'atk', 'dmg', 'hp'];
+
 let pending = false;
 // Latched by any failed render (03-REVIEW WR-04, 04-REVIEW WR-03): no later render is ever scheduled.
 let broken = false;
@@ -3042,6 +3050,12 @@ function render() {
   if (rollStatusHp !== null && state.hp !== rollStatusHp) {
     rollStatusHp = null;
     setText(simStatusEl, '');
+  }
+  // 05-REVIEW WR-02: the same guard for the hit step status (a typed HP, an attack change or a
+  // preset all clear it; returning to the announced values by hand does not bring it back).
+  if (lastHpStatus && HP_STATUS_KEYS.some((k) => state[k] !== lastHpStatus[k])) {
+    lastHpStatus = null;
+    setText(hpStatusEl, '');
   }
   for (const r of RENDERERS) r(view, simCtx);
   lastView = view;
@@ -3091,8 +3105,9 @@ function onPresetClick(e) {
 // at a bound or with a step of 0) returns before any write, so nothing loops or announces. The
 // new HP goes through the one parse path (clamped to 1..500), then ONE setState. The status is
 // cleared, then written in the next frame after the render setState queued (rAF callbacks run in
-// registration order); the state.hp guard drops the write if HP changed again in between. Focus
-// stays on the button: the inert state is aria-disabled, never `disabled`.
+// registration order); the lastHpStatus guard drops the write if HP or the attack changed again
+// in between (render() cleared the record). Focus stays on the button: the inert state is
+// aria-disabled, never `disabled`.
 function onStepClick(e) {
   const b = e.target.closest('button[data-step]');
   if (!b || b.disabled) return;
@@ -3101,9 +3116,11 @@ function onStepClick(e) {
   if (applied === 0) return;
   const hp = VM.parseControl('hp', state.hp + applied, state.hp);
   setState({ hp });
+  const announced = Object.freeze(Object.fromEntries(HP_STATUS_KEYS.map((k) => [k, state[k]])));
+  lastHpStatus = announced;
   hpStatusEl.textContent = '';
   const msg = VM.hpStatus(VM.statsView(state), hp);
-  requestAnimationFrame(() => { if (state.hp === hp) hpStatusEl.textContent = msg; });
+  requestAnimationFrame(() => { if (lastHpStatus === announced) hpStatusEl.textContent = msg; });
 }
 
 function onChange(e) {
@@ -5118,6 +5135,27 @@ function runUiSmoke() {
     render();
     check('hp step ui: typing never announces', state.hp + '|' + status(), '50|');
 
+    // 05-REVIEW WR-02: the announced sentence names an HP and an average-hit figure, so it goes
+    // (silently) once either no longer matches. Each case writes the status first, so it can fail.
+    const ANNOUNCED_45 = 'Enemy' + HP + ' 45: about 9.2 average hits.';
+    show({});
+    click(plus);
+    check('hp step ui: status written before a typed HP', status(), ANNOUNCED_45);
+    send(hpNum, '100');
+    render();
+    check('hp step ui: a typed HP clears the status', status(), '');
+    check('hp step ui: a typed HP drops the status record', lastHpStatus, null);
+    show({});
+    click(plus);
+    check('hp step ui: status written before an attack change', status(), ANNOUNCED_45);
+    show({ hp: 45, die: 12 });
+    check('hp step ui: an attack change clears the status', status(), '');
+    show({ hp: 45 });
+    check('hp step ui: the announced values again leave the status clear', status(), '');
+    show({});
+    held(() => { plus.focus({ preventScroll: true }); plus.click(); setState({ die: 12 }); });
+    check('hp step ui: an attack change in the click frame drops the write', state.hp + '|' + status(), '45|');
+
     // UI-SPEC A3: every control on the strip's first row starts at the same top edge.
     show({});
     const acTop = node('ac-range').getBoundingClientRect().top;
@@ -5134,6 +5172,7 @@ function runUiSmoke() {
   } catch (err) {
     results.push({ name: 'hp step ui smoke crashed: ' + (err && err.message), ok: false });
   } finally {
+    try { lastHpStatus = null; } catch { /* lastHpStatus missing: the crash above is already reported */ }
     const statusEl = document.getElementById('hp-status');
     requestAnimationFrame(() => { if (statusEl) statusEl.textContent = ''; });
     const active = document.activeElement;
