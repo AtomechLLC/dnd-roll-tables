@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Bonus Comparison** - N slider, three side-by-side tables (baseline / +N hit / +N damage), and the SVG sweep chart with crossover and plateau marking (completed 2026-09-25)
 - [x] **Phase 3: Roll-20-Rounds Simulation** - Real dice rolls with a per-round log, realized vs expected (with standard deviation), and stale-result handling (completed 2026-09-26)
 - [x] **Phase 4: Designer Explanation & Final Ship** - Live-substituted formulas, generated crossover/plateau copy, suggested explorations, accessibility pass, final public deploy (completed 2026-09-27)
-- [ ] **Phase 5: Hits-to-Kill** - Enemy hit points (default 40 HP, set by amount or by whole average hits), hits-to-kill, and the chance and timing of a kill
+- [x] **Phase 5: Hits-to-Kill** - Enemy hit points (default 40 HP, set by amount or by whole average hits), hits-to-kill, and the chance and timing of a kill (completed 2026-09-28)
 
 ## Phase Details
 
@@ -167,7 +167,7 @@ Plans:
   3. The 20-round roll shows enemy HP after each round, marks the round the enemy dies, and reports the kill round and hits, or the HP left if it survives. Editing HP re-scores the same rolls live without staling the run; changing the attack still stales it.
   4. The tally shows each run's total and outcome. The kill note's numbers always equal the cards, checked against the engine, and the dev checks and accessibility guards pass with the new controls in the tab order.
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -184,7 +184,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 05-04-PLAN.md — 20-round roll tracks the enemy (HP column, kill row, kill line, tally outcomes, live re-score), K8, phase verification (Wave 4)
+- [x] 05-04-PLAN.md — 20-round roll tracks the enemy (HP column, kill row, kill line, tally outcomes, live re-score), K8, phase verification (Wave 4)
 
 **UI hint**: yes
 
@@ -199,4 +199,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 3 depends only on 
 | 2. Bonus Comparison | 3/3 | Complete   | 2026-09-25 |
 | 3. Roll-20-Rounds Simulation | 3/3 | Complete   | 2026-09-26 |
 | 4. Designer Explanation & Final Ship | 5/5 | Complete   | 2026-09-27 |
-| 5. Hits-to-Kill | 3/4 | In Progress|  |
+| 5. Hits-to-Kill | 4/4 | Complete   | 2026-09-28 |

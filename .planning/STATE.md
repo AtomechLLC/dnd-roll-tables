@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 05-03-PLAN.md
-last_updated: "2026-09-28T06:24:12.733Z"
+status: verifying
+stopped_at: Completed 05-04-PLAN.md (Phase 5 verified)
+last_updated: "2026-09-28T06:51:31.086Z"
 last_activity: 2026-09-28
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 20
-  completed_plans: 19
-  percent: 80
+  completed_plans: 20
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 
 Phase: 05 (hits-to-kill) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-28
 
-Progress: [██████████] 95%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [██████████] 95%
 | Phase 05 P01 | 8 min | 3 tasks | 2 files |
 | Phase 05 P02 | 23 min | 3 tasks | 2 files |
 | Phase 05 P03 | 18 min | 3 tasks | 3 files |
+| Phase 05 P04 | 21 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,10 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-02: check-engine now takes about 113 s (kill section 66 s); accepted as dev-only (T-05-07)
 - [Phase 05]: 05-03: the hit step is round-half-up of the exact average hit (the card value); labels show the clamped change and inert buttons use aria-disabled so focus and tab order stay; only an active click announces
 - [Phase 05]: 05-03: simpleHits(sv, hp) is shared by the kill cards and the step status, so the status needs no kill table; check-engine K7 proves step = card rounding at all 70,980 settings
+- [Phase 05]: 05-04: Kill tracking lives in VM (killTrack / killLine / tallyEntry); #dice-sim is byte-identical and seeds 1/5/6 still total 47/54/71
+- [Phase 05]: 05-04: sim.tally holds the frozen runs, so tally outcomes re-score with Enemy HP; entries 'total · outcome' joined by '; '
+- [Phase 05]: 05-04: renderSim re-scores the log in place per (run id, HP) via killShown; HP never stales a run and never rebuilds rows
+- [Phase 05]: 05-04: log Result-column rules scoped to thead/tbody and .hp-down/.hp-kill line-height 1, so the tfoot HP cell stays numeric and an HP edit never moves the foot
 
 ### Roadmap Evolution
 
@@ -149,6 +154,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-28T06:24:12.720Z
-Stopped at: Completed 05-03-PLAN.md
+Last session: 2026-09-28T06:51:31.076Z
+Stopped at: Completed 05-04-PLAN.md (Phase 5 verified)
 Resume file: None
