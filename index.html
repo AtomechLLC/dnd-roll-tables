@@ -2224,6 +2224,13 @@ const VM = (() => {
 // DOM-free self-test (RULES-08). Runs on every load; also runs unchanged in Node (tools/check-engine.mjs).
 const SelfTest = (() => {
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  // 05-REVIEW WR-04: the defaults' kill table (a cold 5-9 ms DP in Node, which the first render
+  // needs anyway) goes into the page memo before the clock starts, so the 200 ms budget times the
+  // checks, not the warm-up. A throw here is left to the 'kill' section, which calls
+  // killTableFor again inside its guard and reports the failure there.
+  try {
+    if (typeof VM.killTableFor === 'function') VM.killTableFor(VM.statsView(VM.DEFAULT_STATE));
+  } catch { /* reported by the 'kill' section */ }
   const t0 = now();
   const results = [];
   const check = (name, actual, expected, tol = 1e-9) => {
@@ -2829,9 +2836,10 @@ const SelfTest = (() => {
     ].join(' ') : 'explainChart missing', 'true true true');
   });
 
-  // Phase 5 kill pins (KILL-03, D-05): one kill table at the defaults, built once and memoized,
-  // which also warms the memo for the first render (RESEARCH Pitfall 7). O(1) only (200 ms
-  // budget); check-engine proves every attack key x HP. Names avoid visible copy (IN-06).
+  // Phase 5 kill pins (KILL-03, D-05): one kill table at the defaults, built once and memoized
+  // (before t0, above), which also warms the memo for the first render (RESEARCH Pitfall 7).
+  // O(1) only (200 ms budget); check-engine proves every attack key x HP. Names avoid visible
+  // copy (IN-06).
   section('kill', () => {
     const sv = VM.statsView(VM.DEFAULT_STATE);
     const T = typeof VM.killTableFor === 'function' ? VM.killTableFor(sv) : null;

@@ -84,7 +84,7 @@
 //          round trip, the UI-SPEC strings, and parity with the static #explore markup
 //      and the Phase 5 kill math (plan 05-02), in its own pass over the 2,470 attack keys
 //      (hitFaces, die, dmg) x HP 1..500 = 1,235,000 pairs. Per key it builds the page's
-//      DiceMath.killTable once (timed; a WARNING above 8 ms, never a failure) and two oracles
+//      DiceMath.killTable once (timed with the page's kill views: K9 below) and two oracles
 //      that share no code path with the page's thinning method, both from this file's own
 //      weights (DiceMath.outcome / damageFor, as dist20Of): a round-by-round float DP over
 //      cumulative damage, and a BigInt N_n recurrence for exact E[H] and E[R]. The page's
@@ -224,6 +224,7 @@ const names = {
   K6: '(K6) KILL-04 note numbers equal the cards and the oracles; E[H] x average hit > HP exactly',
   K7: '(K7) KILL-02 step = round(exact average hit) = round(card), labels, inert flags, hits line and status; static markup parity',
   K8: '(K8) KILL-05/06 killTrack, kill line and tally entry equal an independent re-scoring of seeded runs; seeded pins',
+  K9: '(K9) UI-SPEC Performance: at every attack key the kill table plus the slowest kill view fit one 16 ms frame (best of 3)',
   cover: '(cover) the stride-53 sample reaches 21 AC values, 5 dice, 26 attack and 26 damage bonuses',
   zero: '(zero) no touches, no leading ties, no setting with 2+ crossings',
 };
@@ -1351,6 +1352,8 @@ const kc = {
   stepSettings: 0, stepZero: 0, stepTies: 0, stepPairs: 0, stepParity: 0,
 };
 let kWorstMs = 0, kWorstKey = '';
+const K_FRAME_MS = 16;   // UI-SPEC Performance: one frame for the whole kill view (K9)
+let kViewWorstMs = 0, kViewWorstAt = '', kFrameWorstMs = 0, kFrameWorstAt = '';
 const tk = performance.now();
 if (!kHave) {
   record('K1', kx('all'), 'DiceMath.killTable, VM.killViewFrom or VM.CONTROL_SPEC.hp missing');
@@ -1370,19 +1373,47 @@ if (!kHave) {
   if (kKeys.size !== K_KEYS_WANT) record('K1', kx('all'), `${kKeys.size} attack keys, want ${K_KEYS_WANT}`);
   const inWin = (y) => Math.abs(y - Math.floor(y) - 0.5) < 1e-6;   // the page's ROUND_WINDOW, for the count only
   const numOf = (s) => (s === 'under 0.1' ? 0 : Number(String(s).replaceAll(',', '')));
-  // All tables first, timed on their own (the BigInt oracles below churn the heap). Each key is
-  // built twice and the faster build counts, so a GC pause in this large heap does not pose as
-  // an algorithmic slowdown; the worst over keys is the RESEARCH Pitfall 3 signal.
+  // K9, UI-SPEC Performance (05-REVIEW WR-04): the whole kill view an attack change costs (one
+  // DiceMath.killTable build plus one VM.killViewFrom) must fit one frame, K_FRAME_MS. All tables
+  // first, timed on their own (the BigInt oracles below churn the heap). Per key the faster of 3
+  // builds counts, so a GC pause has to hit all three to pose as an algorithmic slowdown. Every
+  // HP's view is then timed once, and the 3 slowest HPs (the BigInt tie-break fallback) are
+  // re-timed as the faster of 3; the key's cost is the table plus its slowest view. Measured
+  // 2026-09-28 (05-REVIEW-FIX): Node and headless Chrome agree within noise (worst table + view
+  // 6.4-8.6 ms in Node, 4.8-6.7 ms in Chrome), so this is the frame budget itself, not the
+  // old "8 ms in Node is about 16 ms in Chrome" proxy (RESEARCH Pitfall 3), which only warned.
   const killTabs = new Map();
-  for (const [key, e] of kKeys) {
-    let ms = Infinity, tab = null;
-    for (let i = 0; i < 2; i++) {
+  const best3 = (fn) => {
+    let ms = Infinity, out = null;
+    for (let i = 0; i < 3; i++) {
       const t1 = performance.now();
-      tab = DiceMath.killTable(e.p);
+      out = fn();
       ms = Math.min(ms, performance.now() - t1);
     }
+    return { ms, out };
+  };
+  for (const [key, e] of kKeys) {
+    const { ms, out: tab } = best3(() => DiceMath.killTable(e.p));
     killTabs.set(key, tab);
     if (ms > kWorstMs) { kWorstMs = ms; kWorstKey = key; }
+    const sv = VM.statsView(e.p), once = new Float64Array(HPN + 1);
+    for (let hp = 1; hp <= HPN; hp++) {
+      const t1 = performance.now();
+      VM.killViewFrom(tab, sv, hp);
+      once[hp] = performance.now() - t1;
+    }
+    const slow = Array.from({ length: HPN }, (_, i) => i + 1).sort((a, b) => once[b] - once[a]).slice(0, 3);
+    let vms = 0, vHp = slow[0];
+    for (const hp of slow) {
+      const t = best3(() => VM.killViewFrom(tab, sv, hp)).ms;
+      if (t > vms) { vms = t; vHp = hp; }
+    }
+    if (vms > kViewWorstMs) { kViewWorstMs = vms; kViewWorstAt = `${key} HP ${vHp}`; }
+    if (ms + vms > kFrameWorstMs) { kFrameWorstMs = ms + vms; kFrameWorstAt = `${key} HP ${vHp}`; }
+    if (ms + vms > K_FRAME_MS) {
+      record('K9', e.p, `kill view ${(ms + vms).toFixed(1)} ms (table ${ms.toFixed(1)} + HP ${vHp} view ` +
+        `${vms.toFixed(1)}), over the ${K_FRAME_MS} ms frame`);
+    }
   }
   for (const [key, e] of kKeys) {
     const p = e.p, sv = VM.statsView(p), tab = killTabs.get(key);
@@ -1873,6 +1904,8 @@ if (!k8Have) {
     }
   }
 }
+extra.K9 = ` (worst table + view ${kFrameWorstMs.toFixed(1)} ms at ${kFrameWorstAt || 'n/a'}; worst table ` +
+  `${kWorstMs.toFixed(1)} ms at ${kWorstKey || 'n/a'}; worst view ${kViewWorstMs.toFixed(1)} ms at ${kViewWorstAt || 'n/a'})`;
 extra.K8 = ` (${k8.runs} seeded runs x HP sample = ${k8.pairs} pairs checked: killed ${k8.kills}, ` +
   `survived ${k8.survived}, killed in round 20 ${k8.lastRound}; ${k8.pins} seeded pins)`;
 
@@ -1897,9 +1930,9 @@ console.log(`crossings: damage-all ${dist.damageAll}, hit-all ${dist.hitAll}, hi
   `touches ${zeroCounts.touch}, leading ties ${zeroCounts.leadingTie}, 2+ crossings ${zeroCounts.multiCross}`);
 if (Number(SelfTest.ms) > 200) console.log(`WARNING: Node self-test took ${SelfTest.ms} ms (budget 200)`);
 else console.log(`selftest time ${SelfTest.ms} ms (budget 200)`);
-// RESEARCH Pitfall 3: 8 ms in Node is about 16 ms (one frame) in Chrome. A warning, never a failure.
-const kWorst = `killTable worst ${kWorstMs.toFixed(1)} ms over ${kKeys.size} keys (${kWorstKey}, best of 2 builds); kill section ${kMs} ms`;
-console.log(kWorstMs > 8 ? `WARNING: ${kWorst} (budget 8 ms in Node)` : kWorst);
+// 05-REVIEW WR-04: the kill view timing is a real gate now (K9, 16 ms, best of 3); this line
+// only reports the section's wall time.
+console.log(`kill section ${kMs} ms (K9 worst table + view ${kFrameWorstMs.toFixed(1)} ms, budget ${K_FRAME_MS} ms)`);
 
 const invariantFailures = Object.values(counts).reduce((a, b) => a + b, 0);
 if (SelfTest.failed === 0 && n > 0 && invariantFailures === 0 && combos === TOTAL_COMBOS) {
