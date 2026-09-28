@@ -2463,6 +2463,26 @@ const SelfTest = (() => {
     ].join(' ') : 'explainChart missing', 'true true true');
   });
 
+  // Phase 5 kill pins (KILL-03, D-05): one kill table at the defaults, built once and memoized,
+  // which also warms the memo for the first render (RESEARCH Pitfall 7). O(1) only (200 ms
+  // budget); check-engine proves every attack key x HP. Names avoid visible copy (IN-06).
+  section('kill', () => {
+    const sv = VM.statsView(VM.DEFAULT_STATE);
+    const T = typeof VM.killTableFor === 'function' ? VM.killTableFor(sv) : null;
+    const tol = 5e-6;
+    check('kill: raw engine values at the defaults, hits', T ? T.eHits[40] : 'killTableFor missing', 8.69985, tol);
+    check('kill: raw engine values at the defaults, rounds', T ? 20 * T.eHits[40] / T.hitFaces : 'killTableFor missing',
+      15.8179, tol);
+    check('kill: raw engine values at the defaults, p20', T ? T.p20[40] : 'killTableFor missing', 0.84658, tol);
+    check('kill: raw engine values at the defaults, p10', T ? T.p10[40] : 'killTableFor missing', 0.11142, tol);
+    check('kill: raw engine values at the defaults, median', T ? T.medianRound[40] : 'killTableFor missing', 15, 0);
+    const k = typeof VM.killView === 'function' ? VM.killView(sv, 40) : null;
+    check('kill: default cards',
+      k ? [k.heading, ...k.cards.flatMap((c) => [c.value, c.sub])].join('|') : 'killView missing',
+      'Killing a 40 ' + 'HP enemy|8.7|on average (simple division says 8.1)|15.8|on average, half of fights by round 15|' +
+      '85%|fastest possible: round 3');
+  });
+
   const failed = results.filter((r) => !r.ok);
   for (const f of failed) console.error('SELFTEST FAIL:', f.name, '| got', f.actual, '| expected', f.expected);
   const ms = (now() - t0).toFixed(1);
@@ -4133,6 +4153,70 @@ function runUiSmoke() {
     results.push({ name: 'formula ui smoke crashed: ' + (err && err.message), ok: false });
   }
 
+  // Phase 5 Enemy HP box and kill cards (KILL-01, KILL-03, D-01, D-04, D-12): the box goes
+  // through the one parse path (clamps, keeps the previous value on blank or junk), and the
+  // heading and three cards show the VM's strings live. The compare tables and chart carry no
+  // kill text, and N changes nothing here. Names avoid visible copy; literals are split (IN-06).
+  try {
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); render(); };
+    const node = (id) => document.getElementById(id);
+    const nb = (x) => String(x).replaceAll(String.fromCharCode(0xa0), ' ');
+    const txt = (id) => (node(id) ? nb(node(id).textContent) : null);
+    const cards = () => ['stat-khits', 'stat-khits-sub', 'stat-krounds', 'stat-krounds-sub', 'stat-k20', 'stat-k20-sub']
+      .map(txt).join('|');
+
+    show({});
+    const hpNum = node('hp-num');
+    check('hp ui: the box exists and carries its key', hpNum ? hpNum.dataset.key : null, 'hp');
+    check('hp ui: starts at the default', state.hp, 40);
+
+    send(hpNum, '0');
+    render();
+    check('hp ui: box "0" clamps up to the minimum', state.hp, 1);
+    send(hpNum, '9999');
+    render();
+    check('hp ui: box "9999" clamps down to the maximum', state.hp, 500);
+    send(hpNum, '');
+    render();
+    check('hp ui: box "" keeps the previous value', state.hp, 500);
+    send(hpNum, '45');
+    render();
+    check('hp ui: box "45" sets it', state.hp, 45);
+    // A number box cannot hold "12abc", so feed the same handler through a text input (as for AC).
+    const proxy = document.createElement('input');
+    proxy.type = 'text';
+    proxy.dataset.key = 'hp';
+    form.append(proxy);
+    send(proxy, '12abc');
+    proxy.remove();
+    render();
+    check('hp ui: text "12abc" keeps the previous value', state.hp, 45);
+
+    show({ hp: 45 });
+    check('hp ui: heading follows the box', txt('kill-h'), 'Killing a 45 ' + 'HP enemy');
+    check('hp ui: cards at 45', cards(),
+      '9.7|on average (simple division says 9.2)|17.7|on average, half of fights by round 17|74%|' +
+      'fastest possible: round 3');
+
+    show({});
+    const def = cards();
+    check('hp ui: cards at the defaults', def,
+      '8.7|on average (simple division says 8.1)|15.8|on average, half of fights by round 15|85%|' +
+      'fastest possible: round 3');
+    const cmp = node('compare'), chart = node('chart');
+    check('hp ui: compare tables carry no kill text', cmp ? /HP|kill/i.test(cmp.textContent) : null, false);
+    check('hp ui: chart carries no kill text', chart ? /HP|kill/i.test(chart.textContent) : null, false);
+
+    show({ n: 12 });
+    check('hp ui: moving N leaves the cards alone', cards(), def);
+  } catch (err) {
+    results.push({ name: 'hp ui smoke crashed: ' + (err && err.message), ok: false });
+  } finally {
+    Object.assign(state, VM.DEFAULT_STATE);
+    renderControls();
+    render();
+  }
+
   // Phase 4 Try this (COPY-05, D-07, D-08): a real click on a preset sets all five controls in
   // one parse path, draws the one ring the description names, stales a rolled run, and a later
   // control change clears the record and the status line. The frame the click queues (render,
@@ -4225,8 +4309,8 @@ function runUiSmoke() {
       const group = el.closest('.group');       // #ac-num: aria-label, shown as the group label
       return group ? group.querySelector('.group-label') : null;
     };
-    const order = ['ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'n-range', 'roll', 'cross', 'dmg', 'cap',
-      '#chart', '#controls'];
+    const order = ['ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'hp-num', 'n-range', 'roll', 'cross', 'dmg',
+      'cap', '#chart', '#controls'];
     for (const key of order) {
       const el = find(key);
       if (el) el.focus({ preventScroll: true });

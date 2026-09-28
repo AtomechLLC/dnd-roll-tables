@@ -38,7 +38,7 @@
 //        the .hint), so #ac-num must say "Target AC"
 //   (11) no tabindex > 0; no control with a negative tabindex, `disabled`, or a [hidden]
 //        ancestor; and the focusable order (same-name radios collapsed, presets by
-//        data-preset, links by href) is exactly ac-range, ac-num, die, atk-num, dmg-num,
+//        data-preset, links by href) is exactly ac-range, ac-num, die, atk-num, dmg-num, hp-num,
 //        n-range, roll, cross, dmg, cap, #chart, #controls
 //   (12) miss is not color-only: every td.m in the four table.outcome shows 0, every
 //        auto-miss row has only td.m data cells, the `.m` style rule has the
@@ -384,7 +384,7 @@ function a11yGuards() {
     if (el.tag === 'input' && el.attrs.type === 'radio' && order.includes(key)) continue;   // one stop per group
     order.push(key);
   }
-  const want = ['ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'n-range', 'roll', 'cross', 'dmg', 'cap', '#chart', '#controls'];
+  const want = ['ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'hp-num', 'n-range', 'roll', 'cross', 'dmg', 'cap', '#chart', '#controls'];
   if (order.join(' ') !== want.join(' ')) problems.push(`order ${order.join(', ')} (want ${want.join(', ')})`);
   check('a11y (11) tab order reaches every control', problems.length === 0, problems.slice(0, 8).join('; '));
 
