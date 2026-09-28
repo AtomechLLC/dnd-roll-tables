@@ -84,7 +84,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Hits-to-Kill
 
 - [x] **KILL-01**: An "Enemy HP" control (whole number, 1 to 500, default 40) sits with the other settings and goes through the same parse path, clamping blank, non-numeric, or out-of-range input
-- [ ] **KILL-02**: "−1 hit" and "+1 hit" buttons change enemy HP by the average damage when the attack hits (crits included), rounded to the nearest whole HP and kept within 1 to 500; each button shows the step it will apply, a line shows HP in average hits, and a zero-damage attack neither loops nor divides by zero
+- [x] **KILL-02**: "−1 hit" and "+1 hit" buttons change enemy HP by the average damage when the attack hits (crits included), rounded to the nearest whole HP and kept within 1 to 500; each button shows the step it will apply, a line shows HP in average hits, and a zero-damage attack neither loops nor divides by zero
 - [x] **KILL-03**: Stat cards show the exact expected hits-to-kill (with the simple HP ÷ average-hit division for contrast), the exact expected rounds-to-kill with its median round, and the exact chance of a kill within 20 rounds, all computed by exact enumeration through the one damage rule (no Monte Carlo), with no hang or wrong number at extreme settings
 - [x] **KILL-04**: A short designer-facing note explains why the exact kill numbers differ from simple division (damage past 0 is wasted, so on average the hits needed add up to more than the HP; wording must be true at every setting), and every number in it equals the number shown on its card
 - [ ] **KILL-05**: The 20-round roll log adds an "Enemy HP" column, highlights the round the enemy dies, dims later rounds as "enemy down", and reports "Killed in round R (H hits)" or "Survived with X HP left"; changing HP re-scores the same rolls live without staling the run
@@ -178,7 +178,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEPLOY-03 | Phase 1 | Complete (verified in Phase 4, 2026-09-27, https://atomechllc.github.io/dnd-roll-tables/; Pages deploys from main via the repo's GitHub Actions static workflow instead of legacy branch publishing, no gh auth on this machine) |
 | DEPLOY-04 | Phase 4 | Complete |
 | KILL-01 | Phase 5 | Complete |
-| KILL-02 | Phase 5 | Pending |
+| KILL-02 | Phase 5 | Complete |
 | KILL-03 | Phase 5 | Complete |
 | KILL-04 | Phase 5 | Complete |
 | KILL-05 | Phase 5 | Pending |

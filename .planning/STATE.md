@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-09-28T06:04:50.041Z"
+stopped_at: Completed 05-03-PLAN.md
+last_updated: "2026-09-28T06:24:12.733Z"
 last_activity: 2026-09-28
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
   percent: 80
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 05 (hits-to-kill) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-09-28
 
-Progress: [█████████░] 90%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Progress: [█████████░] 90%
 | Phase 04 P05 | 12min | 3 tasks | 5 files |
 | Phase 05 P01 | 8 min | 3 tasks | 2 files |
 | Phase 05 P02 | 23 min | 3 tasks | 2 files |
+| Phase 05 P03 | 18 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-02: the kill note's numbers are the card strings themselves, so D-07 holds by construction; check-engine K6 still proves them against independent oracles at all 70,980 settings
 - [Phase 05]: 05-02: displayed E[H] can equal displayed simple division only at the whole-number scale (6 pairs >= 1,000); K4 pins them and the note's 'rounds to the same' branch covers them
 - [Phase 05]: 05-02: check-engine now takes about 113 s (kill section 66 s); accepted as dev-only (T-05-07)
+- [Phase 05]: 05-03: the hit step is round-half-up of the exact average hit (the card value); labels show the clamped change and inert buttons use aria-disabled so focus and tab order stay; only an active click announces
+- [Phase 05]: 05-03: simpleHits(sv, hp) is shared by the kill cards and the step status, so the status needs no kill table; check-engine K7 proves step = card rounding at all 70,980 settings
 
 ### Roadmap Evolution
 
@@ -146,6 +149,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-28T06:04:50.031Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-09-28T06:24:12.720Z
+Stopped at: Completed 05-03-PLAN.md
 Resume file: None
