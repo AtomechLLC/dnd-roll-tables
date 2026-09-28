@@ -115,7 +115,8 @@
     /* Die group (CTRL-02, D-16): a real radio group, one tab stop, arrow keys move the
        selection. Radios are clipped (.vh), never display:none, so they stay keyboard reachable. */
     fieldset.dice { border: 0; margin: 0; padding: 0; min-width: 0; }
-    fieldset.dice legend { padding: 0; margin-bottom: var(--sp-2); }
+    /* 4px under the legend, like the other groups' label gap, so every control top lines up (UI-SPEC A3). */
+    fieldset.dice legend { padding: 0; margin-bottom: var(--sp-1); }
     .segs { display: flex; }
     .segs label { position: relative; display: block; }
     .segs span {
@@ -135,8 +136,33 @@
       position: relative; z-index: 1;
       outline: 2px solid var(--accent); outline-offset: 2px;
     }
-    /* Enemy HP (Phase 5, KILL-01): the box on one row; the hit buttons join it in 05-03. */
+    /* Top alignment for the main strip only (UI-SPEC A3): the HP group alone has a line under its
+       control, so with bottom alignment the other controls would line up with that line instead of
+       the HP box. #compare-controls keeps .strip's flex-end. */
+    #controls { align-items: flex-start; }
+    /* Enemy HP (Phase 5, KILL-01, KILL-02): the box and the two hit step buttons on one row; on a
+       phone the buttons wrap together under the box (.hp-steps never splits), then the hits line. */
     .hp-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+    .hp-steps { display: flex; flex-wrap: nowrap; gap: var(--sp-2); }
+    .hp-hits {
+      margin: 0; max-width: 42ch;
+      font-family: var(--font-prose); font-size: 0.875rem; line-height: 1.4; color: var(--ink-muted);
+    }
+    /* The .btn-preset fill, border and mixes. min-width fits the widest label (−1 hit (−27 HP)), so
+       a step going from 1 to 2 digits never moves anything. Inert is aria-disabled (focus stays);
+       :disabled is only the pre-init and failPage state. No transitions. */
+    .btn-step {
+      background: var(--paper); color: var(--ink);
+      border: 1px solid var(--ink-muted); border-radius: 4px;
+      font: 400 0.875rem/1.4 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap;
+      height: 32px; min-width: 120px; padding: 0 var(--sp-2);
+      cursor: pointer; touch-action: manipulation;
+    }
+    .btn-step:hover:not([aria-disabled="true"]):not(:disabled) { background: color-mix(in oklch, var(--paper) 85%, var(--ink)); }
+    .btn-step:active:not([aria-disabled="true"]):not(:disabled) { background: color-mix(in oklch, var(--paper) 75%, var(--ink)); }
+    .btn-step[aria-disabled="true"], .btn-step:disabled {
+      background: var(--surface); color: var(--ink-muted); border-color: var(--line); cursor: not-allowed;
+    }
 
     /* Stat cards */
     /* auto-fit minmax(9rem, 1fr) (was 10rem; 260927-1ty, so phones get two cards per row), with
@@ -742,8 +768,14 @@
       <div class="group hp">
         <label class="group-label" for="hp-num">Enemy HP <span class="hint">1 to 500</span></label>
         <div class="hp-row">
-          <input type="number" id="hp-num" data-key="hp" min="1" max="500" step="1">
+          <input type="number" id="hp-num" data-key="hp" min="1" max="500" step="1" aria-describedby="hp-hits">
+          <span class="hp-steps">
+            <button type="button" id="hp-minus" class="btn-step" data-step="-1" aria-describedby="hp-hits" disabled>−1 hit (−5 HP)</button>
+            <button type="button" id="hp-plus" class="btn-step" data-step="1" aria-describedby="hp-hits" disabled>+1 hit (+5 HP)</button>
+          </span>
         </div>
+        <p id="hp-hits" class="hp-hits">≈ 8.1 average hits (1 hit ≈ 4.91 HP)</p>
+        <p id="hp-status" class="vh" role="status"></p>
       </div>
     </form>
 
@@ -1976,24 +2008,56 @@ const VM = (() => {
     return '>99.9%';
   }
 
+  // D-02, D-03: the hit step is the "Average damage on a hit" card value, e20Num / (e20Den x
+  // hitFaces) with crits included, rounded half up to whole HP by integer arithmetic (hitFaces
+  // >= 1: a natural 20 always hits). It is never a divisor, so a step of 0 cannot loop. The
+  // applied changes are clamped to the HP domain, so a label never promises more than a click does.
+  function hpStep(sv, hp) {
+    const den = sv.exact.e20Den * sv.hitFaces;
+    const step = Math.floor((2 * sv.exact.e20Num + den) / (2 * den));
+    return {
+      step,
+      minus: Math.min(step, hp - CONTROL_SPEC.hp.min),
+      plus: Math.min(step, CONTROL_SPEC.hp.max - hp),
+    };
+  }
+
+  // Simple division hp / avg hit, avg hit = e20Num / (e20Den * hf): integer round-half-up, in the
+  // same format as the kill numbers (numerators stay below 2^53). It needs no kill table, so the
+  // hit step status can use it without touching the memo. tiny: under 0.05 hits.
+  function simpleHits(sv, hp) {
+    const { e20Num, e20Den } = sv.exact;
+    const simpleNum = hp * e20Den * sv.hitFaces;
+    const simpleT = Math.floor((20 * simpleNum + e20Num) / (2 * e20Num));
+    const tiny = 20 * simpleNum < e20Num;
+    const text = tiny ? 'under 0.1'
+      : simpleT < 10000 ? fixed(simpleT, 1)
+        : group3(Math.floor((2 * simpleNum + e20Num) / (2 * e20Num)));
+    return { tiny, text };
+  }
+
   // Pure: the kill heading and three cards (D-04) from one table, a statsView result and an HP.
   // check-engine calls this with its own tables, never through the memo (RESEARCH Pattern 2).
   // Every copy branch is an exact integer test: every hit kills, under 0.1, past the cap, 0%.
   function killViewFrom(T, sv, hp) {
     const hf = sv.hitFaces, X = sv.params.die, D = sv.params.dmg;
-    const { e20Num, e20Den } = sv.exact;
     const eh = T.eHits[hp];
     const exH = () => DiceMath.killHitsExact(T, hp);
     const exR = () => { const e = exH(); return { num: 20n * e.num, den: BigInt(T.hitFaces) * e.den }; };
     const ehText = killNumText(eh, exH);
     const erText = killNumText((20 * eh) / T.hitFaces, exR);
-    // Simple division hp / avg hit, avg hit = e20Num / (e20Den * hf): integer round-half-up,
-    // in the same format as the kill numbers (numerators stay below 2^53).
-    const simpleNum = hp * e20Den * hf;
-    const simpleT = Math.floor((20 * simpleNum + e20Num) / (2 * e20Num));
-    const simpleText = 20 * simpleNum < e20Num ? 'under 0.1'
-      : simpleT < 10000 ? fixed(simpleT, 1)
-        : group3(Math.floor((2 * simpleNum + e20Num) / (2 * e20Num)));
+    const { tiny, text: simpleText } = simpleHits(sv, hp);
+    // D-02, D-03: the two hit step buttons and the hits line under the HP box. Each label shows
+    // the change its click makes ('(0 HP)' when inert); the hits line reuses the card's simple
+    // division string and the Average damage card's avgPerHitText. Branches are integer tests.
+    const st = hpStep(sv, hp);
+    const minusInert = st.minus === 0, plusInert = st.plus === 0;
+    const minusLabel = minusInert ? '−1 hit (0 HP)' : `−1 hit (−${st.minus} HP)`;
+    const plusLabel = plusInert ? '+1 hit (0 HP)' : `+1 hit (+${st.plus} HP)`;
+    const hitsLine = tiny ? `under 0.1 average hits (1 hit ≈ ${sv.avgPerHitText} HP)`
+      : st.step === 0
+        ? `≈ ${simpleText} average hits (1 hit ≈ ${sv.avgPerHitText} HP, which rounds to 0 HP, so the hit buttons are off)`
+        : `≈ ${simpleText} average hits (1 hit ≈ ${sv.avgPerHitText} HP)`;
     const median = T.medianRound[hp];
     const fastest = Math.ceil(hp / (2 * X + D));        // the best crit, 2X + D >= 3
     // E[H] = 1 exactly: every normal hit (when any) and every crit kills.
@@ -2023,6 +2087,8 @@ const VM = (() => {
         Object.freeze({ value: pctText(T.p20[hp], fastest), sub: `fastest possible: round ${fastest}` }),
       ]),
       note, ehText, erText, simpleText, median, fastest,
+      step: st.step, minusApplied: st.minus, plusApplied: st.plus, minusInert, plusInert,
+      minusLabel, plusLabel, hitsLine,
     });
   }
 
@@ -2032,6 +2098,16 @@ const VM = (() => {
     const key = `${sv.hitFaces},${sv.params.die},${sv.params.dmg},${hp}`;
     if (killMemo.key !== key) killMemo = { key, view: killViewFrom(killTableFor(sv), sv, hp) };
     return killMemo.view;
+  }
+
+  // The one announcement per active hit step click (UI-SPEC Live regions): written only by the
+  // click handler, never by render() or typing. The number is the card's simple division string
+  // (the same simpleHits that killViewFrom prints), so it needs no kill table.
+  function hpStatus(sv, hp) {
+    const { tiny, text } = simpleHits(sv, hp);
+    const bound = hp === CONTROL_SPEC.hp.min ? ' That is the lowest it goes.'
+      : hp === CONTROL_SPEC.hp.max ? ' That is the highest it goes.' : '';
+    return (tiny ? `Enemy HP ${hp}: under 0.1 average hits.` : `Enemy HP ${hp}: about ${text} average hits.`) + bound;
   }
 
   // SIM-02, SIM-05, D-04, D-05: the exact figure and its spread, all in displayed tenths
@@ -2090,7 +2166,7 @@ const VM = (() => {
     CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, twoRollsText, formulaView, compareView,
     niceTicks, captionOrder, captionCross, captionBands, explainChart, crossLevers, readoutLines, chartView, computeView,
     settingsText, simExact, simPlacement, simStatus, PRESETS, presetStatus,
-    killTableFor, killViewFrom, killView, roundKill, group3, killNumText, pctText,
+    killTableFor, killViewFrom, killView, roundKill, group3, killNumText, pctText, hpStep, hpStatus,
   });
 })();
   </script>
@@ -2803,6 +2879,12 @@ const explainCrossEl = document.querySelector('#explain-cross span');
 const exploreListEl = document.querySelector('#explore .explore-list');
 const presetBtns = Array.from(document.querySelectorAll('#explore button.btn-preset'));
 const exploreStatusEl = document.getElementById('explore-status');
+// Enemy HP step buttons (Phase 5): the hits line, the click-only status, and the two buttons.
+const hpHitsEl = document.getElementById('hp-hits');
+const hpStatusEl = document.getElementById('hp-status');
+const hpMinusEl = document.getElementById('hp-minus');
+const hpPlusEl = document.getElementById('hp-plus');
+const stepBtns = Array.from(document.querySelectorAll('#controls button.btn-step'));
 // Kill heading over the three kill cards (Phase 5); the cards go through setCard.
 const killHeadEl = document.getElementById('kill-h');
 // The kill note beside / under the kill cards (D-07); written from view.kill.note only.
@@ -2811,7 +2893,7 @@ const killNoteEl = document.getElementById('kill-note');
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
 const state = {};
-const RENDERERS = [renderControls, renderStats, renderFormulas, renderTable, renderTwoRolls, renderLegend,
+const RENDERERS = [renderControls, renderHp, renderStats, renderFormulas, renderTable, renderTwoRolls, renderLegend,
   renderFootnote, renderCompare, renderChart, renderExplain, renderSim];
 
 // The last run lives here, never in state (RESEARCH Pattern 2, Pitfall 2): a run is an event,
@@ -2913,6 +2995,27 @@ function onPresetClick(e) {
   if (b && !b.disabled) applyPreset(b.dataset.preset);
 }
 
+// Enemy HP hit steps (KILL-02, D-02, D-03). The step comes from state at click time, never from
+// the painted label: two clicks before the next frame each see the state the previous one set,
+// so two quick clicks at HP 499 give 500 and then nothing. An inert button (applied change 0,
+// at a bound or with a step of 0) returns before any write, so nothing loops or announces. The
+// new HP goes through the one parse path (clamped to 1..500), then ONE setState. The status is
+// cleared, then written in the next frame after the render setState queued (rAF callbacks run in
+// registration order); the state.hp guard drops the write if HP changed again in between. Focus
+// stays on the button: the inert state is aria-disabled, never `disabled`.
+function onStepClick(e) {
+  const b = e.target.closest('button[data-step]');
+  if (!b || b.disabled) return;
+  const s = VM.hpStep(VM.statsView(state), state.hp);
+  const applied = Number(b.dataset.step) < 0 ? -s.minus : s.plus;
+  if (applied === 0) return;
+  const hp = VM.parseControl('hp', state.hp + applied, state.hp);
+  setState({ hp });
+  hpStatusEl.textContent = '';
+  const msg = VM.hpStatus(VM.statsView(state), hp);
+  requestAnimationFrame(() => { if (state.hp === hp) hpStatusEl.textContent = msg; });
+}
+
 function onChange(e) {
   onControl(e);
   if (e.target.type === 'number' && e.target.dataset.key) {
@@ -2929,6 +3032,18 @@ function renderControls(view) {
     if (el.value !== v) el.value = v;
   }
   nOutEl.textContent = signed(state.n);
+}
+
+// The two hit step labels, their inert state and the hits line (D-03). textContent through
+// setText, aria-disabled written only on change. Never writes #hp-status: only a click announces.
+function renderHp(view) {
+  const k = view.kill;
+  for (const [el, label, isInert] of [[hpMinusEl, k.minusLabel, k.minusInert], [hpPlusEl, k.plusLabel, k.plusInert]]) {
+    setText(el, label);
+    if (isInert && el.getAttribute('aria-disabled') !== 'true') el.setAttribute('aria-disabled', 'true');
+    else if (!isInert && el.hasAttribute('aria-disabled')) el.removeAttribute('aria-disabled');
+  }
+  setText(hpHitsEl, k.hitsLine);
 }
 
 function setCard(id, value, sub) {
@@ -4840,8 +4955,8 @@ function showEngineError() {
 const PAINTED_SECTIONS = ['tables', 'stats', 'compare', 'chart', 'sim', 'explore'];
 
 // The one failure path for a render that throws, first or later (04-REVIEW WR-03): latch
-// `broken` so nothing repaints, hide every painted section, show the banner, and disable Roll
-// and the presets (a later failure finds them enabled).
+// `broken` so nothing repaints, hide every painted section, show the banner, and disable Roll,
+// the presets and the two hit step buttons (a later failure finds them enabled).
 function failPage(err) {
   broken = true;
   console.error('render failed:', err);
@@ -4852,6 +4967,7 @@ function failPage(err) {
   }
   rollBtn.disabled = true;
   for (const b of presetBtns) b.disabled = true;
+  for (const b of stepBtns) b.disabled = true;
   showEngineError();
 }
 
@@ -4866,9 +4982,9 @@ function init() {
 
   // WR-01 (02-REVIEW), WR-04 (03-REVIEW): the first render is guarded, so a view-model or DOM
   // throw shows the banner instead of a blank page. Nothing is wired until that render has
-  // succeeded: the control listeners, the Roll click and the preset click come after it, and
-  // the Roll and preset buttons (shipped disabled) and the sim body (shipped hidden) go live
-  // as the last steps. A throw
+  // succeeded: the control listeners, the Roll click, the preset click and the hit step click
+  // come after it, and the Roll, preset and hit step buttons (shipped disabled) and the sim body
+  // (shipped hidden) go live as the last steps. A throw
   // latches `broken`, hides every painted section, and leaves the controls inert.
   try {
     // The N slider's range comes only from CONTROL_SPEC.n (IN-04: no second copy in the markup).
@@ -4885,9 +5001,11 @@ function init() {
     }
     rollBtn.addEventListener('click', onRoll);
     exploreListEl.addEventListener('click', onPresetClick);   // Try this: one delegated listener
+    form.addEventListener('click', onStepClick);             // Enemy HP hit steps (KILL-02)
     simBodyEl.hidden = false;
     rollBtn.disabled = false;
     for (const b of presetBtns) b.disabled = false;          // enabled with Roll, last (D-09)
+    for (const b of stepBtns) b.disabled = false;            // the hit steps too (UI-SPEC)
   } catch (err) {
     failPage(err);
     const st = selfTestIfLoaded();
