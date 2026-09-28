@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-09-28T05:38:02.006Z"
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-09-28T06:04:50.041Z"
 last_activity: 2026-09-28
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 20
-  completed_plans: 17
+  completed_plans: 18
   percent: 80
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 05 (hits-to-kill) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-09-28
 
-Progress: [█████████░] 85%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [█████████░] 85%
 | Phase 04 P04 | 14min | 2 tasks | 3 files |
 | Phase 04 P05 | 12min | 3 tasks | 5 files |
 | Phase 05 P01 | 8 min | 3 tasks | 2 files |
+| Phase 05 P02 | 23 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,9 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-01: Kill median/P10/P20 use the thinning DP (cap 1,000 rounds); the round-by-round DP is kept as the check-engine oracle
 - [Phase 05]: 05-01: Displayed kill numbers use float rounding with an exact BigInt tie-break within 1e-6 of a .5 boundary; median tie rule P >= 0.5 - 1e-9
 - [Phase 05]: 05-01: One kill table per (hitFaces, die, dmg) covers HP 1..500 in an LRU of 8, so HP edits and N drags are lookups
+- [Phase 05]: 05-02: the kill note's numbers are the card strings themselves, so D-07 holds by construction; check-engine K6 still proves them against independent oracles at all 70,980 settings
+- [Phase 05]: 05-02: displayed E[H] can equal displayed simple division only at the whole-number scale (6 pairs >= 1,000); K4 pins them and the note's 'rounds to the same' branch covers them
+- [Phase 05]: 05-02: check-engine now takes about 113 s (kill section 66 s); accepted as dev-only (T-05-07)
 
 ### Roadmap Evolution
 
@@ -142,6 +146,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-09-28T05:38:01.997Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-09-28T06:04:50.031Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
