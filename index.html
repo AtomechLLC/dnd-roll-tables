@@ -135,6 +135,8 @@
       position: relative; z-index: 1;
       outline: 2px solid var(--accent); outline-offset: 2px;
     }
+    /* Enemy HP (Phase 5, KILL-01): the box on one row; the hit buttons join it in 05-03. */
+    .hp-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
 
     /* Stat cards */
     /* auto-fit minmax(9rem, 1fr) (was 10rem; 260927-1ty, so phones get two cards per row), with
@@ -163,6 +165,9 @@
     /* "Value of the next +1" (STAT-03): full grid row, h2 then two Body lines. */
     .card.marginal { grid-column: 1 / -1; container: formula / inline-size; }
     .card.marginal h2 { margin: 0; }
+    /* Kill heading (Phase 5): a full row under the attack cards; 12px gap + 8px = the 20px section
+       break. The .card.kill cards match the subgrid rule above, so they need no card CSS. */
+    #stats > .stats-h { grid-column: 1 / -1; margin: 0; padding-top: var(--sp-2); }
     .marg-line { margin: 0; font-size: 1rem; line-height: 1.5; }
     .marg-line .lead { font-weight: 700; }
     .marg-line .mv { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; }
@@ -727,6 +732,12 @@
         <label class="group-label" for="dmg-num">Damage bonus <span class="hint">−5 to +20</span></label>
         <input type="number" id="dmg-num" data-key="dmg" min="-5" max="20" step="1">
       </div>
+      <div class="group hp">
+        <label class="group-label" for="hp-num">Enemy HP <span class="hint">1 to 500</span></label>
+        <div class="hp-row">
+          <input type="number" id="hp-num" data-key="hp" min="1" max="500" step="1">
+        </div>
+      </div>
     </form>
 
     <section id="tables">
@@ -769,6 +780,22 @@
         <span class="label">Expected over 20 rounds</span>
         <span class="value" id="stat-e20"></span>
         <span class="sub" id="stat-e20-sub"></span>
+      </div>
+      <h2 id="kill-h" class="stats-h"></h2>
+      <div class="card kill">
+        <span class="label">Hits to kill</span>
+        <span class="value" id="stat-khits"></span>
+        <span class="sub" id="stat-khits-sub"></span>
+      </div>
+      <div class="card kill">
+        <span class="label">Rounds to kill</span>
+        <span class="value" id="stat-krounds"></span>
+        <span class="sub" id="stat-krounds-sub"></span>
+      </div>
+      <div class="card kill">
+        <span class="label">Kill within 20 rounds</span>
+        <span class="value" id="stat-k20"></span>
+        <span class="sub" id="stat-k20-sub"></span>
       </div>
       <div class="card formulas" id="formulas">
         <h2>How these numbers are worked out</h2>
@@ -1130,10 +1157,91 @@ const DiceMath = (() => {
     return { s1, s2, den1, var20Num: den1 * s2 - s1 * s1, var20Den: 20 * X ** 4 };
   }
 
+  // Phase 5 kill math (KILL-03, D-06). HP runs 1..KILL_HP_MAX. The median search stops at
+  // KILL_MEDIAN_CAP rounds (the documented cutoff). Binomial tail entries under KILL_TINY are
+  // dropped: they are invisible in doubles (RESEARCH A2). KILL_TIE_EPS lets an exact 1/2 median
+  // tie that the float sum lands just under still count (RESEARCH Pitfall 1).
+  const KILL_HP_MAX = 500, KILL_MEDIAN_CAP = 1000, KILL_TIE_EPS = 1e-9, KILL_TINY = 1e-30;
+
+  // Per-hit damage weights over den = hitFaces * X^2, conditional on hitting: (hitFaces - 1) * X
+  // per normal face and 1 per true 2dX crit pair, all through damageFor (RULES-05).
+  function hitPmf(p) {
+    assertParams(p);
+    const X = p.die, hf = 21 - threshold(p);
+    const w = new Map(), add = (d, k) => w.set(d, (w.get(d) || 0) + k);
+    for (let k = 1; k <= X; k++) add(damageFor(20, [k], p), (hf - 1) * X);                 // normal faces
+    for (let a = 1; a <= X; a++) for (let b = 1; b <= X; b++) add(damageFor(20, [a, b], p), 1);
+    return { hitFaces: hf, den: hf * X * X, w: [...w].sort((x, y) => x[0] - y[0]) };
+  }
+
+  // D-06: the exact kill table for every HP 1..KILL_HP_MAX at once, from hitPmf (the one damage
+  // rule, true 2dX crit; death is HP <= 0, so 0-damage hits count as hits but never kill).
+  // - eHits[hp]: E[hits to kill] by exact recursion over remaining HP,
+  //   h(n) = (den + sum_d w_d h(n - d)) / (den - w0), with no cutoff (the best crit, 2X + D >= 3,
+  //   always deals damage, so den - w0 > 0).
+  // - E[rounds] = 20 * eHits / hitFaces (Wald: each round hits with chance hitFaces / 20,
+  //   independent of damage). Callers derive it; it is not stored.
+  // - p10 / p20 / medianRound by binomial thinning of damaging hits: a round lands one with
+  //   pp = (hitFaces / 20) * (1 - w0 / den), so P(dead by t) = sum_j Bin(t, pp)(j) * P(S_j >= hp).
+  //   medianRound[hp] is the first t <= KILL_MEDIAN_CAP with P(dead by t) >= 1/2 - KILL_TIE_EPS;
+  //   0 means past the cap (half of fights last over KILL_MEDIAN_CAP rounds).
+  // Memo-free like the rest of DiceMath; the VM memoizes one table per (hitFaces, die, dmg).
+  function killTable(p) {
+    const H = KILL_HP_MAX, W = H + 1, { hitFaces: hf, den, w } = hitPmf(p);
+    let w0 = 0, wpos = 0; const ds = [], ws = [];
+    for (const [d, k] of w) if (d === 0) w0 = k; else { ds.push(d); ws.push(k); wpos += k; }
+    const K = ds.length;
+    const eHits = new Float64Array(W);                  // h(n) = (den + sum w_d h(n-d)) / (den - w0)
+    for (let n = 1; n <= H; n++) {
+      let s = den;
+      for (let k = 0; k < K; k++) if (n > ds[k]) s += ws[k] * eHits[n - ds[k]];
+      eHits[n] = s / (den - w0);
+    }
+    // Thinning: damaging hit per round with pp; F[j*W + hp] = P(damage of j damaging hits >= hp).
+    const pp = (hf * wpos) / (20 * den), qq = 1 - pp, hq = ws.map((k) => k / wpos);
+    let F = new Float64Array(64 * W), rows = 0;
+    let cur = new Float64Array(H), nxt = new Float64Array(H), dead = 0, top = 0;
+    cur[0] = 1;
+    const pushRow = () => {
+      if ((rows + 1) * W > F.length) { const G = new Float64Array(F.length * 2); G.set(F); F = G; }
+      const o = rows * W; F[o + H] = dead;
+      for (let s = H - 1; s >= 1; s--) F[o + s] = F[o + s + 1] + cur[s];
+      rows++;
+    };
+    const hitStep = () => {
+      nxt.fill(0);
+      let nt = top;
+      for (let k = 0; k < K; k++) {
+        const d = ds[k], q = hq[k], lim = Math.min(top, H - 1 - d);
+        for (let s = 0; s <= lim; s++) nxt[s + d] += cur[s] * q;
+        for (let s = Math.max(0, lim + 1); s <= top; s++) dead += cur[s] * q;
+        if (lim + d > nt) nt = lim + d;
+      }
+      top = nt; const t = cur; cur = nxt; nxt = t; pushRow();
+    };
+    pushRow();                                           // j = 0
+    const b = new Float64Array(KILL_MEDIAN_CAP + 2); b[0] = 1;   // Bin(t, pp) on [lo, hi]
+    let lo = 0, hi = 0, open = 1;
+    const pDead = (hp) => { let s = 0; for (let j = lo, o = lo * W + hp; j <= hi; j++, o += W) s += b[j] * F[o]; return s; };
+    const p10 = new Float64Array(W), p20 = new Float64Array(W), medianRound = new Int32Array(W);
+    for (let t = 1; t <= KILL_MEDIAN_CAP; t++) {
+      b[hi + 1] = b[hi] * pp;
+      for (let j = hi; j > lo; j--) b[j] = b[j] * qq + b[j - 1] * pp;
+      b[lo] *= qq; hi++;
+      while (b[lo] < KILL_TINY && lo < hi) b[lo++] = 0;           // tails < 1e-30: invisible in doubles
+      while (b[hi] < KILL_TINY && hi > lo) b[hi--] = 0;
+      while (rows <= hi) hitStep();
+      if (t === 10 || t === 20) { const a = t === 10 ? p10 : p20; for (let hp = 1; hp <= H; hp++) a[hp] = pDead(hp); }
+      while (open <= H && pDead(open) >= 0.5 - KILL_TIE_EPS) medianRound[open++] = t;   // exact 1/2 ties
+      if (open > H && t >= 20) break;
+    }
+    return { hitFaces: hf, den, w0, pos: ds.map((d, i) => [d, ws[i]]), eHits, p10, p20, medianRound };
+  }
+
   return Object.freeze({
     DICE, avg, assertParams, outcome, isHit, damageFor, threshold,
     outcomeTable, stats, closedFormPerRound, marginals, hitAverages, sweep, crossings, attackBands,
-    spread,
+    spread, hitPmf, killTable, KILL_HP_MAX, KILL_MEDIAN_CAP, KILL_TIE_EPS, KILL_TINY,
   });
 })();
   </script>
@@ -1222,8 +1330,9 @@ const VM = (() => {
     atk: Object.freeze({ min: -5, max: 20 }),
     dmg: Object.freeze({ min: -5, max: 20 }),
     n: Object.freeze({ min: 0, max: 20 }),   // Phase 2 "Compare at +N" (CTRL-04): the one copy of its domain
+    hp: Object.freeze({ min: 1, max: 500 }),   // Phase 5 "Enemy HP" (KILL-01)
   });
-  const DEFAULT_STATE = Object.freeze({ ac: 15, die: 8, atk: 5, dmg: 0, n: 5 });   // D-03 (Phase 1 and 2)
+  const DEFAULT_STATE = Object.freeze({ ac: 15, die: 8, atk: 5, dmg: 0, n: 5, hp: 40 });   // D-03 (Phase 1 and 2), D-01 (Phase 5)
 
   // raw: a control's string value (or a number). Blank / non-numeric -> prev. Never Number('') === 0.
   function parseControl(key, raw, prev) {
@@ -1795,6 +1904,57 @@ const VM = (() => {
   // The one announcement per preset click (UI-SPEC Click behavior): written only by the handler.
   const presetStatus = (s) => `Set to ${settingsText(s)}, compare at ${signed(s.n)}. Everything above has updated.`;
 
+  // ---- Hits to kill (Phase 5) ----
+  // The kill numbers depend on the attack only through (hitFaces, die, dmg), and one
+  // DiceMath.killTable covers HP 1..500, so an HP edit or an N drag is a lookup and only an
+  // attack change builds a table. A small LRU keeps the last few attack keys (RESEARCH A4).
+  const KILL_LRU_SIZE = 8;
+  const killTables = new Map();
+  function killTableFor(sv) {
+    const key = `${sv.hitFaces},${sv.params.die},${sv.params.dmg}`;
+    let t = killTables.get(key);
+    if (t) {
+      killTables.delete(key);                            // refresh recency
+    } else {
+      t = DiceMath.killTable(sv.params);
+      if (killTables.size >= KILL_LRU_SIZE) killTables.delete(killTables.keys().next().value);
+    }
+    killTables.set(key, t);
+    return t;
+  }
+
+  // Pure: the kill heading and three cards (D-04) from one table, a statsView result and an HP.
+  // check-engine calls this with its own tables, never through the memo (RESEARCH Pattern 2).
+  function killViewFrom(T, sv, hp) {
+    const hf = sv.hitFaces, X = sv.params.die, D = sv.params.dmg;
+    const { e20Num, e20Den } = sv.exact;
+    const eh = T.eHits[hp], er = (20 * eh) / T.hitFaces;
+    const ehText = fixed(Math.round(10 * eh), 1);
+    const erText = fixed(Math.round(10 * er), 1);
+    // Simple division hp / avg hit, avg hit = e20Num / (e20Den * hf): integer round-half-up tenths.
+    const simpleText = fixed(Math.floor((20 * hp * e20Den * hf + e20Num) / (2 * e20Num)), 1);
+    const median = T.medianRound[hp];
+    const fastest = Math.ceil(hp / (2 * X + D));        // the best crit, 2X + D >= 3
+    const pctText = `${Math.round(T.p20[hp] * 100)}%`;
+    return Object.freeze({
+      hp, heading: `Killing a ${hp} HP enemy`,
+      cards: Object.freeze([
+        Object.freeze({ value: ehText, sub: `on average (simple division says ${simpleText})` }),
+        Object.freeze({ value: erText, sub: `on average, half of fights by round ${median}` }),
+        Object.freeze({ value: pctText, sub: `fastest possible: round ${fastest}` }),
+      ]),
+      ehText, erText, simpleText, median, fastest,
+    });
+  }
+
+  // The page's memo wrapper: the table LRU plus a single-entry view memo keyed hf,die,dmg,hp.
+  let killMemo = { key: null, view: null };
+  function killView(sv, hp) {
+    const key = `${sv.hitFaces},${sv.params.die},${sv.params.dmg},${hp}`;
+    if (killMemo.key !== key) killMemo = { key, view: killViewFrom(killTableFor(sv), sv, hp) };
+    return killMemo.view;
+  }
+
   // SIM-02, SIM-05, D-04, D-05: the exact figure and its spread, all in displayed tenths
   // (UI-SPEC A8), so a reader can add them up by hand. eT uses the stat card's tenths (STAT-02).
   // lopsided: E - SD <= 0, or only a nat 20 hits. At E - SD = 0 the band's low end is already
@@ -1838,11 +1998,12 @@ const VM = (() => {
     const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
     const compare = compareView(p, state.n);
     const sv = statsView(state);
-    // simExact is page-view only: statsView stays sim-free for the per-combo callers. The copy
-    // builders reuse this one statsView result (no second engine pass).
+    // simExact and kill are page-view only: statsView stays sim-free and kill-free for the
+    // per-combo callers. The copy builders reuse this one statsView result (no second engine pass).
     return {
       ...sv, heatMax: compare.heatMax, compare, chart: chartView(p, state.n),
       simExact: simExact(p), formulas: formulaView(sv), twoRolls: twoRollsText(sv),
+      kill: killView(sv, state.hp),
     };
   }
 
@@ -1850,6 +2011,7 @@ const VM = (() => {
     CONTROL_SPEC, DEFAULT_STATE, parseControl, fixed, tenths, signed, statsView, twoRollsText, formulaView, compareView,
     niceTicks, captionOrder, captionCross, captionBands, explainChart, crossLevers, readoutLines, chartView, computeView,
     settingsText, simExact, simPlacement, simStatus, PRESETS, presetStatus,
+    killTableFor, killViewFrom, killView,
   });
 })();
   </script>
@@ -2550,6 +2712,8 @@ const explainCrossEl = document.querySelector('#explain-cross span');
 const exploreListEl = document.querySelector('#explore .explore-list');
 const presetBtns = Array.from(document.querySelectorAll('#explore button.btn-preset'));
 const exploreStatusEl = document.getElementById('explore-status');
+// Kill heading over the three kill cards (Phase 5); the cards go through setCard.
+const killHeadEl = document.getElementById('kill-h');
 
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
@@ -2712,6 +2876,13 @@ function renderStats(view) {
     margHitNEl.textContent = '';
   }
   margDmgVEl.textContent = `+${marg.dmgRound} per round (+${marg.dmg20} over 20 rounds)`;
+
+  // Phase 5 kill cards (KILL-03): every string comes from VM.killView; nothing is built here.
+  const k = view.kill;
+  setText(killHeadEl, k.heading);
+  setCard('stat-khits', k.cards[0].value, k.cards[0].sub);
+  setCard('stat-krounds', k.cards[1].value, k.cards[1].sub);
+  setCard('stat-k20', k.cards[2].value, k.cards[2].sub);
 }
 
 // A formula line from a VM segment: pre text, the card's result in bold (num face), post text.
