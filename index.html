@@ -2728,6 +2728,12 @@ const SelfTest = (() => {
       'The enemy drops only on the hit that takes it to 0 ' + 'HP or below, and whatever that last hit deals ' +
       'past 0 is wasted, so on average the hits needed add up to more than 40 ' + 'HP. ' +
       'Misses come between the hits: at a 55% hit chance, the kill takes 15.8 rounds on average.');
+    // D-02, D-03: the hit step, both applied changes, both button labels and the hits line
+    // (the same memo hit, O(1)). Split literals keep the copy out of names.
+    check('kill: default steps',
+      k && 'hitsLine' in k ? [k.step, k.minusApplied, k.plusApplied, k.minusLabel, k.plusLabel, k.hitsLine].join('|')
+        : 'step fields missing',
+      '5|5|5|−1 hit (−5 ' + 'HP)|+1 hit (+5 ' + 'HP)|≈ 8.1 average hits (1 hit ≈ 4.91 ' + 'HP)');
   });
 
   const failed = results.filter((r) => !r.ok);
@@ -4564,6 +4570,127 @@ function runUiSmoke() {
     render();
   }
 
+  // Phase 5 hit step buttons (KILL-02, D-02, D-03, UI-SPEC A1..A3): real clicks on the real
+  // buttons step HP by one average hit, rounded to whole HP. Each label shows the change the
+  // click will make, a bound or a step of 0 makes the button inert (aria-disabled, focus kept),
+  // and only an active click writes #hp-status. click() holds the frames the click queues (the
+  // render, then the status write) and runs them here in order, as 'explore ui' does. The rAF
+  // registered in `finally` clears the status, so the DOM dump never carries it. Names avoid
+  // visible copy; expected literals are split (IN-06).
+  try {
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); renderControls(); render(); };
+    const node = (id) => document.getElementById(id);
+    const nb = (x) => String(x).replaceAll(String.fromCharCode(0xa0), ' ');
+    const txt = (id) => (node(id) ? nb(node(id).textContent) : null);
+    const minus = node('hp-minus'), plus = node('hp-plus'), hpNum = node('hp-num'), hpStatus = node('hp-status');
+    const status = () => (hpStatus ? hpStatus.textContent : null);
+    const inert = (b) => (b ? b.getAttribute('aria-disabled') : 'missing');
+    const held = (fn) => {
+      const queued = [];
+      const realRaf = window.requestAnimationFrame;
+      window.requestAnimationFrame = (cb) => { queued.push(cb); return 0; };
+      try {
+        fn();
+      } finally {
+        window.requestAnimationFrame = realRaf;
+      }
+      render();
+      for (const cb of queued) cb(performance.now());
+    };
+    const click = (b) => held(() => { b.focus({ preventScroll: true }); b.click(); });
+    const HP = ' ' + 'HP';
+
+    const shape = (b) => (b ? [b.tagName, b.className, b.dataset.step, b.type, b.hasAttribute('data-key')].join(' ') : null);
+    check('hp step ui: the minus button', shape(minus), 'BUTTON btn-step -1 button false');
+    check('hp step ui: the plus button', shape(plus), 'BUTTON btn-step 1 button false');
+    check('hp step ui: box and buttons described by the hits line',
+      [hpNum, minus, plus].map((el) => (el ? el.getAttribute('aria-describedby') : null)).join(' '), 'hp-hits hp-hits hp-hits');
+    check('hp step ui: status region', hpStatus ? hpStatus.getAttribute('role') + ' ' + hpStatus.className : null, 'status vh');
+
+    show({});
+    check('hp step ui: default labels', txt('hp-minus') + '|' + txt('hp-plus'), '−1 hit (−5' + HP + ')|+1 hit (+5' + HP + ')');
+    check('hp step ui: default buttons active', inert(minus) + ' ' + inert(plus), 'null null');
+    check('hp step ui: default hits line', txt('hp-hits'), '≈ 8.1 average hits (1 hit ≈ 4.91' + HP + ')');
+
+    hpStatus.textContent = '';
+    click(plus);
+    check('hp step ui: one plus click steps by 5', state.hp, 45);
+    check('hp step ui: the click announces', status(), 'Enemy' + HP + ' 45: about 9.2 average hits.');
+    check('hp step ui: hits line follows', (txt('hp-hits') ?? '').startsWith('≈ 9.2 average hits'), true);
+    check('hp step ui: focus stays on the plus button', document.activeElement === plus, true);
+    check('hp step ui: cards follow the click', txt('stat-khits') + '|' + txt('stat-krounds'), '9.7|17.7');
+    click(minus);
+    click(minus);
+    check('hp step ui: two minus clicks from 45', state.hp, 35);
+
+    show({ hp: 3 });
+    check('hp step ui: minus label clamps near the bound', txt('hp-minus'), '−1 hit (−2' + HP + ')');
+    click(minus);
+    check('hp step ui: minus click stops at the bound', state.hp, 1);
+    check('hp step ui: minus label at the bound', txt('hp-minus'), '−1 hit (0' + HP + ')');
+    check('hp step ui: minus inert at the bound', inert(minus), 'true');
+    check('hp step ui: bound announced (low)', status(),
+      'Enemy' + HP + ' 1: about 0.2 average hits. That is the lowest ' + 'it goes.');
+    click(minus);
+    check('hp step ui: inert minus click changes nothing', state.hp, 1);
+    check('hp step ui: focus stays on the inert minus button', document.activeElement === minus, true);
+
+    show({ hp: 499 });
+    check('hp step ui: plus label clamps near the bound', txt('hp-plus'), '+1 hit (+1' + HP + ')');
+    held(() => { plus.focus({ preventScroll: true }); plus.click(); plus.click(); });   // no render between
+    check('hp step ui: two quick plus clicks at 499', state.hp, 500);
+    check('hp step ui: plus label at the bound', txt('hp-plus'), '+1 hit (0' + HP + ')');
+    check('hp step ui: plus inert at the bound', inert(plus), 'true');
+    check('hp step ui: bound announced (high)', (status() ?? '').endsWith('That is the highest ' + 'it goes.'), true);
+
+    show({ die: 4, dmg: -4 });
+    check('hp step ui: step 0 labels', [txt('hp-minus'), txt('hp-plus')].every((s) => (s ?? '').endsWith('(0' + HP + ')')), true);
+    check('hp step ui: step 0 both inert', inert(minus) + ' ' + inert(plus), 'true true');
+    check('hp step ui: step 0 hits line', txt('hp-hits'),
+      '≈ 352.0 average hits (1 hit ≈ 0.11' + HP + ', which rounds to 0' + HP + ', so the hit buttons are ' + 'off)');
+    hpStatus.textContent = '';
+    click(minus);
+    click(plus);
+    check('hp step ui: step 0 clicks change nothing', state.hp + '|' + status(), '40|');
+
+    show({ ac: 10, die: 12, atk: 20, dmg: 20, hp: 1 });
+    check('hp step ui: tiny hits line', txt('hp-hits'), 'under 0.1 average hits (1 hit ≈ 26.84' + HP + ')');
+
+    show({ ac: 25, die: 12, atk: 0 });
+    check('hp step ui: labels follow the attack', txt('hp-minus') + '|' + txt('hp-plus'),
+      '−1 hit (−13' + HP + ')|+1 hit (+13' + HP + ')');
+
+    show({});
+    hpStatus.textContent = '';
+    send(hpNum, '50');
+    render();
+    check('hp step ui: typing never announces', state.hp + '|' + status(), '50|');
+
+    // UI-SPEC A3: every control on the strip's first row starts at the same top edge.
+    show({});
+    const acTop = node('ac-range').getBoundingClientRect().top;
+    const groups = Array.from(document.querySelectorAll('#controls > .group'));
+    const rowTop = groups[0].getBoundingClientRect().top;
+    const off = [];
+    for (const g of groups) {
+      if (g.getBoundingClientRect().top !== rowTop) continue;
+      const ctl = g.querySelector('.segs span') || g.querySelector('input');
+      const top = ctl ? ctl.getBoundingClientRect().top : NaN;
+      if (!(Math.abs(top - acTop) <= 1)) off.push((ctl && (ctl.id || ctl.textContent)) + ' ' + (top - acTop).toFixed(1));
+    }
+    check('hp step ui: controls on the first row share a top edge', off.join(', '), '');
+  } catch (err) {
+    results.push({ name: 'hp step ui smoke crashed: ' + (err && err.message), ok: false });
+  } finally {
+    const statusEl = document.getElementById('hp-status');
+    requestAnimationFrame(() => { if (statusEl) statusEl.textContent = ''; });
+    const active = document.activeElement;
+    if (active && active.classList && active.classList.contains('btn-step')) active.blur();
+    Object.assign(state, VM.DEFAULT_STATE);
+    renderControls();
+    render();
+  }
+
   // Phase 4 Try this (COPY-05, D-07, D-08): a real click on a preset sets all five controls in
   // one parse path, draws the one ring the description names, stales a rolled run, and a later
   // control change clears the record and the status line. The frame the click queues (render,
@@ -4656,8 +4783,8 @@ function runUiSmoke() {
       const group = el.closest('.group');       // #ac-num: aria-label, shown as the group label
       return group ? group.querySelector('.group-label') : null;
     };
-    const order = ['ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'hp-num', 'n-range', 'roll', 'cross', 'dmg',
-      'cap', '#chart', '#controls'];
+    const order = ['ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'hp-num', 'hp-minus', 'hp-plus', 'n-range', 'roll',
+      'cross', 'dmg', 'cap', '#chart', '#controls'];
     for (const key of order) {
       const el = find(key);
       if (el) el.focus({ preventScroll: true });

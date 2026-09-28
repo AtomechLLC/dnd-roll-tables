@@ -21,8 +21,9 @@
 //       "visible". Inline elements join, so a sentence whose numbers sit in <b class="num">
 //       still matches.
 //   (6) the engine-error banner is still hidden after init
-//   (7) the Roll button and exactly three .btn-preset buttons are enabled after init (they
-//       ship disabled; init enables them together as its last step)
+//   (7) the Roll button, exactly three .btn-preset buttons and exactly two .btn-step buttons
+//       (the Enemy HP hit steps) are enabled after init (they ship disabled; init enables them
+//       together as its last step)
 //   (8) the sim section body is shown after init (it ships hidden)
 //   (6)-(8) guard 02-REVIEW WR-01: a caught first-render throw logs console.error('render
 //   failed'), which the console check does not match, so these are its only guard.
@@ -39,7 +40,8 @@
 //   (11) no tabindex > 0; no control with a negative tabindex, `disabled`, or a [hidden]
 //        ancestor; and the focusable order (same-name radios collapsed, presets by
 //        data-preset, links by href) is exactly ac-range, ac-num, die, atk-num, dmg-num, hp-num,
-//        n-range, roll, cross, dmg, cap, #chart, #controls
+//        hp-minus, hp-plus, n-range, roll, cross, dmg, cap, #chart, #controls. The two hit step
+//        buttons go inert with aria-disabled only, never `disabled`, so they stay in this order
 //   (12) miss is not color-only: every td.m in the four table.outcome shows 0, every
 //        auto-miss row has only td.m data cells, the `.m` style rule has the
 //        repeating-linear-gradient hatch, and the legend's .swatch.m shows 0
@@ -55,7 +57,8 @@
 // render() throw, and appends a script that dispatches an `input` event on #ac-range after
 // init. It loads that copy in plain mode and, instead of (3), (4), (6)-(8) and the expects,
 // checks the guarded init: SELFTEST PASSED, 'render failed' logged, no 'Uncaught', the banner
-// shown, #roll and every .btn-preset disabled, and every painted section hidden.
+// shown, #roll, every .btn-preset and both .btn-step buttons disabled, and every painted
+// section hidden.
 // --fault later (04-REVIEW WR-03): the same, but render() throws only from its second call on,
 // so init's first render succeeds and wires everything; the appended script then moves
 // #ac-range to 20 and dispatches `input`, and the scheduled render is the one that throws.
@@ -384,7 +387,8 @@ function a11yGuards() {
     if (el.tag === 'input' && el.attrs.type === 'radio' && order.includes(key)) continue;   // one stop per group
     order.push(key);
   }
-  const want = ['ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'hp-num', 'n-range', 'roll', 'cross', 'dmg', 'cap', '#chart', '#controls'];
+  const want = ['ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'hp-num', 'hp-minus', 'hp-plus', 'n-range', 'roll', 'cross',
+    'dmg', 'cap', '#chart', '#controls'];
   if (order.join(' ') !== want.join(' ')) problems.push(`order ${order.join(', ')} (want ${want.join(', ')})`);
   check('a11y (11) tab order reaches every control', problems.length === 0, problems.slice(0, 8).join('; '));
 
@@ -466,6 +470,8 @@ if (fault !== null) {
   check('fault: #roll disabled', roll !== null && 'disabled' in roll.attrs);
   const presets = [...walk(tree)].filter((el) => el.tag === 'button' && classes(el).includes('btn-preset'));
   check(`fault: every .btn-preset disabled (${presets.length})`, presets.every((b) => 'disabled' in b.attrs));
+  const steps = [...walk(tree)].filter((el) => el.tag === 'button' && classes(el).includes('btn-step'));
+  check(`fault: every .btn-step disabled (${steps.length})`, steps.length === 2 && steps.every((b) => 'disabled' in b.attrs));
   for (const id of ['tables', 'stats', 'compare', 'chart', 'sim', 'explore']) {
     const sec = byId(tree, id);
     if (sec === null || sec.tag !== 'section') continue;
@@ -476,14 +482,18 @@ if (fault !== null) {
   check('DOM has 80 <th scope="row"> headers', rowHeads === 80, `found ${rowHeads}`);
 
   check('engine-error banner stays hidden', /<div id="engine-error" role="alert" hidden/.test(rendered));
-  // Roll and the three Try-this presets ship disabled; init enables them together, last.
+  // Roll, the three Try-this presets and the two hit step buttons ship disabled; init enables
+  // them together, last.
   const rollEl = byId(tree, 'roll');
   const presetEls = [...walk(tree)].filter((el) => el.tag === 'button' && classes(el).includes('btn-preset'));
-  check('Roll and preset buttons enabled after init',
+  const stepEls = [...walk(tree)].filter((el) => el.tag === 'button' && classes(el).includes('btn-step'));
+  check('Roll, preset and step buttons enabled after init',
     rollEl !== null && rollEl.tag === 'button' && !('disabled' in rollEl.attrs) &&
-      presetEls.length === 3 && presetEls.every((b) => !('disabled' in b.attrs)),
+      presetEls.length === 3 && presetEls.every((b) => !('disabled' in b.attrs)) &&
+      stepEls.length === 2 && stepEls.every((b) => !('disabled' in b.attrs)),
     `roll ${rollEl ? ('disabled' in rollEl.attrs ? 'disabled' : 'enabled') : 'missing'}, ` +
-      `${presetEls.length} .btn-preset, ${presetEls.filter((b) => 'disabled' in b.attrs).length} disabled`);
+      `${presetEls.length} .btn-preset, ${presetEls.filter((b) => 'disabled' in b.attrs).length} disabled, ` +
+      `${stepEls.length} .btn-step, ${stepEls.filter((b) => 'disabled' in b.attrs).length} disabled`);
   check('sim section body shown after init',
     /<div class="sim-body"/.test(rendered) && !/<div class="sim-body"[^>]*\bhidden\b/.test(rendered));
 
