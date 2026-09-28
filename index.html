@@ -4380,6 +4380,38 @@ function runUiSmoke() {
 
     show({ n: 12 });
     check('hp ui: moving N leaves the cards alone', cards(), def);
+
+    // Edges (D-06): every hit kills, tiny and zero chances, nat-20 only, step 0, past the median
+    // cap, a float that lands on a .5 tenths boundary, and an exact 1/2 median tie.
+    show({ hp: 1 });
+    check('hp ui: edge, one HP', cards(),
+      '1.0|every hit kills (simple division says 0.2)|1.8|on average, half of fights by round 1|>99.9%|' +
+      'fastest possible: round 1');
+    show({ hp: 100 });
+    check('hp ui: edge, 100 HP', cards(),
+      '20.9|on average (simple division says 20.4)|38.0|on average, half of fights by round 38|0.2%|' +
+      'fastest possible: round 7');
+    show({ hp: 500 });
+    check('hp ui: edge, 500 HP', cards(),
+      '102.4|on average (simple division says 101.9)|186.2|on average, half of fights by round 186|0%|' +
+      'fastest possible: round 32');
+    show({ ac: 25, die: 12, atk: 0, dmg: 0 });
+    check('hp ui: edge, nat-20 only', cards(),
+      '3.6|on average (simple division says 3.1)|72.2|on average, half of fights by round 65|5%|' +
+      'fastest possible: round 2');
+    show({ die: 4, dmg: -4 });
+    check('hp ui: edge, step 0', cards(),
+      '358.6|on average (simple division says 352.0)|652.0|on average, half of fights by round 640|<0.1%|' +
+      'fastest possible: round 10');
+    show({ die: 4, dmg: -5 });
+    check('hp ui: edge, past the median cap', cards(),
+      '712.8|on average (simple division says 704.0)|1,296|on average; half of fights last over 1,000 ' +
+      'rounds|<0.1%|fastest possible: round 14');
+    show({ ac: 25, die: 4, atk: 0, dmg: 0, hp: 114 });
+    check('hp ui: edge, exact tenths at a float tie', txt('stat-khits'), '23.2');
+    show({ ac: 16, hp: 1 });
+    check('hp ui: edge, exact half median tie', txt('stat-krounds') + '|' + txt('stat-krounds-sub'),
+      '2.0|on average, half of fights by round 1');
   } catch (err) {
     results.push({ name: 'hp ui smoke crashed: ' + (err && err.message), ok: false });
   } finally {
