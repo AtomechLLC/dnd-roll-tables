@@ -39,8 +39,9 @@
 //        the .hint), so #ac-num must say "Target AC"
 //   (11) no tabindex > 0; no control with a negative tabindex, `disabled`, or a [hidden]
 //        ancestor; and the focusable order (same-name radios collapsed, presets by
-//        data-preset, links by href) is exactly ac-range, ac-num, die, atk-num, dmg-num, hp-num,
-//        hp-minus, hp-plus, n-range, roll, cross, dmg, cap, #chart, #controls. The two hit step
+//        data-preset, links by href) is exactly https://funsmith.club (the header community
+//        link), ac-range, ac-num, die, atk-num, dmg-num, hp-num, hp-minus, hp-plus, n-range,
+//        roll, cross, dmg, cap, #chart, #controls. The two hit step
 //        buttons go inert with aria-disabled only, never `disabled`, so they stay in this order
 //   (12) miss is not color-only: every td.m in the four table.outcome shows 0, every
 //        auto-miss row has only td.m data cells, the `.m` style rule has the
@@ -52,6 +53,10 @@
 //        section#selftest, div#engine-error and noscript, run header, form#controls,
 //        section#tables, section#stats, section#compare, section#chart, section#sim,
 //        section#explore (user request 260927-17o: settings and outcome table at the top).
+//   (15) community link, in every mode including --fault render: main's header holds exactly
+//        one a[href="https://funsmith.club"] that shows and is named "Funsmith Club", with one
+//        aria-hidden, focusable="false", fill="currentColor" svg (the Discord mark, no <title>)
+//        and no target (user request 2026-11-03, PRODUCT.md Brand Commitments: community link).
 //
 // --fault render (02-REVIEW WR-01, 03-REVIEW WR-04): copies index.html to a temp dir, makes
 // render() throw, and appends a script that dispatches an `input` event on #ac-range after
@@ -387,7 +392,7 @@ function a11yGuards() {
     if (el.tag === 'input' && el.attrs.type === 'radio' && order.includes(key)) continue;   // one stop per group
     order.push(key);
   }
-  const want = ['ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'hp-num', 'hp-minus', 'hp-plus', 'n-range', 'roll', 'cross',
+  const want = ['https://funsmith.club', 'ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'hp-num', 'hp-minus', 'hp-plus', 'n-range', 'roll', 'cross',
     'dmg', 'cap', '#chart', '#controls'];
   if (order.join(' ') !== want.join(' ')) problems.push(`order ${order.join(', ')} (want ${want.join(', ')})`);
   check('a11y (11) tab order reaches every control', problems.length === 0, problems.slice(0, 8).join('; '));
@@ -524,6 +529,35 @@ if (fault !== null) {
     'section#chart', 'section#sim', 'section#explore'].join(', ');
   check('page order: header, controls, tables, stats, compare, chart, sim, explore', actual === expected,
     'got ' + actual);
+}
+
+// (15) community link (user request 2026-11-03): one Funsmith Club link in the header, its
+// Discord mark decorative and drawn in the link's own color, same tab.
+{
+  const mainEl = [...walk(tree)].find((el) => el.tag === 'main') || null;
+  const header = mainEl === null ? null : mainEl.children.find((c) => c.tag === 'header') || null;
+  const links = header === null ? [] : [...walk(header)].filter((el) => el.tag === 'a' && el.attrs.href === 'https://funsmith.club');
+  const why = [];
+  if (header === null) why.push('no main > header');
+  if (links.length !== 1) why.push(`count ${links.length}`);
+  const link = links[0];
+  if (link) {
+    const shown = norm(shownText(link));
+    const named = norm(nameText(link));
+    if (shown !== 'Funsmith Club') why.push(`shown ${JSON.stringify(shown)}`);
+    if (named !== 'Funsmith Club') why.push(`name ${JSON.stringify(named)}`);
+    const svgs = [...walk(link)].filter((el) => el.tag === 'svg');
+    if (svgs.length !== 1) why.push(`${svgs.length} svg`);
+    const svg = svgs[0];
+    if (svg) {
+      if (!ariaHidden(svg)) why.push('svg aria-hidden missing');
+      if (svg.attrs.focusable !== 'false') why.push('svg focusable="false" missing');
+      if (svg.attrs.fill !== 'currentColor') why.push(`svg fill ${JSON.stringify(svg.attrs.fill ?? null)}`);
+      if (svg.children.some((c) => c.tag === 'title')) why.push('svg has a title');
+    }
+    if ('target' in link.attrs) why.push('has target');
+  }
+  check('community link: header has one Funsmith Club link with the Discord mark', why.length === 0, why.join('; '));
 }
 
 const mode = fault !== null ? `, mode: fault ${fault}` : '';
