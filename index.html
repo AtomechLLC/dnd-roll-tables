@@ -1502,6 +1502,9 @@ const VM = (() => {
       }),
       heatMax: Math.max(1, 2 * X + p.dmg),                      // heat domain [0, crit max]
       critFloorDiffers: s.tableSum * X !== s.e20Num,            // only when dmg <= -3
+      // The d20 row that +1 to hit would flip (D4, quick 261104-vx6). marg.reason null means the
+      // +1 adds real hits, and threshold - 1 is the one row it moves.
+      flipRow: m.reason === null ? s.threshold - 1 : null,
     };
   }
 
@@ -1638,6 +1641,33 @@ const VM = (() => {
     });
   }
 
+  // The verdict line under the controls (D3, quick 261104-vx6). It only restates formulaView's
+  // win result, so it can never disagree with "Which wins"; it compares nothing itself.
+  const VERDICT_REASON = Object.freeze({
+    cap: 'it already hits on 2+, the 95% cap',
+    floor: 'still only a natural 20 hits',
+    nodmg: 'the extra hits deal 0 damage at this penalty',
+  });
+  function verdictView(sv, fv) {
+    const { hitRound: H, dmgRound: D, reason } = sv.marg;
+    if (fv.branch.win === 'zero-hit') {
+      return {
+        lead: '+1 to damage wins here.',
+        rest: ` +1 to hit adds nothing (${VERDICT_REASON[reason]}); +1 to damage adds ${D} per round.`,
+      };
+    }
+    switch (fv.win.verdict) {
+      case '+1 to hit wins.':
+        return { lead: '+1 to hit wins here.', rest: ` It adds ${H} per round; +1 to damage adds ${D}.` };
+      case '+1 to damage wins.':
+        return { lead: '+1 to damage wins here.', rest: ` It adds ${D} per round; +1 to hit adds ${H}.` };
+      case 'they tie.':
+        return { lead: 'They tie here.', rest: ` Each adds ${H} per round.` };
+      default:
+        return { lead: 'They are about even here.', rest: ` Both add about ${H} per round.` };
+    }
+  }
+
   // CMP-01..04 (D-04, D-06, D-08): Baseline, +N to hit, +N to damage, one DiceMath.stats call
   // each. Plain values only. heatMax is the true largest cell across the three row sets.
   // Deltas are displayed variant tenths minus displayed baseline tenths (RESEARCH Pitfall 7).
@@ -1671,7 +1701,10 @@ const VM = (() => {
         statsText: `${rule} · ${totalText} over 20 rounds` + (deltaText === null ? '' : ` · ${deltaText} vs baseline`),
       };
     }
-    return { n, heatMax, tables };
+    // D10: the three totals in one line, from the same strings the .cmp-stats lines print.
+    const summaryText = `Over 20 rounds: ${tables.base.totalText} as set, ` +
+      `${tables.hit.totalText} with ${tables.hit.title}, ${tables.dmg.totalText} with ${tables.dmg.title}.`;
+    return { n, heatMax, tables, summaryText };
   }
 
   // Y-axis ticks from 0 to a nice ceiling >= max, step in {1, 2, 5} x 10^k (D-11).
@@ -2004,6 +2037,53 @@ const VM = (() => {
   // The one announcement per preset click (UI-SPEC Click behavior): written only by the handler.
   const presetStatus = (s) => `Set to ${settingsText(s)}, compare at ${signed(s.n)}. Everything above has updated.`;
 
+  // ---- Reset, shareable URL and clamp sentences (quick 261104-vx6, D7-D9) ----
+  // The one announcement per Reset click, from the defaults themselves.
+  const resetStatus = () => `Back to the defaults: ${settingsText(DEFAULT_STATE)}, compare at ` +
+    `${signed(DEFAULT_STATE.n)}, Enemy HP ${DEFAULT_STATE.hp}.`;
+
+  // A shared link is untrusted: every value goes through the one parser, so state only ever holds
+  // clamped integers or members of the die set. get() takes the first of repeated keys.
+  function stateFromQuery(search) {
+    const q = new URLSearchParams(search);
+    const state = {};
+    for (const key of Object.keys(DEFAULT_STATE)) state[key] = parseControl(key, q.get(key), DEFAULT_STATE[key]);
+    return state;
+  }
+  // Only values that differ from the defaults, in DEFAULT_STATE order; other params are kept.
+  function queryFromState(state, keep) {
+    const q = new URLSearchParams(keep);
+    for (const key of Object.keys(DEFAULT_STATE)) q.delete(key);
+    for (const key of Object.keys(DEFAULT_STATE)) {
+      if (state[key] !== DEFAULT_STATE[key]) q.append(key, String(state[key]));
+    }
+    const qs = q.toString();
+    return qs ? '?' + qs : '';
+  }
+
+  // What a typed value turned into, in the visible label's words; '' when it stayed as typed.
+  // Keys with no number box (die, n) have no sentence. Attack and damage print signed, as their
+  // labels do; the raw text prints as typed.
+  const CLAMP_LABEL = Object.freeze({
+    ac: Object.freeze({ label: 'Target AC', show: String }),
+    atk: Object.freeze({ label: 'Attack bonus', show: signed }),
+    dmg: Object.freeze({ label: 'Damage bonus', show: signed }),
+    hp: Object.freeze({ label: 'Enemy HP', show: String }),
+  });
+  function clampNote(key, raw, applied) {
+    const entry = CLAMP_LABEL[key];
+    if (!entry) return '';
+    const { label, show } = entry;
+    const text = String(raw ?? '').trim();
+    const n = text === '' ? NaN : Number(text);
+    if (!Number.isFinite(n)) return `${label} needs a number, so it stayed at ${show(applied)}.`;
+    if (n === applied) return '';
+    const { min, max } = CONTROL_SPEC[key];
+    if (n > max) return `${label} goes up to ${show(max)}, so ${text} became ${show(applied)}.`;
+    if (n < min) return `${label} goes down to ${show(min)}, so ${text} became ${show(applied)}.`;
+    return `${label} takes whole numbers, so ${text} became ${show(applied)}.`;
+  }
+
   // ---- Hits to kill (Phase 5) ----
   // The kill numbers depend on the attack only through (hitFaces, die, dmg), and one
   // DiceMath.killTable covers HP 1..500, so an HP edit or an N drag is a lookup and only an
@@ -2226,12 +2306,14 @@ const VM = (() => {
     const p = { ac: state.ac, die: state.die, atk: state.atk, dmg: state.dmg };
     const compare = compareView(p, state.n);
     const sv = statsView(state);
+    const formulas = formulaView(sv);
     // simExact and kill are page-view only: statsView stays sim-free and kill-free for the
     // per-combo callers. The copy builders reuse this one statsView result (no second engine pass).
     return {
       ...sv, heatMax: compare.heatMax, compare, chart: chartView(p, state.n),
-      simExact: simExact(p), formulas: formulaView(sv), twoRolls: twoRollsText(sv),
+      simExact: simExact(p), formulas, twoRolls: twoRollsText(sv),
       kill: killView(sv, state.hp),
+      verdict: { ...verdictView(sv, formulas), set: `${settingsText(p)}, compare at ${signed(state.n)}` },
     };
   }
 
@@ -2241,6 +2323,7 @@ const VM = (() => {
     settingsText, simExact, simPlacement, simStatus, PRESETS, presetStatus,
     killTableFor, killViewFrom, killView, roundKill, group3, killNumText, pctText, hpStep, hpStatus,
     killTrack, killLine, tallyEntry,
+    verdictView, resetStatus, stateFromQuery, queryFromState, clampNote,
   });
 })();
   </script>
