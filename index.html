@@ -185,7 +185,7 @@
     /* The .btn-preset fill, border and mixes. min-width fits the widest label (−1 hit (−27 HP)), so
        a step going from 1 to 2 digits never moves anything. Inert is aria-disabled (focus stays);
        :disabled is only the pre-init and failPage state. No transitions. */
-    .btn-step, .btn-reset {
+    .btn-step, .btn-reset, .btn-nudge {
       background: var(--paper); color: var(--ink);
       border: 1px solid var(--ink-muted); border-radius: 4px;
       font: 400 0.875rem/1.4 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -195,26 +195,34 @@
     .btn-step { min-width: 120px; }
     .btn-reset { padding-inline: var(--sp-3); }   /* natural width; never .btn-step (check-page counts those) */
     .btn-step:hover:not([aria-disabled="true"]):not(:disabled),
+    .btn-nudge:hover:not([aria-disabled="true"]):not(:disabled),
     .btn-reset:hover:not([aria-disabled="true"]):not(:disabled) { background: color-mix(in oklch, var(--paper) 85%, var(--ink)); }
     .btn-step:active:not([aria-disabled="true"]):not(:disabled),
+    .btn-nudge:active:not([aria-disabled="true"]):not(:disabled),
     .btn-reset:active:not([aria-disabled="true"]):not(:disabled) { background: color-mix(in oklch, var(--paper) 75%, var(--ink)); }
     .btn-step[aria-disabled="true"], .btn-step:disabled,
+    .btn-nudge[aria-disabled="true"], .btn-nudge:disabled,
     .btn-reset[aria-disabled="true"], .btn-reset:disabled {
       background: var(--surface); color: var(--ink-muted); border-color: var(--line); cursor: not-allowed;
     }
+    /* Attack and Damage steppers (261105-emn): shown only by the coarse-pointer block near the end of
+       the sheet, so they add no tab stops at laptop widths or to the sticky strip. */
+    .btn-nudge { display: none; }
 
     /* Sticky bar and verdict (261104-vx6, D1, D3). The base is the fallback for every viewport
        the strip does not fit: #bar drops out of the box tree, the strip scrolls away with the page
        and only #verdict sticks, carrying the settings and a Change link so the reader can still
-       see what the sentence is about. z-index 2 clears the table's roll badges (1). Flat on paper
-       with a hairline rule, like every other surface; no shadow. */
+       see what the sentence is about, while #verdict-why scrolls away, so a phone's sticky area stays
+       short. z-index 2 clears anything positioned in the page flow, like the table's roll rings. Flat
+       on paper with a hairline rule, like every other surface; no shadow. */
     #bar { display: contents; }
     /* Jumps and tabbing stop below the sticky area (WCAG 2.4.11). The root cannot use @container
        page, so these are viewport rules: 70rem page + 1.5rem main padding. The values are measured
-       worst cases plus 8px: the 129-character verdict at 320px (152px), and the bar with that
-       verdict and a clamp sentence showing (162px). */
-    :root { --scroll-pad: 10rem; }
-    @media (min-width: 71.5rem) and (min-height: 40rem) { :root { --scroll-pad: 10.75rem; } }
+       worst cases plus 8px: below the sticky widths #verdict alone at 320px, lead and settings
+       (81px); at them, the bar with the 178-character lead and why and a clamp sentence at its
+       narrowest, 1144px (188px; 131px at 1366 with the defaults). */
+    :root { --scroll-pad: 5.75rem; }
+    @media (min-width: 71.5rem) and (min-height: 40rem) { :root { --scroll-pad: 12.5rem; } }
     html { scroll-padding-top: var(--scroll-pad); }
     /* Focus in the strip or the verdict is already on screen, but it sits within that padding, so
        tabbing in, or the caret while typing in a box, would scroll the page away from what the
@@ -228,7 +236,8 @@
       font-size: 1rem; line-height: 1.5; color: var(--ink);
     }
     #verdict-lead { font-weight: 700; }
-    #verdict .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+    #verdict .num, #verdict-why .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+    #verdict-why { margin: 0; max-width: 72ch; font-size: 1rem; line-height: 1.5; color: var(--ink); }
     .verdict-meta { display: block; font-size: 0.875rem; line-height: 1.4; }
     .verdict-set { color: var(--ink-muted); }
     /* Where the strip fits one row and the screen has height to spare, the whole bar sticks.
@@ -241,16 +250,32 @@
           padding-block: var(--sp-2);
           background: var(--paper); border-bottom: 1px solid var(--line);
         }
-        #verdict { position: static; margin-top: var(--sp-2); padding: 0; background: none; border-bottom: 0; }
+        #controls { margin-bottom: var(--sp-2); }
+        #verdict { position: static; padding: 0; background: none; border-bottom: 0; }
+        /* One paragraph flow: lead, then why. :not([hidden]) because display would beat the UA's
+           [hidden] rule, and fault mode depends on hidden. */
+        #verdict:not([hidden]), #verdict-why:not([hidden]) { display: inline; }
         /* Two ids, so the touch-target rule for Change near the end of the sheet cannot bring it back. */
         #verdict .verdict-meta, #verdict #verdict-change { display: none; }
-        /* "Go to the controls": they are already on screen, so the jump leaves the page where it is. */
+        /* A #controls fragment: they are already on screen, so it leaves the page where it is. */
         #controls { scroll-margin-top: calc(-1 * var(--scroll-pad)); }
+        /* The strip never leaves the screen here, so "Go to the controls" has nothing to do. */
+        .explore-jump .jump-controls { display: none; }
         /* The chart fits under the bar: 21rem is the bar, heading, intro, readout and y-title; 1.6 is
            the viewBox ratio. 36rem keeps it readable on short windows, which then scroll a little. */
         #chart { --plot-w: min(50rem, max(36rem, calc((100svh - 21rem) * 1.6))); }
       }
     }
+
+    /* One line of presets right under the bar (261105-emn). Not sticky. Natural width; 32px like the
+       other controls, and the touch block raises .btn-preset to 44px. */
+    #try-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: 0; }
+    .try-label { font-size: 0.875rem; font-weight: 700; line-height: 1.4; }
+    .btn-preset.btn-try { align-self: center; padding-block: 0; }
+
+    /* Roll beside the table it marks (261105-emn). Its note follows the run; #roll stays in the sim. */
+    .table-roll { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-2); }
+    #roll-table-note { font-size: 0.875rem; line-height: 1.4; color: var(--ink-muted); }
 
     /* Stat cards */
     /* auto-fit minmax(9rem, 1fr) (was 10rem; 260927-1ty, so phones get two cards per row), with
@@ -264,6 +289,8 @@
     /* Each stat card spans three subgrid rows so labels, values and sub-lines line up across a
        row even when one label wraps. */
     #stats > .card:not(.marginal):not(.formulas), #kill > .card { grid-row: span 3; grid-template-rows: subgrid; }
+    /* Below the wide layout the cards follow the table inside #tables, which has no gap of its own. */
+    #stats { margin-top: var(--sp-4); }
     /* Kill section (D2): the heading, intro and HP strip each take a full row above the cards. */
     #kill > h2, #kill > .section-intro, #kill > form { grid-column: 1 / -1; }
     #kill > h2, #kill > .section-intro { margin: 0; }
@@ -444,17 +471,31 @@
       font-size: 0.875rem; line-height: 1.4; color: var(--ink-muted);
     }
 
-    /* Compare section (D-02, D-07, CMP-05). A named container, so the unnamed table-tier
-       queries above keep resolving to each .table-wrap (RESEARCH Pitfall 12). One column,
-       or three at >= 77rem (3 x 400px d12 tables + 2 x 16px); never a 2 + 1 layout. */
+    /* Compare section (D-02, D-07, CMP-05; 261105-emn). A named container, so the unnamed table-tier
+       queries above keep resolving to each .table-wrap (RESEARCH Pitfall 12). Two tables side by side
+       at >= 52rem (2 x 400px d12 tables + gap), one at a time below it, chosen by the To hit / To
+       damage switch. CSS only: without :has() the switch stays hidden and both tables stack, which
+       is fine, and #cmp-summary always carries both totals. The radios are .vh, never display: none,
+       so arrow keys work, and carry no data-key, so they touch no state and no URL. */
     #compare { container: compare / inline-size; }
     .trio { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4) var(--sp-3); }
-    @container compare (width >= 77rem) {
-      .trio { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cmp-switch { display: none; min-width: 0; margin: 0 0 var(--sp-3); padding: 0; border: 0; }
+    .cmp-switch legend { padding: 0; margin-bottom: var(--sp-1); }
+    .cmp-switch .segs { width: fit-content; }
+    .cmp-switch .segs span { width: auto; padding-inline: var(--sp-3); white-space: nowrap; }
+    @container compare (width >= 52rem) {
+      .trio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @supports selector(:has(*)) {
+      @container compare (width < 52rem) {
+        .cmp-switch { display: block; }
+        #compare:has(#cmp-show-hit:checked) .cmp-dmg-col,
+        #compare:has(#cmp-show-dmg:checked) .cmp-hit-col { display: none; }
+      }
     }
     /* Compact tables stay in the mid (or narrow) tier even when stacked full width. */
     .trio .table-wrap { max-width: calc(42rem - 1px); }
-    /* Hierarchy (UI-SPEC Compare section): the three tables and their stats lines are the
+    /* Hierarchy (UI-SPEC Compare section): the tables and their stats lines are the
        anchor; the summary line says it in words; the intro is muted support text.
        Phase 1 tokens only, nothing moves. */
     .section-intro {
@@ -792,23 +833,27 @@
        unnamed outcome-table tiers keep resolving against .table-wrap. Kept late in the sheet so
        these equal-specificity rules win. Narrower pages keep the stacked order above. */
     @container page (width >= 64rem) {
-      /* Text (two-roll paragraph, then legend) on the left in DOM order; the table on the right
-         in a 43rem column, so .table-wrap stays >= 42rem (wide tier, d12 652px). The footnote
-         stays directly under the table: the #two-rolls copy says "the note under the table". */
+      /* Text (two-roll paragraph, legend, then the cards) on the left in DOM order; the table column
+         on the right at 43rem, so .table-wrap stays >= 42rem (wide tier, d12 652px). The footnote is
+         inside .table-col, directly under the table: the #two-rolls copy says "the note under the
+         table". Four rows, the last 1fr, so spare height lands below #stats and never between the
+         left column's blocks. */
       #tables {
         display: grid; grid-template-columns: minmax(0, 1fr) 43rem; column-gap: var(--sp-4); align-items: start;
-        grid-template-areas: "head head" "explain table" "legend table" ". table" ". note";
-        grid-template-rows: auto auto auto 1fr auto;
+        grid-template-areas: "head head" "explain tcol" "legend tcol" "stats tcol";
+        grid-template-rows: auto auto auto 1fr;
       }
       #tables > h2 { grid-area: head; }
       #two-rolls { grid-area: explain; }
       #legend { grid-area: legend; }
-      #tables > .table-wrap { grid-area: table; }
-      #crit-note { grid-area: note; }
-      /* #stats always has six tracks here (6 x 9rem + 5 x 12px = 924px), so the two wide cards
-         share one row at equal height. */
-      .card.formulas { grid-column: 1 / span 3; }
-      .card.marginal { grid-column: 4 / -1; }
+      .table-col { grid-area: tcol; min-width: 0; }
+      /* 11rem tracks: three cards a row at 1366, two at 1100. Never below two (the narrow end of
+         this tier would otherwise stack six cards in one column), and never above six, since the
+         full-row marginal and formulas cards would keep a seventh, empty track alive. */
+      #stats {
+        grid-area: stats; margin-top: 0;
+        grid-template-columns: repeat(auto-fit, minmax(max(min(11rem, (100% - var(--sp-3)) / 2), (100% - 5 * var(--sp-3)) / 6), 1fr));
+      }
       /* The three kill cards take columns 1-3 and the note sits beside them in the same three
          subgrid rows; padding-top lines its first line up with the card labels. */
       .kill-note { grid-column: 4 / -1; grid-row: span 3; align-self: start; padding-top: var(--sp-3); }
@@ -838,12 +883,22 @@
       #verdict-change, .explore-jump a { display: inline-flex; align-items: center; min-height: 44px; }
       .fold > summary, .chart-data > summary { min-height: 44px; padding-block: var(--sp-3); }
       .fold[open] > summary { margin-bottom: 0; }
-      /* The sticky area is taller here. Measured worst cases plus 8px, as above: the verdict at
-         320px (177px) and the bar with a clamp sentence showing (174px). */
-      :root { --scroll-pad: 11.75rem; }
+      /* Steppers (261105-emn): Attack and Damage share one row, each [−][number][+], 44px buttons.
+         The box takes what is left, down to the 320px phone; its spinners would only crowd it. */
+      @container page (width < 70rem) {
+        .group-bonus { flex: 1 1 calc(50% - var(--sp-4)); min-width: 0; }
+        .nudge-row { display: flex; gap: var(--sp-1); }
+        .btn-nudge { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; }
+        .nudge-row input[type="number"] { flex: 1 1 0; width: auto; min-width: 0; appearance: textfield; }
+        .nudge-row input[type="number"]::-webkit-outer-spin-button,
+        .nudge-row input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
+      }
+      /* The sticky area is taller here. Measured worst cases plus 8px, as above: #verdict at
+         320px (106px) and the bar with a clamp sentence showing at 1144px (200px). */
+      :root { --scroll-pad: 7.25rem; }
     }
     @media (pointer: coarse) and (min-width: 71.5rem) and (min-height: 40rem) {
-      :root { --scroll-pad: 11.5rem; }
+      :root { --scroll-pad: 13.25rem; }
     }
 
     /* Self-test panel and engine-error banner (UI-SPEC Self-test Panel, States) */
@@ -907,13 +962,21 @@
             <label><input type="radio" name="die" value="12" data-key="die" class="vh"><span>d12</span></label>
           </div>
         </fieldset>
-        <div class="group">
+        <div class="group group-bonus">
           <label class="group-label" for="atk-num">Attack bonus <span class="hint">−5 to +20</span></label>
-          <input type="number" id="atk-num" data-key="atk" min="-5" max="20" step="1">
+          <div class="nudge-row">
+            <button type="button" class="btn-nudge" data-nudge-key="atk" data-nudge="-1" aria-label="Attack bonus down 1" disabled>−</button>
+            <input type="number" id="atk-num" data-key="atk" min="-5" max="20" step="1">
+            <button type="button" class="btn-nudge" data-nudge-key="atk" data-nudge="1" aria-label="Attack bonus up 1" disabled>+</button>
+          </div>
         </div>
-        <div class="group">
+        <div class="group group-bonus">
           <label class="group-label" for="dmg-num">Damage bonus <span class="hint">−5 to +20</span></label>
-          <input type="number" id="dmg-num" data-key="dmg" min="-5" max="20" step="1">
+          <div class="nudge-row">
+            <button type="button" class="btn-nudge" data-nudge-key="dmg" data-nudge="-1" aria-label="Damage bonus down 1" disabled>−</button>
+            <input type="number" id="dmg-num" data-key="dmg" min="-5" max="20" step="1">
+            <button type="button" class="btn-nudge" data-nudge-key="dmg" data-nudge="1" aria-label="Damage bonus up 1" disabled>+</button>
+          </div>
         </div>
         <div class="group group-slider">
           <label class="group-label" for="n-range">Compare at +N <span class="hint">0 to 20</span></label>
@@ -926,117 +989,103 @@
         <p id="reset-status" class="vh" role="status"></p>
         <p id="ctl-note" class="ctl-note" role="status" hidden></p>
       </form>
-      <p id="verdict" hidden><b id="verdict-lead"></b><span id="verdict-rest"></span><span class="verdict-meta"><span class="verdict-set" id="verdict-set"></span> <a id="verdict-change" href="#controls">Change</a></span></p>
+      <p id="verdict" hidden><b id="verdict-lead"></b><span class="verdict-meta"><span class="verdict-set" id="verdict-set"></span> <a id="verdict-change" href="#controls">Change</a></span></p>
+      <p id="verdict-why" hidden></p>
     </div>
+
+    <p id="try-row"><span class="try-label">Try:</span> <button type="button" class="btn-preset btn-try" data-preset="cross" aria-describedby="ex-cross-d ex-cross-s" disabled>A crossover</button> <button type="button" class="btn-preset btn-try" data-preset="dmg" aria-describedby="ex-dmg-d ex-dmg-s" disabled>No crossover</button> <button type="button" class="btn-preset btn-try" data-preset="cap" aria-describedby="ex-cap-d ex-cap-s" disabled>The cap flips it</button></p>
 
     <section id="tables">
       <h2>Outcome table</h2>
       <p class="explain" id="two-rolls"></p>
       <div id="legend" class="legend"></div>
-      <div class="table-wrap">
-        <table id="outcome" class="outcome"><caption></caption><thead></thead><tbody></tbody></table>
+      <div class="table-col">
+        <p class="table-roll"><button type="button" id="roll-table" class="btn-roll" disabled>Roll 20 rounds</button> <span id="roll-table-note"></span></p>
+        <div class="table-wrap">
+          <table id="outcome" class="outcome"><caption></caption><thead></thead><tbody></tbody></table>
+        </div>
+        <p id="crit-note" class="footnote"></p>
       </div>
-      <p id="crit-note" class="footnote"></p>
-    </section>
 
-    <section id="stats" aria-label="Headline numbers">
-      <div class="card">
-        <span class="label">Hits on</span>
-        <span class="value" id="stat-threshold"></span>
-        <span class="sub" id="stat-threshold-sub"></span>
-      </div>
-      <div class="card">
-        <span class="label">Hit chance</span>
-        <span class="value" id="stat-hit"></span>
-        <span class="sub" id="stat-hit-sub"></span>
-      </div>
-      <div class="card">
-        <span class="label">Crit chance</span>
-        <span class="value" id="stat-crit"></span>
-        <span class="sub" id="stat-crit-sub"></span>
-      </div>
-      <div class="card">
-        <span class="label">Average damage on a hit</span>
-        <span class="value" id="stat-avg"></span>
-        <span class="sub" id="stat-avg-sub"></span>
-      </div>
-      <div class="card">
-        <span class="label">Expected per round</span>
-        <span class="value" id="stat-round"></span>
-        <span class="sub" id="stat-round-sub"></span>
-      </div>
-      <div class="card focal">
-        <span class="label">Expected over 20 rounds</span>
-        <span class="value" id="stat-e20"></span>
-        <span class="sub" id="stat-e20-sub"></span>
-      </div>
-      <div class="card formulas" id="formulas">
-        <details class="fold" open>
-          <summary id="fold-formulas"><h2>How these numbers are worked out</h2></summary>
-          <dl class="formulas">
-            <div class="formula" id="f-hit">
-              <dt>Hit chance</dt>
-              <dd class="f-rule">= d20 faces that hit / <span class="num">20</span></dd>
-              <dd class="f-rule">= <span class="nw">(<span class="num">21</span> − (AC − attack bonus))</span> / <span class="num">20</span>, kept between <span class="num">1</span> and <span class="num">19</span> faces</dd>
-              <dd class="f-key">A natural 1 always misses and a natural 20 always hits, so it is always 1 to 19 faces: 5% to 95%.</dd>
-              <dd class="f-live" id="f-hit-live"></dd>
-            </div>
-            <div class="formula" id="f-round">
-              <dt>Expected per round</dt>
-              <dd class="f-rule">= <span class="nw">P(normal hit) × (avg die + D)</span> + <span class="nw">P(crit) × (<span class="num">2</span> × avg die + D)</span></dd>
-              <dd class="f-key" id="f-round-key"></dd>
-              <dd class="f-live" id="f-round-l1"></dd>
-              <dd class="f-live" id="f-round-l2"></dd>
-              <dd class="f-note" id="f-round-note" hidden></dd>
-            </div>
-          </dl>
-        </details>
-      </div>
-      <div class="card marginal" id="marginal">
-        <h2>Value of the next +1</h2>
-        <p class="marg-line" id="marg-hit"><span class="lead">+1 to hit:</span> <span class="mv" id="marg-hit-v"></span><span class="mnote" id="marg-hit-n"></span></p>
-        <p class="marg-line" id="marg-dmg"><span class="lead">+1 to damage:</span> <span class="mv" id="marg-dmg-v"></span></p>
-        <details class="fold f-marg" open>
-          <summary id="fold-marginal">How this is worked out</summary>
-          <dl class="formulas">
-            <div class="formula" id="f-plus-hit">
-              <dt>+1 to hit</dt>
-              <dd class="f-rule">= <span class="nw">(avg die + D) / <span class="num">20</span></span> per round: one more d20 face becomes a normal hit. <span class="num">0</span> once capped.</dd>
-              <dd class="f-live" id="f-plus-hit-live"></dd>
-            </div>
-            <div class="formula" id="f-plus-dmg">
-              <dt>+1 to damage</dt>
-              <dd class="f-rule">= P(hit) per round: every hit deals <span class="num">1</span> more.</dd>
-              <dd class="f-live" id="f-plus-dmg-live"></dd>
-            </div>
-            <div class="formula" id="f-plus-win">
-              <dt>Which wins</dt>
-              <dd class="f-rule">+<span class="num">1</span> to hit wins only while avg die + D &gt; <span class="nw"><span class="num">20</span> × P(hit)</span>.</dd>
-              <dd class="f-live" id="f-plus-win-live"></dd>
-            </div>
-          </dl>
-        </details>
-      </div>
-    </section>
-
-    <section id="compare" aria-labelledby="compare-h">
-      <h2 id="compare-h">Compare +N to hit vs +N to damage</h2>
-      <p class="section-intro">The same attack three ways: as set above, with +N added to the attack roll, and with +N added to the damage roll. All tables share the color scale in the legend above, so the same damage is the same color everywhere.</p>
-      <p class="explain" id="cmp-summary"></p>
-      <div class="trio">
-        <div class="cmp">
-          <div class="table-wrap"><table class="outcome" id="cmp-base" aria-describedby="cmp-base-stats"><caption></caption><thead></thead><tbody></tbody></table></div>
-          <p class="cmp-stats" id="cmp-base-stats"></p>
+      <section id="stats" aria-label="Headline numbers">
+        <div class="card">
+          <span class="label">Hits on</span>
+          <span class="value" id="stat-threshold"></span>
+          <span class="sub" id="stat-threshold-sub"></span>
         </div>
-        <div class="cmp">
-          <div class="table-wrap"><table class="outcome" id="cmp-hit" aria-describedby="cmp-hit-stats"><caption></caption><thead></thead><tbody></tbody></table></div>
-          <p class="cmp-stats" id="cmp-hit-stats"></p>
+        <div class="card">
+          <span class="label">Hit chance</span>
+          <span class="value" id="stat-hit"></span>
+          <span class="sub" id="stat-hit-sub"></span>
         </div>
-        <div class="cmp">
-          <div class="table-wrap"><table class="outcome" id="cmp-dmg" aria-describedby="cmp-dmg-stats"><caption></caption><thead></thead><tbody></tbody></table></div>
-          <p class="cmp-stats" id="cmp-dmg-stats"></p>
+        <div class="card">
+          <span class="label">Crit chance</span>
+          <span class="value" id="stat-crit"></span>
+          <span class="sub" id="stat-crit-sub"></span>
         </div>
-      </div>
+        <div class="card">
+          <span class="label">Average damage on a hit</span>
+          <span class="value" id="stat-avg"></span>
+          <span class="sub" id="stat-avg-sub"></span>
+        </div>
+        <div class="card">
+          <span class="label">Expected per round</span>
+          <span class="value" id="stat-round"></span>
+          <span class="sub" id="stat-round-sub"></span>
+        </div>
+        <div class="card focal">
+          <span class="label">Expected over 20 rounds</span>
+          <span class="value" id="stat-e20"></span>
+          <span class="sub" id="stat-e20-sub"></span>
+        </div>
+        <div class="card marginal" id="marginal">
+          <h2>Value of the next +1</h2>
+          <p class="marg-line" id="marg-hit"><span class="lead">+1 to hit:</span> <span class="mv" id="marg-hit-v"></span><span class="mnote" id="marg-hit-n"></span></p>
+          <p class="marg-line" id="marg-dmg"><span class="lead">+1 to damage:</span> <span class="mv" id="marg-dmg-v"></span></p>
+          <details class="fold f-marg">
+            <summary id="fold-marginal">How this is worked out</summary>
+            <dl class="formulas">
+              <div class="formula" id="f-plus-hit">
+                <dt>+1 to hit</dt>
+                <dd class="f-rule">= <span class="nw">(avg die + D) / <span class="num">20</span></span> per round: one more d20 face becomes a normal hit. <span class="num">0</span> once capped.</dd>
+                <dd class="f-live" id="f-plus-hit-live"></dd>
+              </div>
+              <div class="formula" id="f-plus-dmg">
+                <dt>+1 to damage</dt>
+                <dd class="f-rule">= P(hit) per round: every hit deals <span class="num">1</span> more.</dd>
+                <dd class="f-live" id="f-plus-dmg-live"></dd>
+              </div>
+              <div class="formula" id="f-plus-win">
+                <dt>Which wins</dt>
+                <dd class="f-rule">+<span class="num">1</span> to hit wins only while avg die + D &gt; <span class="nw"><span class="num">20</span> × P(hit)</span>.</dd>
+                <dd class="f-live" id="f-plus-win-live"></dd>
+              </div>
+            </dl>
+          </details>
+        </div>
+        <div class="card formulas" id="formulas">
+          <details class="fold">
+            <summary id="fold-formulas"><h2>How these numbers are worked out</h2></summary>
+            <dl class="formulas">
+              <div class="formula" id="f-hit">
+                <dt>Hit chance</dt>
+                <dd class="f-rule">= d20 faces that hit / <span class="num">20</span></dd>
+                <dd class="f-rule">= <span class="nw">(<span class="num">21</span> − (AC − attack bonus))</span> / <span class="num">20</span>, kept between <span class="num">1</span> and <span class="num">19</span> faces</dd>
+                <dd class="f-key">A natural 1 always misses and a natural 20 always hits, so it is always 1 to 19 faces: 5% to 95%.</dd>
+                <dd class="f-live" id="f-hit-live"></dd>
+              </div>
+              <div class="formula" id="f-round">
+                <dt>Expected per round</dt>
+                <dd class="f-rule">= <span class="nw">P(normal hit) × (avg die + D)</span> + <span class="nw">P(crit) × (<span class="num">2</span> × avg die + D)</span></dd>
+                <dd class="f-key" id="f-round-key"></dd>
+                <dd class="f-live" id="f-round-l1"></dd>
+                <dd class="f-live" id="f-round-l2"></dd>
+                <dd class="f-note" id="f-round-note" hidden></dd>
+              </div>
+            </dl>
+          </details>
+        </div>
+      </section>
     </section>
 
     <section id="chart" aria-labelledby="chart-h">
@@ -1068,6 +1117,29 @@
           <p class="explain" id="explain-dmg"><b>The dashed line (+N to damage).</b> <span></span></p>
           <p class="explain" id="explain-hit"><b>The solid line (+N to hit).</b> <span></span></p>
           <p class="explain" id="explain-cross"><b>What moves the crossover.</b> <span></span></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="compare" aria-labelledby="compare-h">
+      <h2 id="compare-h">Compare +N to hit vs +N to damage</h2>
+      <p class="section-intro">The same attack two ways: with +N added to the attack roll, and with +N added to the damage roll. Compare both with the main table above. All tables share its color scale, so the same damage is the same color everywhere.</p>
+      <p class="explain" id="cmp-summary"></p>
+      <fieldset class="cmp-switch">
+        <legend class="group-label">Show</legend>
+        <div class="segs">
+          <label><input type="radio" name="cmp-show" id="cmp-show-hit" class="vh" checked><span>To hit</span></label>
+          <label><input type="radio" name="cmp-show" id="cmp-show-dmg" class="vh"><span>To damage</span></label>
+        </div>
+      </fieldset>
+      <div class="trio">
+        <div class="cmp cmp-hit-col">
+          <div class="table-wrap"><table class="outcome" id="cmp-hit" aria-describedby="cmp-hit-stats"><caption></caption><thead></thead><tbody></tbody></table></div>
+          <p class="cmp-stats" id="cmp-hit-stats"></p>
+        </div>
+        <div class="cmp cmp-dmg-col">
+          <div class="table-wrap"><table class="outcome" id="cmp-dmg" aria-describedby="cmp-dmg-stats"><caption></caption><thead></thead><tbody></tbody></table></div>
+          <p class="cmp-stats" id="cmp-dmg-stats"></p>
         </div>
       </div>
     </section>
@@ -1134,21 +1206,24 @@
           <p id="sim-status" class="vh" role="status"></p>
         </div>
         <div class="sim-log-wrap" hidden>
-          <table id="sim-log" class="sim-log" aria-describedby="sim-note">
-            <caption></caption>
-            <thead>
-              <tr>
-                <th scope="col"><span aria-hidden="true">Rnd</span><span class="vh">Round</span></th>
-                <th scope="col">d20</th>
-                <th scope="col">Result</th>
-                <th scope="col"><span aria-hidden="true">Dice</span><span class="vh">Damage dice</span></th>
-                <th scope="col"><span aria-hidden="true">Dmg</span><span class="vh">Damage</span></th>
-                <th scope="col"><span aria-hidden="true">Enemy HP</span><span class="vh">Enemy HP left</span></th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-            <tfoot></tfoot>
-          </table>
+          <details class="fold sim-log-fold" open>
+            <summary id="fold-log">Round by round</summary>
+              <table id="sim-log" class="sim-log" aria-describedby="sim-note">
+                <caption></caption>
+                <thead>
+                  <tr>
+                    <th scope="col"><span aria-hidden="true">Rnd</span><span class="vh">Round</span></th>
+                    <th scope="col">d20</th>
+                    <th scope="col">Result</th>
+                    <th scope="col"><span aria-hidden="true">Dice</span><span class="vh">Damage dice</span></th>
+                    <th scope="col"><span aria-hidden="true">Dmg</span><span class="vh">Damage</span></th>
+                    <th scope="col"><span aria-hidden="true">Enemy HP</span><span class="vh">Enemy HP left</span></th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+                <tfoot></tfoot>
+              </table>
+          </details>
         </div>
       </div>
     </section>
@@ -1177,7 +1252,7 @@
         </li>
       </ul>
       <p id="explore-status" class="explore-status" role="status"></p>
-      <p class="explore-jump"><a href="#chart">Go to the chart</a> <span aria-hidden="true">·</span> <a href="#controls">Go to the controls</a></p>
+      <p class="explore-jump"><a href="#chart">Go to the chart</a> <span class="jump-controls" aria-hidden="true">·</span> <a class="jump-controls" href="#controls">Go to the controls</a></p>
     </section>
   </main>
 
@@ -3170,7 +3245,7 @@ const killForm = document.getElementById('kill-controls');
 // The sticky bar's verdict line and Reset, and the two clamp sentences (261104-vx6, D3, D7, D9).
 const verdictEl = document.getElementById('verdict');
 const verdictLeadEl = document.getElementById('verdict-lead');
-const verdictRestEl = document.getElementById('verdict-rest');
+const verdictWhyEl = document.getElementById('verdict-why');
 const verdictSetEl = document.getElementById('verdict-set');
 const resetEl = document.getElementById('reset');
 const resetStatusEl = document.getElementById('reset-status');
@@ -3180,7 +3255,7 @@ const hpNoteEl = document.getElementById('hp-note');
 const cmpSummaryEl = document.getElementById('cmp-summary');
 const nRangeEl = document.getElementById('n-range');
 const nOutEl = document.getElementById('n-out');
-const CMP_KEYS = ['base', 'hit', 'dmg'];
+const CMP_KEYS = ['hit', 'dmg'];   // tables.base stays in the view for the deltas; it is not drawn
 const cmpEls = Object.fromEntries(CMP_KEYS.map((k) => [k, {
   table: document.getElementById('cmp-' + k),
   stats: document.getElementById('cmp-' + k + '-stats'),
@@ -3224,7 +3299,13 @@ const explainHitEl = document.querySelector('#explain-hit span');
 const explainCrossEl = document.querySelector('#explain-cross span');
 // Try this: one delegated click root, the three preset buttons, and the visible status line.
 const exploreListEl = document.querySelector('#explore .explore-list');
-const presetBtns = Array.from(document.querySelectorAll('#explore button.btn-preset'));
+const presetBtns = Array.from(document.querySelectorAll('button.btn-preset'));   // both preset rows
+const tryRowEl = document.getElementById('try-row');
+// Roll beside the table, its note, and the phone steppers (261105-emn).
+const rollTableBtn = document.getElementById('roll-table');
+const rollTableNoteEl = document.getElementById('roll-table-note');
+const nudgeBtns = Array.from(document.querySelectorAll('button.btn-nudge'));
+const logFoldEl = document.querySelector('.sim-log-fold');
 const exploreStatusEl = document.getElementById('explore-status');
 // Enemy HP step buttons (Phase 5): the hits line, the click-only status, and the two buttons.
 const hpHitsEl = document.getElementById('hp-hits');
@@ -3241,7 +3322,8 @@ const killNoteEl = document.getElementById('kill-note');
 // cannot crash this block before the error banner is shown.
 const state = {};
 const RENDERERS = [renderControls, renderVerdict, renderReset, renderHp, renderStats, renderFormulas, renderTable,
-  renderTwoRolls, renderLegend, renderFootnote, renderCompare, renderChart, renderExplain, renderSim];
+  renderTwoRolls, renderLegend, renderFootnote, renderCompare, renderChart, renderExplain, renderSim,
+  renderRollNote, renderNudges];
 
 // The last run lives here, never in state (RESEARCH Pattern 2, Pitfall 2): a run is an event,
 // not a derivation. init() and the UI smoke do Object.assign(state, DEFAULT_STATE), which would
@@ -3441,6 +3523,17 @@ function onStepClick(e) {
   requestAnimationFrame(() => { if (lastHpStatus === announced) hpStatusEl.textContent = msg; });
 }
 
+// Phone steppers (261105-emn, T-emn-01): the step is a fixed attribute of shipped markup, read as a
+// number; the result goes through the one parse path, then ONE setState. At a limit the button is
+// inert (aria-disabled, focus kept) and returns before any write. Focus stays on the button.
+function onNudgeClick(e) {
+  const b = e.target.closest('button[data-nudge]');
+  if (!b || b.disabled || b.getAttribute('aria-disabled') === 'true') return;
+  const key = b.dataset.nudgeKey;
+  const next = VM.parseControl(key, state[key] + Number(b.dataset.nudge), state[key]);
+  if (next !== state[key]) setState({ [key]: next });
+}
+
 function onChange(e) {
   const raw = e.target.value;   // before the box is normalized below: the clamp sentence quotes it
   onControl(e);
@@ -3500,8 +3593,19 @@ function setNumbered(el, text) {
 function renderVerdict(view) {
   const v = view.verdict;
   setNumbered(verdictLeadEl, v.lead);
-  setNumbered(verdictRestEl, v.why);
+  setNumbered(verdictWhyEl, v.why);
   setText(verdictSetEl, v.set);
+}
+
+// The stepper at a limit goes inert: aria-disabled written only on change, from the spec's limits.
+function renderNudges() {
+  for (const b of nudgeBtns) {
+    const spec = VM.CONTROL_SPEC[b.dataset.nudgeKey];
+    const v = state[b.dataset.nudgeKey];
+    const inert = Number(b.dataset.nudge) < 0 ? v <= spec.min : v >= spec.max;
+    if (inert && b.getAttribute('aria-disabled') !== 'true') b.setAttribute('aria-disabled', 'true');
+    else if (!inert && b.hasAttribute('aria-disabled')) b.removeAttribute('aria-disabled');
+  }
 }
 
 // Every control on the page, in both control roots (RESEARCH Pattern 1).
@@ -3627,7 +3731,7 @@ function noteFor(row, threshold) {
   return '';
 }
 
-// One renderer for all four tables (D-17). Only numbers and fixed label strings reach
+// One renderer for all three tables (D-17). Only numbers and fixed label strings reach
 // innerHTML (T-01-01, T-02-01); captions use textContent, and the optional hidden caption
 // suffix is a .vh span built with createElement. marks (D-11, D-12; #outcome only) is
 // Sim.runMarks output: hit cells get class roll (data-n from 2 up), and crit / miss / nat 1
@@ -3687,7 +3791,7 @@ function renderTable(view, simCtx) {
   });
 }
 
-// CMP-01..04: three compact tables on the shared scale, each with its stats line
+// CMP-01..04: two compact tables on the shared scale, each with its stats line
 // (rule · total over 20 rounds · delta vs the main table), built with createElement/textContent.
 // A number inside a prose line: <b class="num"> (tabular numerals, 700), text only.
 function num(text) {
@@ -3765,6 +3869,29 @@ function handleRoll(rng) {
 // The page's live dice: the one place a random source is chosen (SIM-06, D-15).
 const onRoll = () => handleRoll(Math.random);
 
+// The note beside #roll-table (261105-emn, T-emn-02): always from the sim's own strings, never
+// recomputed. The DOM is rewritten only when the words change, so a focused link survives a drag.
+const ROLL_NOTE_EMPTY = 'Outlines each cell it lands on.';
+let rollNoteShown = null;
+function renderRollNote(view, simCtx) {
+  const run = sim.run;
+  const stale = simCtx.stale;
+  let shown;
+  if (run === null) shown = sim.rollError ? ROLL_ERROR_TEXT : ROLL_NOTE_EMPTY;
+  else if (stale) shown = simNoteStaleEl.textContent.trim();
+  else shown = 'This run: ' + run.total + ' damage; expected ' + sim.exact.eText + '.';
+  if (shown === rollNoteShown) return;
+  rollNoteShown = shown;
+  if (run === null || stale) {
+    rollTableNoteEl.textContent = shown;
+    return;
+  }
+  const link = document.createElement('a');
+  link.href = '#sim';
+  link.textContent = 'See the rounds';
+  rollTableNoteEl.replaceChildren('This run: ', num(String(run.total)), ' damage; expected ', num(sim.exact.eText), '. ', link);
+}
+
 // A VM sentence as text with every decimal number in <b class="num"> (UI-SPEC Typography).
 // The copy stays in VM; the renderer only adds number styling.
 const numberedParts = (sentence) =>
@@ -3815,7 +3942,7 @@ function renderSim(view, simCtx) {
     // 03-REVIEW IN-05: rebuild the spread only when its text changes.
     if (simSpreadEl.textContent !== ex.spreadText) simSpreadEl.replaceChildren(...numberedParts(ex.spreadText));
     setText(simPlaceEl, sim.rollError ? ROLL_ERROR_TEXT : SIM_PROMPT);
-    // No run: the log is empty again, so the DOM is back to 80 row headers (Pitfall 3).
+    // No run: the log is empty again, so the DOM is back to 60 row headers (Pitfall 3).
     // Checked by content, not shownRunId: resetSim() zeroes shownRunId before this frame.
     if (simLogEl.tBodies[0].firstChild !== null) simLogEl.tBodies[0].replaceChildren();
     if (simLogEl.tFoot.firstChild !== null) simLogEl.tFoot.replaceChildren();
@@ -4208,7 +4335,7 @@ function renderFootnote(view) {
   critNoteEl.textContent = view.critFloorDiffers
     ? rule + 'Each column is one die face, so the crit row shows 2 × face + damage bonus. ' +
       "With a damage penalty this large, the 0-damage floor makes the doubled-face shortcut slightly off, so this table's average is close to the expected damage. " +
-      'The stat cards below use the real two-dice rule.'
+      'The stat cards use the real two-dice rule.'
     : rule + `Each column is one die face, so the crit row shows 2 × face + damage bonus, and averaged across the row that equals a real 2${d} crit. ` +
       "So this table's average is exactly the expected damage.";
 }
@@ -4470,7 +4597,7 @@ function runUiSmoke() {
     check('d4 D-5: footnote never claims the table is exact here', critNoteEl.textContent.includes('exactly'), false);
     check('d4 D-5: footnote says close to', critNoteEl.textContent.includes('close to the expected damage'), true);
     check('d4 D-5: verdict numbers use the number face',
-      [...verdictLeadEl.querySelectorAll('.num'), ...verdictRestEl.querySelectorAll('.num')].map((n) => n.textContent).join(' '),
+      [...verdictLeadEl.querySelectorAll('.num'), ...verdictWhyEl.querySelectorAll('.num')].map((n) => n.textContent).join(' '),
       '+1 ' + '20 +1 0 +1 0.6 1');
     check('chart: the readout sits above the plot',
       Boolean(chartReadoutEl.compareDocumentPosition(sweepEl) & Node.DOCUMENT_POSITION_FOLLOWING), true);
@@ -4498,9 +4625,9 @@ function runUiSmoke() {
 
     show({});
     const trio = Array.from(document.querySelectorAll('.trio table.outcome'));
-    const three = trio.length === 3;
-    check('cmp ui: three compact tables', trio.length, 3);
-    check('cmp ui: compact table ids in order', trio.map((t) => t.id).join(' '), 'cmp-base cmp-hit cmp-dmg');
+    const three = trio.length === 2;   // named for the Phase 2 trio; two tables since 261105-emn
+    check('cmp ui: two compact tables', trio.length, 2);
+    check('cmp ui: compact table ids in order', trio.map((t) => t.id).join(' '), 'cmp-hit cmp-dmg');
     check('cmp ui: each compact table has 20 body rows',
       three && trio.every((t) => t.tBodies[0].rows.length === 20), true);
     check('cmp ui: each compact row has 8 hit or miss cells at d8',
@@ -4509,15 +4636,15 @@ function runUiSmoke() {
 
     const cmpTables = VM.computeView(state).compare.tables;
     const statsOf = (key) => document.getElementById('cmp-' + key + '-stats').textContent;
-    check('cmp ui: baseline stats paragraph equals the view', statsOf('base'), cmpTables.base.statsText);
+    check('cmp ui: the Baseline table is gone', document.getElementById('cmp-base') === null && document.getElementById('cmp-base-stats') === null, true);
     check('cmp ui: +hit stats paragraph equals the view', statsOf('hit'), cmpTables.hit.statsText);
     check('cmp ui: +dmg stats paragraph equals the view', statsOf('dmg'), cmpTables.dmg.statsText);
     const ruleRow = (t) => {
       const tr = t.tBodies[0].querySelector('tr.threshold');
       return tr ? tr.querySelector('th').textContent : null;
     };
-    check('cmp ui: threshold rule rows base / hit / dmg', trio.map(ruleRow).join(' '), '10 5 10');
-    const titles = ['Baseline ' + '(+0)', '+5 ' + 'to hit', '+5 ' + 'to damage'];
+    check('cmp ui: threshold rule rows hit / dmg', trio.map(ruleRow).join(' '), '5 10');
+    const titles = ['+5 ' + 'to hit', '+5 ' + 'to damage'];
     check('cmp ui: each compact caption starts with its title',
       three && trio.every((t, i) => t.caption.textContent.startsWith(titles[i])), true);
 
@@ -4548,17 +4675,17 @@ function runUiSmoke() {
     const root = document.documentElement;
     const cw = document.getElementById('compare').clientWidth;
     const rem = parseFloat(getComputedStyle(root).fontSize);
-    const wraps = Array.from(document.querySelectorAll('.trio .table-wrap'));
+    // Below 52rem only the chosen table is on screen (the switch), so read the visible ones.
+    const wraps = Array.from(document.querySelectorAll('.trio .table-wrap')).filter((w) => w.checkVisibility());
     const tops = wraps.map((w) => w.getBoundingClientRect().top);
-    if (cw >= 77 * rem) {
-      check(`cmp ui: d12 three-up, wrapper tops level (${cw}px)`,
-        wraps.length === 3 && Math.max(...tops) - Math.min(...tops) <= 1, true);
+    if (cw >= 52 * rem) {
+      check(`cmp ui: d12 side by side, wrapper tops level (${cw}px)`,
+        wraps.length === 2 && Math.max(...tops) - Math.min(...tops) <= 1, true);
     } else {
-      check(`cmp ui: d12 stacked, wrapper tops increase (${cw}px)`,
-        wraps.length === 3 && tops[0] < tops[1] && tops[1] < tops[2], true);
+      check(`cmp ui: d12 one table at a time (${cw}px)`, wraps.length, CSS.supports('selector(:has(*))') ? 1 : 2);
     }
     check('cmp ui: d12 compact tables fit their wrappers, mid or narrow tier only',
-      wraps.length === 3 && wraps.every((w) => {
+      wraps.length >= 1 && wraps.every((w) => {
         const tw = w.querySelector('table').getBoundingClientRect().width;
         return tw <= w.getBoundingClientRect().width + 1 && tw <= 401;
       }), true);
@@ -4866,7 +4993,7 @@ function runUiSmoke() {
     check('sim log ui: now line hidden when fresh', hid($('#sim-now')), true);
     check('sim log ui: tally hidden after one run', hid($('#sim-tally')), true);
     check('sim log ui: fresh run is not stale', isStale(), false);
-    check('sim log ui: page row headers with a run', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 101);
+    check('sim log ui: page row headers with a run', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 81);
 
     // 2. No flicker (D-09, SC3): later frames reuse the rows and the button
     const row0 = body().rows[0];
@@ -4952,14 +5079,14 @@ function runUiSmoke() {
     check('sim log ui: five-run tally lead-in',
       (txt($('#sim-tally')) || '').startsWith('Last 5 runs ' + 'at these settings, newest first: '), true);
 
-    // 9. Reset empties the log, so the load count of 80 row headers holds (Pitfall 3)
+    // 9. Reset empties the log, so the load count of 60 row headers holds (Pitfall 3)
     resetSim();
     show({});
     check('sim log ui: log wrapper hidden after reset', hid($('#sim .sim-log-wrap')), true);
     check('sim log ui: body emptied after reset', body().rows.length, 0);
     check('sim log ui: foot emptied after reset', logEl.tFoot.rows.length, 0);
     check('sim log ui: note hidden after reset', hid($('#sim-note')), true);
-    check('sim log ui: page row headers after reset', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 80);
+    check('sim log ui: page row headers after reset', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 60);
   } catch (err) {
     results.push({ name: 'sim log ui smoke crashed: ' + (err && err.message), ok: false });
   } finally {
@@ -5131,12 +5258,12 @@ function runUiSmoke() {
     check('sim kill ui: an HP edit in the roll frame drops the kill sentence', txt($('#sim-status')), '');
     check('sim kill ui: the HP edit in the roll frame still re-scores', txt(killEl()), 'Survived with 1 ' + 'HP left.');
 
-    // 8. Reset: the kill line is hidden and empty, and the load count of 80 row headers holds
+    // 8. Reset: the kill line is hidden and empty, and the load count of 60 row headers holds
     resetSim();
     show({});
     check('sim kill ui: kill line hidden after reset', hid(killEl()), true);
     check('sim kill ui: kill line empty after reset', killEl() ? killEl().childNodes.length : null, 0);
-    check('sim kill ui: page row headers after reset', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 80);
+    check('sim kill ui: page row headers after reset', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 60);
   } catch (err) {
     results.push({ name: 'sim kill ui smoke crashed: ' + (err && err.message), ok: false });
   } finally {
@@ -5244,11 +5371,11 @@ function runUiSmoke() {
     render();
     check('sim marks ui: legend item present with no run', items().length, 5);
 
-    // 6. Reset: no marks, 80 row headers (Pitfall 3)
+    // 6. Reset: no marks, 60 row headers (Pitfall 3)
     resetSim();
     show({});
     check('sim marks ui: no marks after reset', rolls(), 0);
-    check('sim marks ui: page row headers after reset', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 80);
+    check('sim marks ui: page row headers after reset', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 60);
   } catch (err) {
     results.push({ name: 'sim marks ui smoke crashed: ' + (err && err.message), ok: false });
   } finally {
@@ -5620,7 +5747,7 @@ function runUiSmoke() {
     Object.assign(state, VM.DEFAULT_STATE);
     renderControls();
     render();
-    const btns = Array.from(document.querySelectorAll('button.btn-preset'));
+    const btns = Array.from(document.querySelectorAll('#explore button.btn-preset'));
     check('explore ui: three preset buttons, all enabled', btns.length + ' ' + btns.every((b) => !b.disabled), '3 true');
     const secs = Array.from(document.querySelector('main').children).filter((el) => el.tagName === 'SECTION');
     const ex = node('explore');
@@ -5703,7 +5830,7 @@ function runUiSmoke() {
       check('verdict ui: lead at ' + name, node('verdict-lead').textContent, want);
     }
     show({ atk: 13 });
-    check('verdict ui: the cap says why', node('verdict-rest').textContent.includes('it already hits ' + 'on 2+'), true);
+    check('verdict ui: the cap says why', node('verdict-why').textContent.includes('it already hits ' + 'on 2+'), true);
     show({ n: 12 });
     check('verdict ui: settings line follows n', node('verdict-set').textContent,
       VM.settingsText(state) + ', compare at ' + '+12');
@@ -5772,7 +5899,7 @@ function runUiSmoke() {
     held(() => resetEl.click());
     check('clamp ui: Reset clears a sentence whose key moved', ctlNoteEl.textContent + '|' + ctlNoteEl.hidden, '|true');
     commit(acBox, '40');
-    held(() => document.querySelector('button.btn-preset').click());
+    held(() => document.querySelector('#explore button.btn-preset').click());
     check('clamp ui: a preset clears a sentence whose key moved', ctlNoteEl.textContent + '|' + ctlNoteEl.hidden, '|true');
     show({});
     commit(hpBox, '0');
@@ -5820,6 +5947,149 @@ function runUiSmoke() {
     render();
   }
 
+  // quick 261105-emn on the live page: what a DOM dump cannot see (display: none, focus, geometry) and
+  // what a click does. Visible copy is split (IN-06). Everything is restored in finally.
+  try {
+    const node = (id) => document.getElementById(id);
+    const shows = (el) => el.checkVisibility();
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); renderControls(); render(); };
+    resetSim();
+    show({});
+
+    // Folds: closed at every width, and the live text inside still updates.
+    check('emn ui: the formulas fold starts closed', node('fold-formulas').parentElement.open, false);
+    check('emn ui: the marginal fold starts closed', node('fold-marginal').parentElement.open, false);
+    check('emn ui: a closed fold keeps its live text', node('f-plus-win-live').textContent.includes('wins'), true);
+    check('emn ui: the log fold is closed only under a 40rem page',
+      logFoldEl.open, !matchMedia('(width < 40rem)').matches);
+
+    // Verdict: the lead in #verdict and the why in #verdict-why.
+    check('emn ui: the lead stays in #verdict', node('verdict').contains(verdictLeadEl), true);
+    check('emn ui: the why is the view\'s string', verdictWhyEl.textContent, VM.computeView(state).verdict.why);
+    check('emn ui: the why is not a live region',
+      verdictWhyEl.hasAttribute('role') || verdictWhyEl.hasAttribute('aria-live'), false);
+    if (getComputedStyle(node('bar')).position === 'sticky') {
+      check('emn ui: lead and why are one flow in the bar', getComputedStyle(verdictWhyEl).display, 'inline');
+    } else {
+      check('emn ui: on a phone the verdict sticks', getComputedStyle(node('verdict')).position, 'sticky');
+      check('emn ui: on a phone the why scrolls away', getComputedStyle(verdictWhyEl).position, 'static');
+    }
+
+    // Roll beside the table: all three note states, from the sim's own strings.
+    const noteEl = node('roll-table-note');
+    check('emn ui: note before a roll', noteEl.textContent, 'Outlines each ' + 'cell it lands on.');
+    node('roll-table').click();
+    render();
+    check('emn ui: #roll-table rolls', sim.run !== null, true);
+    check('emn ui: #roll-table marks the outcome table', tableEl.querySelectorAll('.roll').length > 0, true);
+    const stopWord = 'See the ' + 'rounds';
+    check('emn ui: note after a roll', noteEl.textContent,
+      'This run: ' + node('sim-total').textContent + ' damage; expected ' + node('sim-e').textContent + '. ' + stopWord);
+    const noteLink = noteEl.querySelector('a');
+    check('emn ui: the note link goes to the rounds', noteLink ? noteLink.getAttribute('href') + ' ' + noteLink.textContent : null, '#sim ' + stopWord);
+    show({ n: 9 });
+    check('emn ui: a +N drag does not rewrite the note', noteEl.querySelector('a'), noteLink);
+    show({ ac: 16 });
+    check('emn ui: note when stale', noteEl.textContent, document.querySelector('.note-stale').textContent.trim());
+    check('emn ui: stale note has no link', noteEl.querySelector('a'), null);
+    show({});
+    check('emn ui: the note is fresh again at the rolled-at settings', noteEl.textContent.startsWith('This run: '), true);
+    resetSim();
+    render();
+    check('emn ui: resetting the sim returns the first note', noteEl.textContent, 'Outlines each ' + 'cell it lands on.');
+
+    // Try row: the preset titles, the same handler, and no roll.
+    const tries = Array.from(document.querySelectorAll('#try-row button'));
+    check('emn ui: try row labels are the preset titles', tries.map((b) => b.textContent).join('|'), VM.PRESETS.map((p) => p.title).join('|'));
+    check('emn ui: try row buttons describe their preset', tries.every((b) => (b.getAttribute('aria-describedby') || '').split(' ').every((id) => node(id) !== null)), true);
+    tries[0].click();
+    render();
+    check('emn ui: a try button applies its preset', [state.ac, state.die, state.atk, state.dmg, state.n].join(' '), '25 12 0 0 6');
+    check('emn ui: a try button does not roll', sim.run, null);
+    lastPreset = null;
+    show({});
+
+    // Steppers: through the one parse path, inert at the limits, invisible at a fine pointer.
+    const nudge = (k, d) => document.querySelector('button[data-nudge-key="' + k + '"][data-nudge="' + d + '"]');
+    show({ atk: 19 });
+    const up = nudge('atk', '1');
+    if (shows(up)) up.focus();
+    up.click();
+    render();
+    check('emn ui: + from 19 gives 20', state.atk, 20);
+    check('emn ui: + is inert at 20', up.getAttribute('aria-disabled'), 'true');
+    up.click();
+    render();
+    check('emn ui: + at 20 writes nothing', state.atk, 20);
+    if (shows(up)) check('emn ui: focus stays on the stepper', document.activeElement, up);
+    show({ dmg: -4 });
+    const down = nudge('dmg', '-1');
+    down.click();
+    render();
+    down.click();
+    render();
+    check('emn ui: - twice from -4 stops at -5', state.dmg, -5);
+    check('emn ui: - is inert at -5', down.getAttribute('aria-disabled'), 'true');
+    show({});
+    check('emn ui: steppers wake up away from the limits', up.hasAttribute('aria-disabled') || down.hasAttribute('aria-disabled'), false);
+    if (document.activeElement === up) up.blur();
+    const coarseStep = matchMedia('(pointer: coarse)').matches && document.querySelector('main').clientWidth < 70 * 16;
+    check('emn ui: steppers show only at a coarse pointer under the sticky widths',
+      getComputedStyle(up).display === 'none', !coarseStep);
+
+    // The compare switch: no state, no URL, no button touched.
+    const hitRadio = node('cmp-show-hit'), dmgRadio = node('cmp-show-dmg');
+    const hitCol = document.querySelector('.cmp-hit-col'), dmgCol = document.querySelector('.cmp-dmg-col');
+    const before = JSON.stringify(state) + location.search;
+    const btnState = () => Array.from(document.querySelectorAll('button')).map((b) => b.disabled + String(b.getAttribute('aria-disabled'))).join();
+    const btnsBefore = btnState();
+    check('emn ui: the switch radios carry no data-key', hitRadio.hasAttribute('data-key') || dmgRadio.hasAttribute('data-key'), false);
+    const oneAtATime = node('compare').clientWidth < 52 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const hasHas = CSS.supports('selector(:has(*))');
+    check('emn ui: to hit is the first choice', hitRadio.checked, true);
+    check('emn ui: the switch shows only under 52rem', shows(document.querySelector('.cmp-switch')), oneAtATime && hasHas);
+    check('emn ui: the to-hit table shows', shows(hitCol), true);
+    check('emn ui: the to-damage table shows only at the wide width', shows(dmgCol), !(oneAtATime && hasHas));
+    dmgRadio.click();
+    render();
+    check('emn ui: the to-damage table shows when chosen', shows(dmgCol), true);
+    check('emn ui: the to-hit table hides when not chosen', shows(hitCol), !(oneAtATime && hasHas));
+    check('emn ui: the switch writes no state and no URL', JSON.stringify(state) + location.search, before);
+    check('emn ui: the switch leaves every button alone', btnState(), btnsBefore);
+    check('emn ui: the summary stays visible', shows(cmpSummaryEl), true);
+    hitRadio.click();
+
+    // Wide layout: the cards beside the table.
+    const rootEl = document.documentElement;
+    const mainEl = document.querySelector('main');
+    const mainCs = getComputedStyle(mainEl);
+    const pageW = mainEl.clientWidth - parseFloat(mainCs.paddingLeft) - parseFloat(mainCs.paddingRight);
+    const col = document.querySelector('.table-col');
+    const wrap = col.querySelector('.table-wrap');
+    const crit = node('crit-note');
+    check('emn ui: the footnote comes straight after the table', wrap.nextElementSibling, crit);
+    check('emn ui: the footnote sits under the table', crit.getBoundingClientRect().top >= wrap.getBoundingClientRect().bottom, true);
+    if (pageW >= 64 * parseFloat(getComputedStyle(rootEl).fontSize)) {
+      check('emn ui: the cards sit left of the table', node('stats').getBoundingClientRect().right <= col.getBoundingClientRect().left, true);
+      if (rootEl.clientWidth >= 1350 && rootEl.clientWidth <= 1366) {
+        check('emn ui: three card tracks at 1366', getComputedStyle(node('stats')).gridTemplateColumns.split(' ').length, 3);
+      }
+    }
+    check('emn ui: the page never scrolls sideways', rootEl.scrollWidth <= rootEl.clientWidth, true);
+  } catch (err) {
+    results.push({ name: 'emn ui smoke crashed: ' + (err && err.message), ok: false });
+  } finally {
+    try {
+      resetSim();
+      lastPreset = null;
+      requestAnimationFrame(() => { exploreStatusEl.textContent = ''; simStatusEl.textContent = ''; });
+      document.getElementById('cmp-show-hit').checked = true;
+    } catch { /* a missing name: the crash above is already reported */ }
+    Object.assign(state, VM.DEFAULT_STATE);
+    renderControls();
+    render();
+  }
+
   // Phase 4 accessibility (DEPLOY-04, D-09): each control, in the Tab order check-page's guard
   // (11) expects (since 261103-d9g it starts with the header's Funsmith Club link), really takes focus in Chrome, and the label a sighted user reads beside it is
   // rendered (checkVisibility and a non-zero box). A DOM dump cannot prove either (RESEARCH
@@ -5828,20 +6098,25 @@ function runUiSmoke() {
     Object.assign(state, VM.DEFAULT_STATE);
     renderControls();
     render();
-    const presetBtn = (k) => Array.from(document.querySelectorAll('button.btn-preset'))
+    const presetBtn = (k) => Array.from(document.querySelectorAll('#explore button.btn-preset'))
       .find((b) => b.dataset.preset === k) || null;
+    const tryBtn = (k) => document.querySelector('#try-row button[data-preset="' + k + '"]');
+    const nudgeBtn = (k, d) => document.querySelector('button[data-nudge-key="' + k + '"][data-nudge="' + d + '"]');
     // Through .explore-jump: the verdict's Change link has the same href and comes first.
     const jump = (h) => (h === 'https://funsmith.club'
       ? document.querySelector('a.community')
       : Array.from(document.querySelectorAll('.explore-jump a[href]')).find((a) => a.getAttribute('href') === h)) || null;
     const find = (key) => {
       if (key === 'die') return document.querySelector('#controls input[name="die"]:checked');
+      if (key === 'cmp-show') return document.querySelector('input[name="cmp-show"]:checked');
       if (key === 'cross' || key === 'dmg' || key === 'cap') return presetBtn(key);
+      if (key.startsWith('try-')) return tryBtn(key.slice(4));
+      if (key.startsWith('nudge ')) return nudgeBtn(key.split(' ')[1], key.split(' ')[2]);
       if (key.startsWith('#') || key.startsWith('https:')) return jump(key);   // links, keyed by href
       return document.getElementById(key);
     };
     const labelOf = (key, el) => {
-      if (key === 'die') {                      // the group's legend; each radio's own label is its span
+      if (key === 'die' || key === 'cmp-show') {   // the group's legend; each radio's own label is its span
         const fs = el.closest('fieldset');
         return fs ? fs.querySelector('legend') : null;
       }
@@ -5850,13 +6125,22 @@ function runUiSmoke() {
       const group = el.closest('.group');       // #ac-num: aria-label, shown as the group label
       return group ? group.querySelector('.group-label') : null;
     };
-    const order = ['https://funsmith.club', 'ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'n-range', 'reset', 'verdict-change',
-      'fold-formulas', 'fold-marginal', 'chart-data-summary', 'hp-num', 'hp-minus', 'hp-plus', 'roll',
+    const order = ['https://funsmith.club', 'ac-range', 'ac-num', 'die', 'nudge atk -1', 'atk-num', 'nudge atk 1',
+      'nudge dmg -1', 'dmg-num', 'nudge dmg 1', 'n-range', 'reset', 'verdict-change', 'try-cross', 'try-dmg', 'try-cap', 'roll-table',
+      'fold-marginal', 'fold-formulas', 'chart-data-summary', 'cmp-show', 'hp-num', 'hp-minus', 'hp-plus', 'roll',
       'cross', 'dmg', 'cap', '#chart', '#controls'];
+    // These exist only at some widths and pointers; each is in the order only where it shows.
+    // Change and Go to the controls are display: none where the whole bar sticks.
+    const onlyWhenShown = (key) => key === 'verdict-change' || key === '#controls' || key === 'cmp-show' || key.startsWith('nudge ');
+    let prevEl = null;
     for (const key of order) {
       const el = find(key);
-      // Change is display: none where the whole bar sticks: it has nowhere to send anyone.
-      if (key === 'verdict-change' && el && getComputedStyle(el).display === 'none') continue;
+      if (onlyWhenShown(key) && el && !el.checkVisibility()) continue;
+      if (el && prevEl) {
+        check('a11y ui: ' + key + ' comes after the stop before it in the page',
+          Boolean(prevEl.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING), true);
+      }
+      if (el) prevEl = el;
       if (el) el.focus({ preventScroll: true });
       check('a11y ui: focus reaches ' + key, el !== null && document.activeElement === el, true);
       const lab = el ? labelOf(key, el) : null;
@@ -5911,7 +6195,8 @@ const PAINTED_SECTIONS = ['tables', 'stats', 'compare', 'chart', 'kill', 'sim', 
 
 // The one failure path for a render that throws, first or later (04-REVIEW WR-03): latch
 // `broken` so nothing repaints, hide every painted section and the verdict, show the banner, and
-// disable Roll, the presets, the two hit step buttons and Reset (a later failure finds them enabled).
+// disable both Rolls, the presets, the steppers, the two hit step buttons and Reset (a later failure
+// finds them enabled).
 function failPage(err) {
   broken = true;
   console.error('render failed:', err);
@@ -5921,10 +6206,13 @@ function failPage(err) {
     if (sec) sec.hidden = true;
   }
   rollBtn.disabled = true;
+  rollTableBtn.disabled = true;
   for (const b of presetBtns) b.disabled = true;
   for (const b of stepBtns) b.disabled = true;
+  for (const b of nudgeBtns) b.disabled = true;
   resetEl.disabled = true;
   verdictEl.hidden = true;
+  verdictWhyEl.hidden = true;
   showEngineError();
 }
 
@@ -5955,10 +6243,9 @@ function init() {
       lastQuery = location.search;
       Object.assign(state, VM.stateFromQuery(location.search));
     }
-    // D11: the long derivations start closed on a phone; the reader opens what they want.
-    if (matchMedia('(width < 40rem)').matches) {
-      for (const d of document.querySelectorAll('details.fold')) d.open = false;
-    }
+    // The round log starts closed on a phone; the reader opens it if they want. The two long
+    // derivations ship closed at every width (261105-emn).
+    if (matchMedia('(width < 40rem)').matches) logFoldEl.open = false;
     renderControls();                        // D-04: state -> controls, never the reverse
     render();                                // guarded first render: nothing is wired yet
     for (const root of [form, killForm]) {   // two control roots, one handler (Pattern 1)
@@ -5967,15 +6254,21 @@ function init() {
       root.addEventListener('change', onChange);
     }
     rollBtn.addEventListener('click', onRoll);
+    rollTableBtn.addEventListener('click', onRoll);          // the same handler beside the table
     exploreListEl.addEventListener('click', onPresetClick);   // Try this: one delegated listener
+    tryRowEl.addEventListener('click', onPresetClick);       // and the one-line row under the bar
+    form.addEventListener('click', onNudgeClick);            // phone steppers
     killForm.addEventListener('click', onStepClick);         // Enemy HP hit steps (KILL-02)
     resetEl.addEventListener('click', onReset);              // Reset (D7)
     simBodyEl.hidden = false;
     rollBtn.disabled = false;
+    rollTableBtn.disabled = false;
     for (const b of presetBtns) b.disabled = false;          // enabled with Roll, last (D-09)
+    for (const b of nudgeBtns) b.disabled = false;           // and the steppers
     for (const b of stepBtns) b.disabled = false;            // the hit steps too (UI-SPEC)
     resetEl.disabled = false;                                // and Reset (D7)
     verdictEl.hidden = false;                                // the verdict shows only once it is true
+    verdictWhyEl.hidden = false;
   } catch (err) {
     failPage(err);
     const st = selfTestIfLoaded();
