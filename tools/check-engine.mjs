@@ -122,6 +122,19 @@
 //          re-scoring from cumulative damage (kill round = first round with cum >= HP, hits =
 //          non-miss rounds up to it, HP left per round then null, HP left after round 20).
 //          The seeded table (seeds 1 / 5 / 6 at HP 40 / 47 / 48 / 71 / 72) is pinned verbatim
+//      and the quick 261104-vx6 additions, from each combo's VM.statsView result:
+//      (I1) VM.verdictView: the lead maps from the independent (t) verdict, the rest is rebuilt here
+//          from marg and the reason, and the winner's displayed value is never below the loser's
+//          (zero-hit: exactly 0 against more than 0). 'they tie.' is unreachable, so a direct pin
+//          feeds it. computeView's verdict and settings line are pinned at the defaults.
+//      (I2) flipRow: an independent walk of rows at atk and atk + 1 finds the only row that misses
+//          at atk and hits with a cell > 0 at atk + 1; null when there is none.
+//      (I3) URL state: stateFromQuery(queryFromState(s, '')) === s across a sweep touching every
+//          value of every key; defaults give ''; other params survive and owned keys are replaced;
+//          garbage falls back or clamps through parseControl.
+//      (I4) VM.clampNote branch pins (out of range, not a number, fraction, unchanged, keys with no
+//          box) and the VM.resetStatus sentence.
+//      (i) also checks cv.summaryText at N 0, 5, 20 against the engine's own 20-round tenths.
 //      The research counts (past the cap, near-ties, every hit kills, under 0.1, fallbacks,
 //      float-only mismatches, p20 truncated to 0) are pinned as equality checks.
 //      Zero-count asserts (02-REVIEW IN-04): no setting has a touch (a tie that is neither a
@@ -167,7 +180,8 @@ if (!/const onRoll = \(\) => handleRoll\(Math\.random\);/.test(html)) {
   fail('the one Math.random is not in `const onRoll = () => handleRoll(Math.random);`');
 }
 
-const ctx = vm.createContext({ console, performance });
+// URLSearchParams: VM.stateFromQuery / queryFromState (quick 261104-vx6) read a query string.
+const ctx = vm.createContext({ console, performance, URLSearchParams });
 for (const id of BLOCKS) {
   const src = block(id);
   try {
@@ -225,6 +239,10 @@ const names = {
   K7: '(K7) KILL-02 step = round(exact average hit) = round(card), labels, inert flags, hits line and status; static markup parity',
   K8: '(K8) KILL-05/06 killTrack, kill line and tally entry equal an independent re-scoring of seeded runs; seeded pins',
   K9: '(K9) UI-SPEC Performance: at every attack key the kill table plus the slowest kill view fit one 16 ms frame (best of 3)',
+  I1: '(I1) verdict line: lead from the independent (t) verdict, rest rebuilt from marg, winner never shows less',
+  I2: '(I2) flipRow is the only row that misses at atk and hits with a cell > 0 at atk + 1',
+  I3: '(I3) URL state: round trip across a sweep, defaults empty, other params kept, garbage falls back or clamps',
+  I4: '(I4) clampNote branch pins and the resetStatus sentence',
   cover: '(cover) the stride-53 sample reaches 21 AC values, 5 dice, 26 attack and 26 damage bonuses',
   zero: '(zero) no touches, no leading ties, no setting with 2+ crossings',
 };
@@ -294,6 +312,47 @@ const cov = { minTwoInThree: Infinity, maxTwoInThree: -Infinity, minMost: Infini
 // these checks add no engine calls. Every expectation below is computed independently from p
 // and view.exact; strings are compared after U+00A0 -> space (the page's no-break wrapping).
 const hasFormula = typeof VM.formulaView === 'function';
+// (I1) the verdict line. `verdict` is the independent oracle from (t); the sentence is rebuilt
+// here from marg, and the numbers it prints may not contradict its lead.
+const LEAD_OF = {
+  '+1 to damage wins.': '+1 to damage wins here.',
+  '+1 to hit wins.': '+1 to hit wins here.',
+  'they tie.': 'They tie here.',
+  'they are about even.': 'They are about even here.',
+};
+const REASON_OF = {
+  cap: 'it already hits on 2+, the 95% cap',
+  floor: 'still only a natural 20 hits',
+  nodmg: 'the extra hits deal 0 damage at this penalty',
+};
+const verdictCounts = { zero: 0, hit: 0, dmg: 0, even: 0, tie: 0 };
+function checkVerdict(p, view, fv, verdict, marg, ex) {
+  if (typeof VM.verdictView !== 'function') { record('I1', p, 'VM.verdictView missing'); return; }
+  const v = VM.verdictView(view, fv);
+  const H = marg.hitRound, D = marg.dmgRound;
+  let rest;
+  if (marg.reason) rest = ` +1 to hit adds nothing (${REASON_OF[marg.reason]}); +1 to damage adds ${D} per round.`;
+  else if (verdict === '+1 to hit wins.') rest = ` It adds ${H} per round; +1 to damage adds ${D}.`;
+  else if (verdict === '+1 to damage wins.') rest = ` It adds ${D} per round; +1 to hit adds ${H}.`;
+  else if (verdict === 'they tie.') rest = ` Each adds ${H} per round.`;
+  else rest = ` Both add about ${H} per round.`;
+  if (v.lead !== LEAD_OF[verdict]) record('I1', p, `lead ${JSON.stringify(v.lead)} vs ${JSON.stringify(LEAD_OF[verdict])}`);
+  if (v.rest !== rest) record('I1', p, `rest ${JSON.stringify(v.rest)} vs ${JSON.stringify(rest)}`);
+  const hN = Number(H), dN = Number(D);
+  if (marg.reason) {
+    verdictCounts.zero++;
+    if (!(ex.hitNum === 0 && hN === 0 && dN > 0)) record('I1', p, `zero-hit numbers: hit ${H}, damage ${D}`);
+  } else if (verdict === '+1 to hit wins.') {
+    verdictCounts.hit++;
+    if (!(hN > dN)) record('I1', p, `hit wins but shows ${H} vs ${D}`);
+  } else if (verdict === '+1 to damage wins.') {
+    verdictCounts.dmg++;
+    if (!(dN > hN)) record('I1', p, `damage wins but shows ${D} vs ${H}`);
+  } else {
+    if (verdict === 'they tie.') verdictCounts.tie++; else verdictCounts.even++;
+    if (H !== D) record('I1', p, `${verdict} but shows ${H} vs ${D}`);
+  }
+}
 const hasTwoRolls = typeof VM.twoRollsText === 'function';
 const nb = (x) => String(x ?? '').replaceAll(String.fromCharCode(0xa0), ' ');
 const MINUS = '−';
@@ -457,6 +516,7 @@ function checkCopy(p, view, tab) {
       else if (mHitT > mDmgT) verdict = '+1 to hit wins.';
       else if (mHitT < mDmgT) verdict = '+1 to damage wins.';
       else verdict = form === 'inequality' ? 'they tie.' : 'they are about even.';
+      checkVerdict(p, view, fv, verdict, marg, ex);
       let preWant;
       if (form === 'zero-hit') preWant = 'Here +1 to hit adds nothing, so ';
       else if (form === 'inequality') {
@@ -750,6 +810,20 @@ for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
         if (dmg >= -2 && s.tableSum * die !== s.e20Num) record('e', p, `tableSum*die ${s.tableSum * die} vs e20Num ${s.e20Num}`);
 
         const view = VM.statsView(p);
+        // (I2) an independent walk of the rows at atk and atk + 1, from the rule itself
+        {
+          const hits = (r, a) => r === 20 || (r !== 1 && r + a >= ac);
+          const up = statAt(atk + 1, dmg).st.rows;
+          let flip = null, many = false;
+          for (let r = 1; r <= 20; r++) {
+            if (hits(r, atk) || !hits(r, atk + 1)) continue;
+            if (!up[r - 1].cells.some((c) => c > 0)) continue;
+            if (flip !== null) many = true;
+            flip = r;
+          }
+          if (many) record('I2', p, 'more than one row flips');
+          if (view.flipRow !== flip) record('I2', p, `flipRow ${view.flipRow} vs walk ${flip}`);
+        }
         const back = VM.fixed(Math.round(Number(view.perRoundText) * 200), 1);
         if (back !== view.e20Text) record('f', p, `perRound ${view.perRoundText} x 20 -> ${back} vs ${view.e20Text}`);
 
@@ -834,6 +908,17 @@ for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
               const dh = deltaText(hitV.st, s), dd = deltaText(dmgV.st, s);
               if (cv.tables.hit.deltaText !== dh) record('i', p, `N ${N}: hit delta ${cv.tables.hit.deltaText} vs ${dh}`);
               if (cv.tables.dmg.deltaText !== dd) record('i', p, `N ${N}: dmg delta ${cv.tables.dmg.deltaText} vs ${dd}`);
+              // The compare summary restates the same three totals (quick 261104-vx6, D10).
+              const t3 = [s, hitV.st, dmgV.st].map((st) => VM.fixed(tenthsOf(st), 1));
+              const sumWant = `Over 20 rounds: ${t3[0]} as set, ${t3[1]} with ${VM.signed(N)} to hit, ` +
+                `${t3[2]} with ${VM.signed(N)} to damage.`;
+              if (cv.summaryText !== sumWant) record('i', p, `N ${N}: summary ${JSON.stringify(cv.summaryText)} vs ${JSON.stringify(sumWant)}`);
+              ['base', 'hit', 'dmg'].forEach((k, j) => {
+                const tb = cv.tables[k];
+                if (tb.totalText !== t3[j] || !tb.statsText.includes(` ${t3[j]} over 20 rounds`)) {
+                  record('i', p, `N ${N}: ${k} prints ${JSON.stringify(tb.statsText)}, summary says ${t3[j]}`);
+                }
+              });
             }
           }
         }
@@ -1908,6 +1993,113 @@ extra.K9 = ` (worst table + view ${kFrameWorstMs.toFixed(1)} ms at ${kFrameWorst
   `${kWorstMs.toFixed(1)} ms at ${kWorstKey || 'n/a'}; worst view ${kViewWorstMs.toFixed(1)} ms at ${kViewWorstAt || 'n/a'})`;
 extra.K8 = ` (${k8.runs} seeded runs x HP sample = ${k8.pairs} pairs checked: killed ${k8.kills}, ` +
   `survived ${k8.survived}, killed in round 20 ${k8.lastRound}; ${k8.pins} seeded pins)`;
+
+// ---- quick 261104-vx6: the pure pieces that are not per combo -------------------
+{
+  const xp = (key) => ({ ac: `(${key})`, atk: '', die: '', dmg: '' });
+  const eq = (key, label, got, want) => {
+    if (JSON.stringify(got) !== JSON.stringify(want)) record(key, xp(label), `${JSON.stringify(got)} vs ${JSON.stringify(want)}`);
+  };
+
+  // (I1) direct pins: 'they tie.' never happens at a real setting (X + 1 + 2D is odd for every die
+  // in the set), so the sentence is fed the result directly. The defaults pin the page's line.
+  if (typeof VM.verdictView === 'function') {
+    const fake = { marg: { hitRound: '0.300', dmgRound: '0.300', reason: null } };
+    eq('I1', 'tie', { ...VM.verdictView(fake, { win: { verdict: 'they tie.' }, branch: { win: 'inequality' } }) },
+      { lead: 'They tie here.', rest: ' Each adds 0.300 per round.' });
+    const dv = VM.computeView(VM.DEFAULT_STATE).verdict || {};
+    eq('I1', 'defaults', { lead: dv.lead, rest: dv.rest, set: dv.set }, {
+      lead: '+1 to damage wins here.',
+      rest: ' It adds 0.550 per round; +1 to hit adds 0.225.',
+      set: 'AC 15, d8, +5 to hit, +0 damage, compare at +5',
+    });
+    if (verdictCounts.zero !== 28100) record('I1', xp('count'), `zero-hit ${verdictCounts.zero} (want 28,100)`);
+    if (verdictCounts.tie !== 0) record('I1', xp('count'), `tie ${verdictCounts.tie} (want 0)`);
+    extra.I1 = ` (zero-hit ${verdictCounts.zero}, hit ahead ${verdictCounts.hit}, damage ahead ${verdictCounts.dmg}, ` +
+      `about even ${verdictCounts.even}, tie ${verdictCounts.tie})`;
+  }
+
+  // (I3) URL state
+  if (typeof VM.stateFromQuery !== 'function' || typeof VM.queryFromState !== 'function') {
+    record('I3', xp('url'), 'VM.stateFromQuery or VM.queryFromState missing');
+  } else {
+    const D0 = VM.DEFAULT_STATE, S = VM.stateFromQuery, Q = VM.queryFromState;
+    const plain = (x) => ({ ...x });
+    eq('I3', 'defaults query', Q(D0, ''), '');
+    eq('I3', 'empty search', plain(S('')), plain(D0));
+    // Every value of every key on its own, then a stride over the whole key product.
+    const domain = { ac: [], die: [...CS.die.set], atk: [], dmg: [], n: [], hp: [] };
+    for (const k of ['ac', 'atk', 'dmg', 'n', 'hp']) for (let v = CS[k].min; v <= CS[k].max; v++) domain[k].push(v);
+    let trips = 0;
+    const trip = (st) => {
+      trips++;
+      const q = Q(st, '');
+      if (JSON.stringify(plain(S(q))) !== JSON.stringify(plain(st))) {
+        record('I3', xp('trip'), `${JSON.stringify(st)} -> ${q} -> ${JSON.stringify(S(q))}`);
+      }
+    };
+    for (const k of Object.keys(domain)) for (const v of domain[k]) trip({ ...D0, [k]: v });
+    for (let i = 0; i < 2000; i++) {
+      const st = {};
+      for (const k of Object.keys(D0)) st[k] = domain[k][(i * 7 + k.length * 13 + i * i) % domain[k].length];
+      trip(st);
+    }
+    extra.I3 = ` (${trips} round trips)`;
+    eq('I3', 'keep', Q(D0, '?foo=1&ac=20'), '?foo=1');
+    eq('I3', 'replace', Q({ ...D0, ac: 25 }, '?foo=1&ac=20'), '?foo=1&ac=25');
+    eq('I3', 'order', Q({ ...D0, hp: 100, ac: 25, die: 12 }, ''), '?ac=25&die=12&hp=100');
+    const one = (search, key, want) => eq('I3', search, S(search)[key], want);
+    one('?ac=abc', 'ac', 15);
+    one('?die=7', 'die', 8);
+    one('?atk=999', 'atk', 20);
+    one('?hp=-3', 'hp', 1);
+    one('?ac=', 'ac', 15);
+    one('?ac=20&ac=25', 'ac', 20);
+    one('?n=2.5', 'n', 3);
+    one('?die=d8', 'die', 8);
+    one('?ac=Infinity', 'ac', 15);
+    eq('I3', 'unknown param', plain(S('?foo=1&bar=<b>')), plain(D0));
+  }
+
+  // (I4) clamp sentences, one per branch, plus the Reset announcement
+  if (typeof VM.clampNote !== 'function' || typeof VM.resetStatus !== 'function') {
+    record('I4', xp('clamp'), 'VM.clampNote or VM.resetStatus missing');
+  } else {
+    const C = VM.clampNote;
+    const pin = (key, raw, applied, want) => eq('I4', `${key} ${JSON.stringify(raw)} ${applied}`, C(key, raw, applied), want);
+    pin('ac', '40', 30, 'Target AC goes up to 30, so 40 became 30.');
+    pin('ac', '5', 10, 'Target AC goes down to 10, so 5 became 10.');
+    pin('ac', '', 15, 'Target AC needs a number, so it stayed at 15.');
+    pin('ac', '   ', 15, 'Target AC needs a number, so it stayed at 15.');
+    pin('hp', 'abc', 40, 'Enemy HP needs a number, so it stayed at 40.');
+    pin('ac', '15.5', 16, 'Target AC takes whole numbers, so 15.5 became 16.');
+    pin('ac', '40.5', 30, 'Target AC goes up to 30, so 40.5 became 30.');
+    pin('atk', '30', 20, 'Attack bonus goes up to +20, so 30 became +20.');
+    pin('dmg', '-9', -5, `Damage bonus goes down to ${MINUS}5, so -9 became ${MINUS}5.`);
+    pin('atk', '', 5, 'Attack bonus needs a number, so it stayed at +5.');
+    pin('dmg', '2.5', 3, 'Damage bonus takes whole numbers, so 2.5 became +3.');
+    pin('hp', '0', 1, 'Enemy HP goes down to 1, so 0 became 1.');
+    pin('hp', '501', 500, 'Enemy HP goes up to 500, so 501 became 500.');
+    pin('ac', ' 40 ', 30, 'Target AC goes up to 30, so 40 became 30.');
+    pin('ac', '15', 15, '');
+    pin('ac', '1e1', 10, '');
+    pin('atk', '-5', -5, '');
+    pin('n', '40', 20, '');
+    pin('die', '7', 8, '');
+    // Agreement with the one parser: a note appears exactly when the box's value changed.
+    for (const key of ['ac', 'atk', 'dmg', 'hp']) {
+      const { min, max } = CS[key];
+      for (const raw of [String(min - 1), String(max + 1), String(min), String(max), String(min + 0.5), '', 'x']) {
+        const applied = VM.parseControl(key, raw, VM.DEFAULT_STATE[key]);
+        const note = C(key, raw, applied);
+        const kept = raw !== '' && raw !== 'x' && Number(raw) === applied;
+        if (kept ? note !== '' : note === '') record('I4', xp(`${key} ${raw}`), `note ${JSON.stringify(note)} at applied ${applied}`);
+      }
+    }
+    eq('I4', 'resetStatus', VM.resetStatus(),
+      'Back to the defaults: AC 15, d8, +5 to hit, +0 damage, compare at +5, Enemy HP 40.');
+  }
+}
 
 // ---- report -----------------------------------------------------------------
 for (const k of Object.keys(names)) {
