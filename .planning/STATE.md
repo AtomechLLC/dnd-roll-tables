@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-28)
 Phase: Milestone v1.0 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-11-04 - Completed quick task 261104-vx6: Impeccable suite improvements
+Last activity: 2026-11-05 - Completed quick task 261105-emn: Apply the open critique backlog
 
 ## Performance Metrics
 
@@ -96,6 +96,7 @@ None open. Known tech debt (Phase 1 review WR-01, the per-round third decimal) i
 | 260927-1ty | Make the page more space-dense (spacing scale 4/8/12/16/20/24, 32px controls, 24px wide-tier rows, side columns beside the table/formulas/chart at 64rem and 72rem; page 27.6% shorter at 1366px, 10.8% at 360px; overrides Phase 1–4 UI-SPEC spacing at the user's request) | 2026-09-27 | 8886582 | [260927-1ty-make-the-page-more-space-dense](./quick/260927-1ty-make-the-page-more-space-dense/) |
 | 261103-d9g | Add a Funsmith Club link with the Discord logo in the top right corner (https://funsmith.club; inline SVG mark; first tab stop; check-page guard 15). User request during Impeccable init, recorded in PRODUCT.md | 2026-11-03 | 1e889d2 | [261103-d9g-add-funsmith-club-link-with-discord-logo](./quick/261103-d9g-add-funsmith-club-link-with-discord-logo/) |
 | 261104-vx6 | Apply the Impeccable suite's improvements (user accepted them all): sticky one-row control bar with +N and Reset, generated verdict line, kill section with its Enemy HP control moved below the chart, "hits at +1" note, roll counts in the note column, settings in the URL, clamp messages, compare summary, chart data table, 44px touch targets, copy trims. Page order changes again: header, bar, tables, stats, compare, chart, kill, sim, explore | 2026-11-04 | 0c6ec0d | [261104-vx6-impeccable-suite-improvements](./quick/261104-vx6-impeccable-suite-improvements/) |
+| 261105-emn | Apply the open critique backlog (user: "apply them all"): page order changes again to header, bar, try row, tables with the stat cards beside them, chart, compare, kill, sim, explore; Baseline table removed (reverses the three-table compare); verdict gives its reason in 20-round units and names any crossing; phone steppers, one compare table at a time, collapsed log; Roll beside the outcome table; heavier ring and row counts replace the ×2 badge | 2026-11-05 | c961753 | [261105-emn-apply-critique-backlog](./quick/261105-emn-apply-critique-backlog/) |
 
 ## Deferred Items
 
