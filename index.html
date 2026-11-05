@@ -5272,9 +5272,10 @@ function runUiSmoke() {
     requestAnimationFrame(() => { document.getElementById('sim-status').textContent = ''; });
   }
 
-  // Phase 3 table marks (D-11..D-13): rings and ×N badges on #outcome only, counted d20
-  // labels for crits / misses / nat 1s, the caption suffix, and the static legend item.
-  // Seed 6 at the defaults: 8 distinct hit cells ((11, 1) twice) and 7 counted rows.
+  // Phase 3 table marks (D-11..D-13; 261105-emn): rings on #outcome only, a heavier ring on a cell
+  // rolled more than once, ×N in the note column of every rolled row, ringed d20 labels for crits /
+  // misses / nat 1s, the caption suffix, and the static legend item.
+  // Seed 6 at the defaults: 8 distinct hit cells ((11, 1) twice) and 7 ringed labels.
   // Names avoid displayed strings; visible copy is split (IN-06). Resets in finally.
   try {
     const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); renderControls(); render(); };
@@ -5294,10 +5295,11 @@ function runUiSmoke() {
     rollWith(Sim.mulberry32(6));
     render();
     check('sim marks ui: seed 6 marked elements', rolls(), 15);
-    check('sim marks ui: seed 6 badged elements', tableEl.querySelectorAll('[data-n]').length, 1);
+    check('sim marks ui: no badge is left anywhere', document.querySelectorAll('#outcome [data-n], #legend [data-n]').length, 0);
+    check('sim marks ui: seed 6 heavier rings', tableEl.querySelectorAll('.roll-many').length, 1);
     const c11 = body.rows[10].cells[1];
     check('sim marks ui: cell 11,1 is marked', hasRoll(c11), true);
-    check('sim marks ui: cell 11,1 count', dataN(c11), '2');
+    check('sim marks ui: cell 11,1 has the heavier ring', c11.classList.contains('roll-many'), true);
     const h20 = body.rows[19].cells[0];
     check('sim marks ui: row 20 label is marked', hasRoll(h20), true);
     const noteCount = (i) => {
@@ -5308,6 +5310,15 @@ function runUiSmoke() {
     check('sim marks ui: row 1 count in the note column', noteCount(0), '×2');
     check('sim marks ui: no label carries a badge',
       tableEl.querySelectorAll('th[data-n], th[data-' + 'down]').length, 0);
+    // The independent oracle: the run's own rounds, counted by d20 face, for every row of the table.
+    const byFace = new Map();
+    for (const r of sim.run.rounds) byFace.set(r.d20, (byFace.get(r.d20) || 0) + 1);
+    const rowCounts = Array.from(body.rows, (_, i) => noteCount(i));
+    check('sim marks ui: every rolled row counts its d20 face',
+      rowCounts.join(' '), Array.from({ length: 20 }, (_, i) => (byFace.has(i + 1) ? '×' + byFace.get(i + 1) : null)).join(' '));
+    const hitRow = Array.from(body.rows).find((tr) => tr.classList.contains('hit') && tr.querySelector('td.roll'));
+    check('sim marks ui: a hit row counts too', hitRow ? hitRow.querySelector('.note-count') !== null : null, true);
+    check('sim marks ui: a hit row keeps a plain label', hitRow ? hitRow.cells[0].classList.contains('roll') : null, false);
     check('sim marks ui: note counts are aria-hidden',
       Array.from(body.querySelectorAll('.note-count')).every((s) => s.getAttribute('aria-hidden') === 'true'), true);
     check('sim marks ui: note counts come after the note text',
@@ -5320,9 +5331,12 @@ function runUiSmoke() {
     check('sim marks ui: marked label markup keeps scope first',
       body.innerHTML.split('<th scope="row" class="roll"').length - 1, 7);
     const mk = Sim.runMarks(sim.run);
-    check('sim marks ui: unbadged marked cells were rolled once',
-      Array.from(body.querySelectorAll('td.roll:not([data-n])')).every((td) =>
+    check('sim marks ui: plain rings were rolled once',
+      Array.from(body.querySelectorAll('td.roll:not(.roll-many)')).every((td) =>
         mk.cells.get(td.parentElement.cells[0].textContent + ',' + td.cellIndex) === 1), true);
+    check('sim marks ui: heavier rings were rolled more than once',
+      Array.from(body.querySelectorAll('td.roll-many')).every((td) =>
+        mk.cells.get(td.parentElement.cells[0].textContent + ',' + td.cellIndex) >= 2), true);
     check('sim marks ui: compact tables carry no marks', document.querySelectorAll('#compare .roll').length, 0);
     check('sim marks ui: caption suffix text', capVh() ? capVh().textContent : null,
       ' Outlined cells and d20 labels ' + 'show your last roll of 20 rounds; ' +
@@ -5355,7 +5369,8 @@ function runUiSmoke() {
     check('sim marks ui: legend item count', items().length, 5);
     const fifth = items()[4];
     check('sim marks ui: fifth legend item text', fifth ? fifth.lastElementChild.textContent : null,
-      'Outlined: rolled in your last ' + '20 rounds (×2 = rolled twice). Misses and crits are counted in the note column.');
+      'Outlined: rolled in your last ' + '20 rounds; a heavier outline means that exact cell came up more than once. ' +
+      '×N in the note column counts how often that d20 face came up.');
     const swatchText = (sel) => {
       const s = document.querySelector('#legend ' + sel);
       return s ? s.textContent : null;
@@ -5364,8 +5379,8 @@ function runUiSmoke() {
     check('sim marks ui: rule swatch says what it is', swatchText('.swatch.threshold'), 'hi' + 'ts');
     const sw = fifth ? fifth.querySelector('.swatch') : null;
     check('sim marks ui: fifth legend swatch classes',
-      sw ? ['swatch', 'h', 'roll'].every((c) => sw.classList.contains(c)) : null, true);
-    check('sim marks ui: fifth legend swatch count', dataN(sw), '2');
+      sw ? ['swatch', 'h', 'roll', 'roll-many'].every((c) => sw.classList.contains(c)) : null, true);
+    check('sim marks ui: fifth legend swatch has no badge', dataN(sw), null);
     check('sim marks ui: ramp still has five swatches', document.querySelectorAll('#legend .ramp .swatch.h').length, 5);
     resetSim();
     render();
@@ -5842,6 +5857,12 @@ function runUiSmoke() {
     check('flip ui: one flip note at the defaults', flips().length, 1);
     check('flip ui: on row threshold - 1', flips()[0].closest('tr').cells[0].textContent, String(VM.computeView(state).threshold - 1));
     check('flip ui: wording', flips()[0].textContent, 'hits at ' + '+1');
+    check('flip ui: short note for a phone', flips()[0].getAttribute('data-short'), 'at ' + '+1');
+    const missNote = tableEl.tBodies[0].rows[0].querySelector('.note-miss');
+    check('note ui: auto-miss keeps its full words', missNote.textContent, 'auto-' + 'miss');
+    check('note ui: auto-miss short note for a phone', missNote.getAttribute('data-short'), 'mi' + 'ss');
+    check('chart ui: the intro says what the line at the top is about',
+      document.querySelector('#chart .section-intro').textContent.includes('The line at the top is about ' + 'the very next +1; this chart adds N all at once.'), true);
     check('flip ui: compact tables carry none', node('compare').querySelectorAll('.note-flip').length, 0);
     show({ atk: 13 });
     check('flip ui: none at a capped setting', flips().length, 0);
