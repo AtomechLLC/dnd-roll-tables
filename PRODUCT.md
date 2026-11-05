@@ -27,7 +27,7 @@ Exactness as the teaching device. Every displayed number is computed by exact en
 ## Operating Context
 
 - **Where it lives:** a public static page at https://atomechllc.github.io/dnd-roll-tables/ (repo AtomechLLC/dnd-roll-tables). Every push to `main` redeploys it through a GitHub Actions Pages workflow. It also works opened straight from disk.
-- **How it's used:** visitors explore by adjusting target AC (10 to 30), the damage die (d4 to d12), attack and damage bonuses (−5 to +20), a comparison bonus +N (0 to 20), and enemy HP (1 to 500). They also use one-click "Try this" presets and roll 20 rounds on demand.
+- **How it's used:** visitors explore by adjusting target AC (10 to 30), the damage die (d4 to d12), attack and damage bonuses (−5 to +20), a comparison bonus +N (0 to 20), and enemy HP (1 to 500). They also use one-click "Try this" presets, roll 20 rounds on demand, reset to the defaults, and share a setup through the page's URL.
 - **Devices:** used on laptops and phones; the layout must work at both.
 - **Self-test:** a `?test` query shows the in-page self-test panel.
 
