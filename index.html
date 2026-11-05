@@ -21,7 +21,7 @@
       --rule:        oklch(0.30 0.04 40);
       --accent:      oklch(0.48 0.10 70);
       --miss-bg:     oklch(0.87 0.006 80);
-      --miss-ink:    oklch(0.45 0.01 80);
+      --miss-ink:    oklch(0.40 0.01 80);
       --heat-lo:     oklch(0.925 0.04 62);
       --heat-hi:     oklch(0.42 0.16 25);
       --cell-ink-lo: oklch(0.20 0.03 40);
@@ -380,19 +380,20 @@
       .outcome thead th.corner .cd { display: none; }
     }
     @container (width < 25rem) {
-      /* d12: 23 + 240 + 72 + 1 (the collapsed outer border) = 336, a 360px phone. The note insets
-         are 1px so "auto-miss ×2" stays on one line. */
+      /* d12: 23 + 240 + 72 + 1 (the collapsed outer border) = 336, a 360px phone. The note's left
+         inset is 1px so "at +1 ×2" stays on one line; the count keeps its gap, so it never reads
+         like arithmetic. */
       .outcome { --cell: 20px; --row: 20px; --rowhead: 23px; --note: 72px; font-size: 0.75rem; }
       .outcome td.note { padding-left: 1px; }
-      .note-count { margin-left: 1px; }
-      /* "hits on N+" -> "N+": the phrase stays in the DOM and the accessible text; only the
-         visual label shortens. Both boxes are pinned to the top of the row-high line box so
-         the zero-size hidden text cannot shift the label off center. */
-      .outcome .note-th {
+      .note-count { margin-left: var(--sp-1); }
+      /* "hits on N+" -> "N+", "auto-miss" -> "miss", "hits at +1" -> "at +1": the phrase stays in the
+         DOM and the accessible text; only the visual label shortens. Both boxes are pinned to the
+         top of the row-high line box so the zero-size hidden text cannot shift the label off center. */
+      .outcome [data-short] {
         display: inline-block; vertical-align: top; height: var(--row);
         font-size: 0; line-height: 0;
       }
-      .outcome .note-th::after {
+      .outcome [data-short]::after {
         content: attr(data-short) / "";
         display: inline-block; vertical-align: top;
         font-size: 0.75rem; line-height: var(--row);
@@ -418,28 +419,19 @@
     tr.threshold > *, .swatch.threshold { box-shadow: inset 0 3px 0 0 var(--rule); }
     tr.crit > *, .swatch.crit { box-shadow: inset 0 -2px 0 0 var(--accent); }
     tr.threshold.crit > * { box-shadow: inset 0 3px 0 0 var(--rule), inset 0 -2px 0 0 var(--accent); }
-    /* Run marks (D-11, D-12), #outcome only, plus the legend swatch that explains them.
+    /* Run marks (D-11, D-12; 261105-emn), #outcome only, plus the legend swatch that explains them.
        A two-tone ring (2px ink, 1px paper halo) drawn by a pseudo-element, so it never
        touches the threshold / crit box-shadows and shifts no layout; it reads on every heat
-       color and without color. A hit cell rolled twice or more also gets an x-N badge straddling
-       its top edge. Row labels keep only the ring: their counts sit in the note column (.note-count,
-       261104-vx6 D5), so nothing covers a d20 label. The badge's alt text is "" (the caption suffix
-       and the log carry the run for assistive tech); the first content line is the fallback for
-       engines without alt-text syntax. Kept after the heat and rule styles so order never loses. */
+       color and without color. A hit cell rolled twice or more gets a heavier 3px ring, which covers
+       nothing. Crit, miss and nat 1 labels keep the ring too, since their cells are never marked.
+       Every rolled row's count sits in the note column (.note-count, 261104-vx6 D5), so nothing
+       covers a number or a d20 label. Kept after the heat and rule styles so order never loses. */
     .outcome .roll, .swatch.roll { position: relative; }
     .outcome .roll::before, .swatch.roll::before {
       content: ""; position: absolute; inset: 0; pointer-events: none;
       border: 2px solid var(--ink); box-shadow: inset 0 0 0 1px var(--paper);
     }
-    .outcome .roll[data-n]::after, .swatch.roll[data-n]::after {
-      content: "×" attr(data-n);
-      content: "×" attr(data-n) / "";
-      position: absolute; top: -6px; left: 50%; translate: -50% 0; z-index: 1;
-      height: 12px; min-width: 16px; padding: 0 4px; border-radius: 4px; box-sizing: border-box;
-      background: var(--ink); color: var(--paper);
-      font: 700 12px/12px var(--font-num); font-variant-numeric: tabular-nums;
-      text-align: center; white-space: nowrap;
-    }
+    .outcome .roll-many::before, .swatch.roll-many::before { border-width: 3px; }
 
     /* Legend (TABLE-05): one wrapping row between the h2 and the table; at page width >= 64rem
        it sits in the text column left of the table, under the two-roll paragraph (260927-1ty). */
@@ -847,12 +839,12 @@
       #two-rolls { grid-area: explain; }
       #legend { grid-area: legend; }
       .table-col { grid-area: tcol; min-width: 0; }
-      /* 11rem tracks: three cards a row at 1366, two at 1100. Never below two (the narrow end of
-         this tier would otherwise stack six cards in one column), and never above six, since the
-         full-row marginal and formulas cards would keep a seventh, empty track alive. */
+      /* 11rem tracks: three cards a row at 1366, two at 1100. Never below two: the narrow end of this
+         tier would otherwise stack six cards in one column. The marginal and formulas cards span
+         every track from their base rules. */
       #stats {
         grid-area: stats; margin-top: 0;
-        grid-template-columns: repeat(auto-fit, minmax(max(min(11rem, (100% - var(--sp-3)) / 2), (100% - 5 * var(--sp-3)) / 6), 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(11rem, (100% - var(--sp-3)) / 2), 1fr));
       }
       /* The three kill cards take columns 1-3 and the note sits beside them in the same three
          subgrid rows; padding-top lines its first line up with the card labels. */
@@ -1090,7 +1082,7 @@
 
     <section id="chart" aria-labelledby="chart-h">
       <h2 id="chart-h">Every bonus from +0 to +20</h2>
-      <p class="section-intro">Expected damage over 20 rounds for every extra bonus from +0 to +20, at the settings above. Point at or drag across the chart to read any N; the +N slider in the controls sets the marker.</p>
+      <p class="section-intro">Expected damage over 20 rounds for every extra bonus from +0 to +20, at the settings above. The line at the top is about the very next +1; this chart adds N all at once. Point at or drag across the chart to read any N; the +N slider in the controls sets the marker.</p>
       <div class="chart-body">
         <div class="legend chart-legend">
           <div class="legend-item"><svg class="key" aria-hidden="true" focusable="false"><line class="series-hit" x1="0" y1="8" x2="32" y2="8"></line></svg><span>+N to hit (added to the attack roll)</span></div>
@@ -3719,10 +3711,10 @@ function renderTwoRolls(view) {
 }
 
 // Note column labels (D-10). Fixed markup plus the integer threshold only (T-01-12).
-// The narrow tier shows data-short ("N+") via ::after; the full phrase stays in the DOM
-// and in the accessible text at every width.
+// The narrow tier shows data-short ("N+", "miss", "at +1") via ::after; the full phrase stays in
+// the DOM and in the accessible text at every width.
 function noteFor(row, threshold) {
-  if (row.d20 === 1) return '<span class="note-miss">auto-miss</span>';
+  if (row.d20 === 1) return '<span class="note-miss" data-short="miss">auto-miss</span>';
   if (row.d20 === 20) return '<span class="note-crit">crit*</span>';   // also when threshold is 20
   if (row.d20 === threshold) {
     const n = Number(threshold) | 0;
@@ -3734,9 +3726,10 @@ function noteFor(row, threshold) {
 // One renderer for all three tables (D-17). Only numbers and fixed label strings reach
 // innerHTML (T-01-01, T-02-01); captions use textContent, and the optional hidden caption
 // suffix is a .vh span built with createElement. marks (D-11, D-12; #outcome only) is
-// Sim.runMarks output: hit cells get class roll (data-n from 2 up), and crit / miss / nat 1
-// rows get a ring on their row header and a count in the note column (261104-vx6 D5). Counts are
-// integers coerced with | 0 (T-03-11).
+// Sim.runMarks output: hit cells get class roll (roll-many from 2 up), and crit / miss / nat 1 rows
+// get a ring on their row header. Every rolled row shows its count in the note column (261104-vx6
+// D5; 261105-emn): runMarks' rows counts only non-hit rounds, so a hit row's count is the sum of its
+// cells' counts. Counts are integers coerced with | 0 (T-03-11, T-emn-02).
 function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captionHidden, marks, flipRow }) {
   const X = Number(die) | 0;
   const head = `<tr><th scope="col" class="corner">d20<span class="cd"> \\ d${X}</span></th>` +
@@ -3744,23 +3737,25 @@ function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captio
     '<th scope="col" class="note"><span class="vh">Notes</span></th></tr>';
   const body = rows.map((row) => {
     const cls = [row.kind, row.d20 === threshold ? 'threshold' : ''].join(' ').trim();
+    let cellSum = 0;
     const cells = row.cells.map((d, i) => {
       if (row.kind === 'miss' || row.kind === 'fumble') return '<td class="m">0</td>';
       const t = Math.min(1, d / heatMax);
       // Crit-row cells are never marked: no cell equals a real two-dice crit (D-12)
       const n = marks && row.kind === 'hit' ? (marks.cells.get(row.d20 + ',' + (i + 1)) | 0) : 0;
-      const roll = n > 0 ? ' roll' : '';
-      const badge = n >= 2 ? ` data-n="${n | 0}"` : '';
-      return `<td class="h${t >= 0.5 ? ' hi' : ''}${roll}"${badge} style="--t:${t.toFixed(3)}">${d}</td>`;
+      cellSum += n;
+      const roll = n >= 2 ? ' roll roll-many' : n > 0 ? ' roll' : '';
+      return `<td class="h${t >= 0.5 ? ' hi' : ''}${roll}" style="--t:${t.toFixed(3)}">${d}</td>`;
     }).join('');
     const rn = marks ? (marks.rows.get(row.d20) | 0) : 0;
     const th = rn > 0 ? '<th scope="row" class="roll">' : '<th scope="row">';
-    const count = rn > 0 ? `<span class="note-count" aria-hidden="true">×${rn | 0}</span>` : '';
+    const rowCount = rn + cellSum;   // one of the two is always 0: rows counts only non-hit rounds
+    const count = rowCount > 0 ? `<span class="note-count" aria-hidden="true">×${rowCount | 0}</span>` : '';
     // D4: the row +1 to hit would flip; the main table only. noteFor is '' on threshold - 1.
-    const note = row.d20 === flipRow ? '<span class="note-flip">hits at +1</span>' : noteFor(row, threshold);
+    const note = row.d20 === flipRow ? '<span class="note-flip" data-short="at +1">hits at +1</span>' : noteFor(row, threshold);
     // A count of 10 or more (about one run in five million) leads the cell, so if a narrow note
     // column has to clip, it clips the word and never a digit.
-    return `<tr class="${cls}">${th}${row.d20}</th>${cells}<td class="note">${rn >= 10 ? count + ' ' + note : note + count}</td></tr>`;
+    return `<tr class="${cls}">${th}${row.d20}</th>${cells}<td class="note">${rowCount >= 10 ? count + ' ' + note : note + count}</td></tr>`;
   }).join('');
   el.style.setProperty('--cols', String(X));
   el.tHead.innerHTML = head;
@@ -4315,15 +4310,15 @@ function renderLegend(view) {
     ramp.append(swatch(t >= 0.5 ? 'h hi' : 'h', String(Math.round(t * view.heatMax)), t));
   }
   // Static, always present (never reflows on roll or clear); drawn by the real mark classes
-  const rollSwatch = swatch('h roll', String(Math.round(0.25 * view.heatMax)), 0.25);
-  rollSwatch.setAttribute('data-n', '2');
+  const rollSwatch = swatch('h roll roll-many', String(Math.round(0.25 * view.heatMax)), 0.25);
   legendEl.replaceChildren(
     legendItem(ramp, 'Hit damage, low to high (one scale for every table on the page)'),
     legendItem(swatch('m', '0'), 'Miss: always 0, whatever the die shows'),
     legendItem(swatch('h hi crit', 'crit', 1), 'Natural 20: crit, shown as 2 × face + damage bonus*'),
     legendItem(swatch('threshold', 'hits'), 'Rule: first d20 roll that hits'),
     legendItem(rollSwatch,
-      'Outlined: rolled in your last 20 rounds (×2 = rolled twice). Misses and crits are counted in the note column.'),
+      'Outlined: rolled in your last 20 rounds; a heavier outline means that exact cell came up more than once. ' +
+      '×N in the note column counts how often that d20 face came up.'),
   );
 }
 
