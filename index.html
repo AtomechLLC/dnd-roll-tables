@@ -4435,6 +4435,12 @@ function runUiSmoke() {
     check('d4 D-5: row 10 face 1 is a hit cell showing 0',
       c10.classList.contains('h') && !c10.classList.contains('m') && c10.textContent === '0', true);
     check('d4 D-5: footnote adds the floor sentence', critNoteEl.textContent.includes('doubled-face shortcut'), true);
+    check('d4 D-5: footnote never claims the table is exact here', critNoteEl.textContent.includes('exactly'), false);
+    check('d4 D-5: footnote says close to', critNoteEl.textContent.includes('close to the expected damage'), true);
+    check('d4 D-5: verdict numbers use the number face',
+      node('verdict-rest').querySelectorAll('.num').length > 0 && node('verdict-lead').querySelector('.num') !== null, true);
+    check('chart: the readout sits above the plot',
+      Boolean(chartReadoutEl.compareDocumentPosition(sweepEl) & Node.DOCUMENT_POSITION_FOLLOWING), true);
   } catch (err) {
     results.push({ name: 'UI smoke crashed: ' + (err && err.message), ok: false });
   }
