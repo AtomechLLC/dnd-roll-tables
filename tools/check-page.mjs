@@ -7,8 +7,10 @@
 // the final DOM (--dump-dom) and the console (--enable-logging), then checks:
 //   (1) the console contains SELFTEST PASSED
 //   (2) the console has no Uncaught / SELFTEST FAIL / CSP / parse / load errors
-//   (3) the DOM has exactly 80 row headers (<th scope="row">) at load: 4 tables x 20 rows;
-//       the sim log adds 21 only after a roll (the ?test smoke resets its run at the end)
+//   (3) the DOM has exactly 80 row headers (th with scope="row") outside .chart-data at load:
+//       4 tables x 20 rows, plus exactly 21 inside .chart-data (the chart data table, one row
+//       per N). The sim log adds 21 only after a roll (the ?test smoke resets its run at the end).
+//       Counted by walking the tree, so markup order inside a tag does not matter
 //   (4) test mode: the visible self-test panel passed; plain mode: the panel is hidden
 //   (5) every --expect string appears in the VISIBLE page text (03-REVIEW WR-03). The dump is
 //       parsed into a mini element tree; subtrees with a `hidden` attribute, class `vh`,
@@ -21,9 +23,9 @@
 //       "visible". Inline elements join, so a sentence whose numbers sit in <b class="num">
 //       still matches.
 //   (6) the engine-error banner is still hidden after init
-//   (7) the Roll button, exactly three .btn-preset buttons and exactly two .btn-step buttons
-//       (the Enemy HP hit steps) are enabled after init (they ship disabled; init enables them
-//       together as its last step)
+//   (7) the Roll button, exactly three .btn-preset buttons, exactly two .btn-step buttons
+//       (the Enemy HP hit steps) and #reset are enabled after init (they ship disabled; init
+//       enables them together as its last step)
 //   (8) the sim section body is shown after init (it ships hidden)
 //   (6)-(8) guard 02-REVIEW WR-01: a caught first-render throw logs console.error('render
 //   failed'), which the console check does not match, so these are its only guard.
@@ -39,10 +41,11 @@
 //        the .hint), so #ac-num must say "Target AC"
 //   (11) no tabindex > 0; no control with a negative tabindex, `disabled`, or a [hidden]
 //        ancestor; and the focusable order (same-name radios collapsed, presets by
-//        data-preset, links by href) is exactly https://funsmith.club (the header community
-//        link), ac-range, ac-num, die, atk-num, dmg-num, hp-num, hp-minus, hp-plus, n-range,
-//        roll, cross, dmg, cap, #chart, #controls. The two hit step
-//        buttons go inert with aria-disabled only, never `disabled`, so they stay in this order
+//        data-preset, links by href, summaries by id) is exactly https://funsmith.club (the header
+//        community link), ac-range, ac-num, die, atk-num, dmg-num, n-range, reset, #controls (the
+//        verdict's Change link), fold-formulas, fold-marginal, chart-data-summary, hp-num,
+//        hp-minus, hp-plus, roll, cross, dmg, cap, #chart, #controls. The two hit step buttons
+//        and #reset go inert with aria-disabled only, never `disabled`, so they stay in this order
 //   (12) miss is not color-only: every td.m in the four table.outcome shows 0, every
 //        auto-miss row has only td.m data cells, the `.m` style rule has the
 //        repeating-linear-gradient hatch, and the legend's .swatch.m shows 0
@@ -50,20 +53,24 @@
 //   (12) and (13) read the raw <style> text from the dump. A dump cannot prove real focus or
 //   rendering; the page's ?test smoke ('a11y ui:') covers that in the live DOM.
 //   (14) page order, in every mode including --fault render: main's direct children, ignoring
-//        section#selftest, div#engine-error and noscript, run header, form#controls,
-//        section#tables, section#stats, section#compare, section#chart, section#sim,
-//        section#explore (user request 260927-17o: settings and outcome table at the top).
+//        section#selftest, div#engine-error and noscript, run header, div#bar, section#tables,
+//        section#stats, section#compare, section#chart, section#kill, section#sim, section#explore
+//        (user request 260927-17o: settings and outcome table at the top; quick 261104-vx6: the
+//        bar and the kill section). #bar's element children are form#controls, then p#verdict.
 //   (15) community link, in every mode including --fault render: main's header holds exactly
 //        one a[href="https://funsmith.club"] that shows and is named "Funsmith Club", with one
 //        aria-hidden, focusable="false", fill="currentColor" svg (the Discord mark, no <title>)
 //        and no target (user request 2026-11-03, PRODUCT.md Brand Commitments: community link).
+//   (16) verdict line, in every non-fault mode (quick 261104-vx6): #bar exists, #verdict has no
+//        [hidden], and when the settings are the defaults (test mode, or no setting in the url)
+//        its lead and rest are the sentence for AC 15, d8, +5, +0; otherwise the lead is non-empty.
 //
 // --fault render (02-REVIEW WR-01, 03-REVIEW WR-04): copies index.html to a temp dir, makes
 // render() throw, and appends a script that dispatches an `input` event on #ac-range after
 // init. It loads that copy in plain mode and, instead of (3), (4), (6)-(8) and the expects,
 // checks the guarded init: SELFTEST PASSED, 'render failed' logged, no 'Uncaught', the banner
-// shown, #roll, every .btn-preset and both .btn-step buttons disabled, and every painted
-// section hidden.
+// shown, #roll, every .btn-preset, both .btn-step buttons and #reset disabled, #verdict hidden,
+// and every painted section hidden (section#kill must exist).
 // --fault later (04-REVIEW WR-03): the same, but render() throws only from its second call on,
 // so init's first render succeeds and wires everything; the appended script then moves
 // #ac-range to 20 and dispatches `input`, and the scheduled render is the one that throws.
@@ -263,6 +270,17 @@ function detach(el) {
 }
 
 const tree = parseTree(rendered);
+// Row headers by walking the tree: those inside .chart-data (21, one per N) and all the others.
+function rowHeaderCounts(root) {
+  const counts = { outside: 0, chartData: 0 };
+  for (const el of walk(root)) {
+    if (el.tag !== 'th' || el.attrs.scope !== 'row') continue;
+    let inChartData = false;
+    for (let n = el.parent; n; n = n.parent) if (n.attrs && (n.attrs.class || '').split(/\s+/).includes('chart-data')) inChartData = true;
+    if (inChartData) counts.chartData++; else counts.outside++;
+  }
+  return counts;
+}
 // The --expect haystack: the page minus the self-test panel.
 const pageTree = parseTree(rendered);
 const selftestEl = byId(pageTree, 'selftest');
@@ -392,7 +410,8 @@ function a11yGuards() {
     if (el.tag === 'input' && el.attrs.type === 'radio' && order.includes(key)) continue;   // one stop per group
     order.push(key);
   }
-  const want = ['https://funsmith.club', 'ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'hp-num', 'hp-minus', 'hp-plus', 'n-range', 'roll', 'cross',
+  const want = ['https://funsmith.club', 'ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'n-range', 'reset', '#controls',
+    'fold-formulas', 'fold-marginal', 'chart-data-summary', 'hp-num', 'hp-minus', 'hp-plus', 'roll', 'cross',
     'dmg', 'cap', '#chart', '#controls'];
   if (order.join(' ') !== want.join(' ')) problems.push(`order ${order.join(', ')} (want ${want.join(', ')})`);
   check('a11y (11) tab order reaches every control', problems.length === 0, problems.slice(0, 8).join('; '));
@@ -463,8 +482,9 @@ check('self-test within 200 ms (Chrome)', budget !== null && Number(budget[3]) <
 if (fault !== null) {
   if (fault === 'later') {
     // The first render painted all four tables before the scheduled one threw.
-    const rowHeads = rendered.split('<th scope="row"').length - 1;
-    check('fault later: the first render painted (80 <th scope="row">)', rowHeads === 80, `found ${rowHeads}`);
+    const rowHeads = rowHeaderCounts(tree);
+    check('fault later: the first render painted (80 row headers, 21 in the chart data)',
+      rowHeads.outside === 80 && rowHeads.chartData === 21, `found ${rowHeads.outside} + ${rowHeads.chartData}`);
   }
   check('fault: console has "render failed"', consoleText.includes('render failed'));
   check('fault: console has no "Uncaught"', !consoleText.includes('Uncaught'),
@@ -477,14 +497,21 @@ if (fault !== null) {
   check(`fault: every .btn-preset disabled (${presets.length})`, presets.every((b) => 'disabled' in b.attrs));
   const steps = [...walk(tree)].filter((el) => el.tag === 'button' && classes(el).includes('btn-step'));
   check(`fault: every .btn-step disabled (${steps.length})`, steps.length === 2 && steps.every((b) => 'disabled' in b.attrs));
-  for (const id of ['tables', 'stats', 'compare', 'chart', 'sim', 'explore']) {
+  const resetEl = byId(tree, 'reset');
+  check('fault: #reset disabled', resetEl !== null && 'disabled' in resetEl.attrs);
+  const verdictFault = byId(tree, 'verdict');
+  check('fault: #verdict hidden', verdictFault !== null && 'hidden' in verdictFault.attrs);
+  const killSec = byId(tree, 'kill');
+  check('fault: section#kill exists', killSec !== null && killSec.tag === 'section');
+  for (const id of ['tables', 'stats', 'compare', 'chart', 'kill', 'sim', 'explore']) {
     const sec = byId(tree, id);
     if (sec === null || sec.tag !== 'section') continue;
     check(`fault: section#${id} hidden`, 'hidden' in sec.attrs);
   }
 } else {
-  const rowHeads = rendered.split('<th scope="row"').length - 1;
-  check('DOM has 80 <th scope="row"> headers', rowHeads === 80, `found ${rowHeads}`);
+  const rowHeads = rowHeaderCounts(tree);
+  check('DOM has 80 row headers outside the chart data', rowHeads.outside === 80, `found ${rowHeads.outside}`);
+  check('the chart data table has 21 row headers', rowHeads.chartData === 21, `found ${rowHeads.chartData}`);
 
   check('engine-error banner stays hidden', /<div id="engine-error" role="alert" hidden/.test(rendered));
   // Roll, the three Try-this presets and the two hit step buttons ship disabled; init enables
@@ -492,6 +519,9 @@ if (fault !== null) {
   const rollEl = byId(tree, 'roll');
   const presetEls = [...walk(tree)].filter((el) => el.tag === 'button' && classes(el).includes('btn-preset'));
   const stepEls = [...walk(tree)].filter((el) => el.tag === 'button' && classes(el).includes('btn-step'));
+  const resetBtn = byId(tree, 'reset');
+  check('#reset exists and is enabled after init', resetBtn !== null && resetBtn.tag === 'button' && !('disabled' in resetBtn.attrs),
+    resetBtn ? 'it is disabled' : 'missing');
   check('Roll, preset and step buttons enabled after init',
     rollEl !== null && rollEl.tag === 'button' && !('disabled' in rollEl.attrs) &&
       presetEls.length === 3 && presetEls.every((b) => !('disabled' in b.attrs)) &&
@@ -525,10 +555,14 @@ if (fault !== null) {
     .map((c) => (c.attrs.id ? `${c.tag}#${c.attrs.id}` : c.tag))
     .filter((k) => !skip.has(k))
     .join(', ');
-  const expected = ['header', 'form#controls', 'section#tables', 'section#stats', 'section#compare',
-    'section#chart', 'section#sim', 'section#explore'].join(', ');
-  check('page order: header, controls, tables, stats, compare, chart, sim, explore', actual === expected,
+  const expected = ['header', 'div#bar', 'section#tables', 'section#stats', 'section#compare',
+    'section#chart', 'section#kill', 'section#sim', 'section#explore'].join(', ');
+  check('page order: header, bar, tables, stats, compare, chart, kill, sim, explore', actual === expected,
     'got ' + actual);
+  const bar = byId(tree, 'bar');
+  const barKids = bar === null ? '(no #bar)' : bar.children.filter((c) => c.text === undefined)
+    .map((c) => (c.attrs.id ? `${c.tag}#${c.attrs.id}` : c.tag)).join(', ');
+  check('the bar holds the controls, then the verdict', barKids === 'form#controls, p#verdict', 'got ' + barKids);
 }
 
 // (15) community link (user request 2026-11-03): one Funsmith Club link in the header, its
@@ -558,6 +592,30 @@ if (fault !== null) {
     if ('target' in link.attrs) why.push('has target');
   }
   check('community link: header has one Funsmith Club link with the Discord mark', why.length === 0, why.join('; '));
+}
+
+// (16) the verdict line (quick 261104-vx6): shown after init, and at the defaults it is the
+// sentence the engine check pins. Text comes from the page's own spans, so a heading elsewhere
+// cannot satisfy it. In a url with settings only the lead's presence is checked here; use
+// --expect for its wording.
+if (fault === null) {
+  const OWNED = ['ac', 'die', 'atk', 'dmg', 'n', 'hp'];
+  const atDefaults = testMode || !OWNED.some((k) => u.searchParams.has(k));
+  const bar = byId(tree, 'bar');
+  const verdictEl = byId(tree, 'verdict');
+  const leadEl = byId(tree, 'verdict-lead');
+  const restEl = byId(tree, 'verdict-rest');
+  check('verdict: #bar exists', bar !== null);
+  check('verdict: #verdict is shown', verdictEl !== null && !('hidden' in verdictEl.attrs));
+  const lead = leadEl ? norm(visibleText(leadEl)) : '';
+  // Not normalized at the start: the rest starts with the one space that joins it to the lead.
+  const rest = restEl ? restEl.children.map(visibleText).join('') : '';
+  if (atDefaults) {
+    check('verdict: lead at the defaults', lead === '+1 to damage wins here.', `got ${JSON.stringify(lead)}`);
+    check('verdict: rest at the defaults', rest === ' It adds 0.550 per round; +1 to hit adds 0.225.', `got ${JSON.stringify(rest)}`);
+  } else {
+    check('verdict: lead is not empty', lead !== '', 'empty');
+  }
 }
 
 const mode = fault !== null ? `, mode: fault ${fault}` : '';
