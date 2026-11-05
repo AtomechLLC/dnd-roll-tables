@@ -123,10 +123,15 @@
 //          non-miss rounds up to it, HP left per round then null, HP left after round 20).
 //          The seeded table (seeds 1 / 5 / 6 at HP 40 / 47 / 48 / 71 / 72) is pinned verbatim
 //      and the quick 261104-vx6 additions, from each combo's VM.statsView result:
-//      (I1) VM.verdictView: the lead maps from the independent (t) verdict, the rest is rebuilt here
-//          from marg and the reason, and the winner's displayed value is never below the loser's
-//          (zero-hit: exactly 0 against more than 0). 'they tie.' is unreachable, so a direct pin
-//          feeds it. computeView's verdict and settings line are pinned at the defaults.
+//      (I1) VM.verdictView: the lead maps from the independent (t) verdict. The why is rebuilt here
+//          from marg's 20-round strings, the reason, an exact test on the sweep series (d[1] - d[0]
+//          === hitFaces x e20Den picks the expected hits wording) and a crossing tail from
+//          DiceMath.crossings on the same series ('at +t' with a tie, 'between +a and +b' without).
+//          The winner's displayed 20-round value is above the loser's and not 0.0 (zero-hit: exactly
+//          0 against more than 0); about even shows equal values. Counts pinned: zero-hit 28,100,
+//          tie 0, each expected hit 60,740, floor 10,240, crossing tails 26,192 (between 25,318).
+//          'they tie.' is unreachable, so a direct pin feeds it. computeView's verdict and settings
+//          line are pinned at the defaults, and a sampled chart caption holds the same sentence.
 //      (I2) flipRow: an independent walk of rows at atk and atk + 1 finds the only row that misses
 //          at atk and hits with a cell > 0 at atk + 1; null when there is none.
 //      (I3) URL state: stateFromQuery(queryFromState(s, '')) === s across a sweep touching every
@@ -239,7 +244,7 @@ const names = {
   K7: '(K7) KILL-02 step = round(exact average hit) = round(card), labels, inert flags, hits line and status; static markup parity',
   K8: '(K8) KILL-05/06 killTrack, kill line and tally entry equal an independent re-scoring of seeded runs; seeded pins',
   K9: '(K9) UI-SPEC Performance: at every attack key the kill table plus the slowest kill view fit one 16 ms frame (best of 3)',
-  I1: '(I1) verdict line: lead from the independent (t) verdict, rest rebuilt from marg, winner never shows less',
+  I1: '(I1) verdict line: lead from the independent (t) verdict, why rebuilt from marg, an exact expected hits test and the crossing; winner never shows less',
   I2: '(I2) flipRow is the only row that misses at atk and hits with a cell > 0 at atk + 1',
   I3: '(I3) URL state: round trip across a sweep, defaults empty, other params kept, garbage falls back or clamps',
   I4: '(I4) clampNote branch pins and the resetStatus sentence',
@@ -312,8 +317,9 @@ const cov = { minTwoInThree: Infinity, maxTwoInThree: -Infinity, minMost: Infini
 // these checks add no engine calls. Every expectation below is computed independently from p
 // and view.exact; strings are compared after U+00A0 -> space (the page's no-break wrapping).
 const hasFormula = typeof VM.formulaView === 'function';
-// (I1) the verdict line. `verdict` is the independent oracle from (t); the sentence is rebuilt
-// here from marg, and the numbers it prints may not contradict its lead.
+// (I1) the verdict line. `verdict` is the independent oracle from (t). checkCopy runs before the
+// sweep series exist, so it keeps its inputs here and the sentence is rebuilt once crossRes is
+// set: numbers from marg's 20-round strings, wording from an exact test on the series itself.
 const LEAD_OF = {
   '+1 to damage wins.': '+1 to damage wins here.',
   '+1 to hit wins.': '+1 to hit wins here.',
@@ -325,29 +331,46 @@ const REASON_OF = {
   floor: 'still only a natural 20 hits',
   nodmg: 'the extra hits deal 0 damage at this penalty',
 };
-const verdictCounts = { zero: 0, hit: 0, dmg: 0, even: 0, tie: 0 };
-function checkVerdict(p, view, fv, verdict, marg, ex) {
+const verdictCounts = { zero: 0, hit: 0, dmg: 0, even: 0, tie: 0, eachHit: 0, floorWord: 0, tails: 0, between: 0 };
+let verdictInputs = null;
+function keepVerdict(p, view, fv, verdict, marg, ex) {
+  verdictInputs = { p, view, fv, verdict, marg, ex };
+}
+function checkVerdict(a, d, hitFaces, e20Den, cross) {
+  const { p, view, fv, verdict, marg, ex } = verdictInputs;
   if (typeof VM.verdictView !== 'function') { record('I1', p, 'VM.verdictView missing'); return; }
-  const v = VM.verdictView(view, fv);
-  const H = marg.hitRound, D = marg.dmgRound;
-  let rest;
-  if (marg.reason) rest = ` +1 to hit adds nothing (${REASON_OF[marg.reason]}); +1 to damage adds ${D} per round.`;
-  else if (verdict === '+1 to hit wins.') rest = ` It adds ${H} per round; +1 to damage adds ${D}.`;
-  else if (verdict === '+1 to damage wins.') rest = ` It adds ${D} per round; +1 to hit adds ${H}.`;
-  else if (verdict === 'they tie.') rest = ` Each adds ${H} per round.`;
-  else rest = ` Both add about ${H} per round.`;
+  const v = VM.verdictView(view, fv, cross);
+  const H = marg.hit20, D = marg.dmg20;
+  const everyHit = d[1] - d[0] === hitFaces * e20Den;
+  if (everyHit) verdictCounts.eachHit++; else verdictCounts.floorWord++;
+  const onHits = !everyHit ? '1 more on each hit that deals damage'
+    : hitFaces === 1 ? '1 more on your 1 expected hit'
+      : `1 more on each of your ${hitFaces} expected hits`;
+  let why;
+  if (marg.reason) why = ` Over 20 rounds +1 to hit adds nothing (${REASON_OF[marg.reason]}); +1 to damage adds ${D}: ${onHits}.`;
+  else if (verdict === '+1 to hit wins.') why = ` Over 20 rounds it adds ${H}: one more hit. +1 to damage adds ${D}: ${onHits}.`;
+  else if (verdict === '+1 to damage wins.') why = ` Over 20 rounds it adds ${D}: ${onHits}. +1 to hit adds ${H}: one more hit.`;
+  else if (verdict === 'they tie.') why = ` Over 20 rounds each adds ${H}.`;
+  else why = ` Over 20 rounds both add about ${H}.`;
+  if (cross.list.length > 0) {
+    const e = cross.list[0];
+    if (e.tieN === null && e.flipN !== e.lastLeadN + 1) record('I1', p, `no tie, yet +${e.lastLeadN} and +${e.flipN} are not adjacent`);
+    verdictCounts.tails++;
+    if (e.tieN === null) verdictCounts.between++;
+    why += e.tieN !== null ? ` The curves cross once, at +${e.tieN}.` : ` The curves cross once, between +${e.lastLeadN} and +${e.flipN}.`;
+  }
   if (v.lead !== LEAD_OF[verdict]) record('I1', p, `lead ${JSON.stringify(v.lead)} vs ${JSON.stringify(LEAD_OF[verdict])}`);
-  if (v.rest !== rest) record('I1', p, `rest ${JSON.stringify(v.rest)} vs ${JSON.stringify(rest)}`);
+  if (v.why !== why) record('I1', p, `why ${JSON.stringify(v.why)} vs ${JSON.stringify(why)}`);
   const hN = Number(H), dN = Number(D);
   if (marg.reason) {
     verdictCounts.zero++;
     if (!(ex.hitNum === 0 && hN === 0 && dN > 0)) record('I1', p, `zero-hit numbers: hit ${H}, damage ${D}`);
   } else if (verdict === '+1 to hit wins.') {
     verdictCounts.hit++;
-    if (!(hN > dN)) record('I1', p, `hit wins but shows ${H} vs ${D}`);
+    if (!(hN > dN && hN > 0)) record('I1', p, `hit wins but shows ${H} vs ${D}`);
   } else if (verdict === '+1 to damage wins.') {
     verdictCounts.dmg++;
-    if (!(dN > hN)) record('I1', p, `damage wins but shows ${D} vs ${H}`);
+    if (!(dN > hN && dN > 0)) record('I1', p, `damage wins but shows ${D} vs ${H}`);
   } else {
     if (verdict === 'they tie.') verdictCounts.tie++; else verdictCounts.even++;
     if (H !== D) record('I1', p, `${verdict} but shows ${H} vs ${D}`);
@@ -516,7 +539,7 @@ function checkCopy(p, view, tab) {
       else if (mHitT > mDmgT) verdict = '+1 to hit wins.';
       else if (mHitT < mDmgT) verdict = '+1 to damage wins.';
       else verdict = form === 'inequality' ? 'they tie.' : 'they are about even.';
-      checkVerdict(p, view, fv, verdict, marg, ex);
+      keepVerdict(p, view, fv, verdict, marg, ex);
       let preWant;
       if (form === 'zero-hit') preWant = 'Here +1 to hit adds nothing, so ';
       else if (form === 'inequality') {
@@ -918,6 +941,11 @@ for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
                 if (tb.totalText !== t3[j] || !tb.statsText.includes(` ${t3[j]} over 20 rounds`)) {
                   record('i', p, `N ${N}: ${k} prints ${JSON.stringify(tb.statsText)}, summary says ${t3[j]}`);
                 }
+                // The Baseline table is gone from the page, so the delta names the table it is against.
+                const tailWant = k === 'base' ? '' : ` · ${tb.deltaText} vs the main table`;
+                if (!tb.statsText.endsWith(`over 20 rounds${tailWant}`)) {
+                  record('i', p, `N ${N}: ${k} stats line ${JSON.stringify(tb.statsText)}, want it to end ${JSON.stringify(tailWant)}`);
+                }
               });
             }
           }
@@ -982,6 +1010,7 @@ for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
         } else {
           const c = DiceMath.crossings(a, d);
           crossRes = c;
+          if (verdictInputs && verdictInputs.p === p) checkVerdict(a, d, s.hitFaces, s.e20Den, c);
           let lastSign = 0, flips = 0;
           for (let n = 1; n <= MAXN; n++) {
             const sg = Math.sign(a[n] - d[n]);
@@ -998,6 +1027,13 @@ for (let ac = CS.ac.min; ac <= CS.ac.max; ac++) {
             const markers = (VM.chartView(p, 5).markers || []).length;
             const want = c.list.length + (c.endTieN !== null ? 1 : 0);
             if (markers !== want) record('m', p, `${markers} markers vs ${want}`);
+            // (I1) the chart caption reads the same crossing sentence the verdict appends.
+            if (c.list.length > 0 && typeof VM.verdictView === 'function') {
+              const tail = String(VM.verdictView(verdictInputs.view, verdictInputs.fv, c).why).match(/ The curves cross once[^.]*\.$/);
+              if (!tail || !VM.chartView(p, 5).caption.includes(tail[0].trim())) {
+                record('I1', p, `caption ${JSON.stringify(VM.chartView(p, 5).caption)} lacks ${tail && tail[0]}`);
+              }
+            }
           }
           // Zero counts (02-REVIEW IN-04): the synthetic-only copy branches stay unreachable.
           // A touch is a tie with the same leader on both sides (the nearest non-zero signs).
@@ -1143,7 +1179,7 @@ const PRESET_WANT = {
     sets: { ac: 25, die: 12, atk: 0, dmg: 0, n: 6 },
   },
   dmg: {
-    title: 'Damage always wins',
+    title: 'No crossover',
     button: 'Try AC 15 with a d8',
     desc: 'At AC 15 with +0 to hit you expect 6 hits in 20 rounds, so each +1 to damage adds 6.0. Each +1 to hit ' +
       'adds one more hit, worth only 4.5. The dashed line stays on top at every N, and there is no ring.',
@@ -1241,7 +1277,7 @@ const presetFacts = [];
         expect('one crossing, flipN 6, to attack', c.list.length === 1 && c.list[0].flipN === 6 && c.list[0].to === 'attack');
         expect('ring label "flips at +6"', labels === 'flips at +6');
         expect('caption: damage leads +1..+5, hit leads +6..+20, cross once', cv.caption.includes(
-          '+N to damage leads from +1 to +5, then +N to hit leads from +6 to +20. The curves cross once.'));
+          '+N to damage leads from +1 to +5, then +N to hit leads from +6 to +20. The curves cross once, between +5 and +6.'));
         expect('readout at +6: to hit ahead by 0.5', lines[6] === 'At +6: to hit 19.5 · to damage 19.0 · to hit ahead by 0.5');
         expect('crossover text names +6', !!cv.explain && nb(cv.explain.crossLine).includes('the lead changes once, at +6'));
       } else if (key === 'dmg') {
@@ -1263,13 +1299,13 @@ const presetFacts = [];
         expect('one crossing, flipN 15, to damage', c.list.length === 1 && c.list[0].flipN === 15 && c.list[0].to === 'damage');
         expect('ring label "flips at +15"', labels === 'flips at +15');
         expect('caption: hit leads +1..+14, damage leads +15..+20, cross once', cv.caption.includes(
-          '+N to hit leads from +1 to +14, then +N to damage leads from +15 to +20. The curves cross once.'));
+          '+N to hit leads from +1 to +14, then +N to damage leads from +15 to +20. The curves cross once, between +14 and +15.'));
         expect('readout at +15: to damage ahead by 5.5', lines[15].endsWith('to damage ahead by 5.5'));
       }
       presetFacts.push(`${key}: ${facts.length} claims`);
     }
     const cross = PRESETS.find((pr) => pr.key === 'cross');
-    const statusWant = 'Set to AC 25, d12, +0 to hit, +0 damage, compare at +6. Everything above has updated.';
+    const statusWant = 'Set to AC 25, d12, +0 to hit, +0 damage, compare at +6. Everything on the page has updated.';
     let status;
     try { status = cross && VM.presetStatus(cross.sets); } catch (err) { status = `threw ${err && err.message}`; }
     if (status !== statusWant) bad('cross', `presetStatus ${JSON.stringify(status)}`);
@@ -1699,8 +1735,8 @@ if (!kHave) {
               if (v.step !== exStep) bad.push(`step ${v.step} vs ${exStep}`);
               if (v.minusApplied !== mA || v.plusApplied !== pA) bad.push(`applied ${v.minusApplied} / ${v.plusApplied} vs ${mA} / ${pA}`);
               if (v.minusInert !== (mA === 0) || v.plusInert !== (pA === 0)) bad.push(`inert ${v.minusInert} / ${v.plusInert}`);
-              if (v.minusLabel !== (mA === 0 ? '−1 hit (0 HP)' : '−1 hit (−' + mA + ' HP)')) bad.push(`minus label "${v.minusLabel}"`);
-              if (v.plusLabel !== (pA === 0 ? '+1 hit (0 HP)' : '+1 hit (+' + pA + ' HP)')) bad.push(`plus label "${v.plusLabel}"`);
+              if (v.minusLabel !== (mA === 0 ? '−1 hit' : '−1 hit (−' + mA + ' HP)')) bad.push(`minus label "${v.minusLabel}"`);
+              if (v.plusLabel !== (pA === 0 ? '+1 hit' : '+1 hit (+' + pA + ' HP)')) bad.push(`plus label "${v.plusLabel}"`);
               const h = HITS_RE.exec(v.hitsLine);
               const cs = /\(simple division says (.+)\)$/.exec(v.cards[0].sub);
               if (!h) {
@@ -2002,21 +2038,39 @@ extra.K8 = ` (${k8.runs} seeded runs x HP sample = ${k8.pairs} pairs checked: ki
   };
 
   // (I1) direct pins: 'they tie.' never happens at a real setting (X + 1 + 2D is odd for every die
-  // in the set), so the sentence is fed the result directly. The defaults pin the page's line.
+  // in the set), so the sentence is fed the result directly. The strings below are the page's.
   if (typeof VM.verdictView === 'function') {
-    const fake = { marg: { hitRound: '0.300', dmgRound: '0.300', reason: null } };
-    eq('I1', 'tie', { ...VM.verdictView(fake, { win: { verdict: 'they tie.' }, branch: { win: 'inequality' } }) },
-      { lead: 'They tie here.', rest: ' Each adds 0.300 per round.' });
+    const noCross = { list: [], ties: [], first: 'none', endTieN: null };
+    const fakeSv = (hit20, dmg20) => ({ hitFaces: 6, exact: { dmgNum: 6, den: 1 }, marg: { hit20, dmg20, reason: null } });
+    const fakeFv = (verdict) => ({ win: { verdict }, branch: { win: 'inequality' } });
+    eq('I1', 'tie', { ...VM.verdictView(fakeSv('0.3', '0.3'), fakeFv('they tie.'), noCross) },
+      { lead: 'They tie here.', why: ' Over 20 rounds each adds 0.3.' });
+    eq('I1', 'about even', { ...VM.verdictView(fakeSv('4.5', '4.5'), fakeFv('they are about even.'), noCross) },
+      { lead: 'They are about even here.', why: ' Over 20 rounds both add about 4.5.' });
+    const full = (ac, die, atk, dmg, n = 5) => VM.computeView({ ...VM.DEFAULT_STATE, ac, die, atk, dmg, n }).verdict || {};
     const dv = VM.computeView(VM.DEFAULT_STATE).verdict || {};
-    eq('I1', 'defaults', { lead: dv.lead, rest: dv.rest, set: dv.set }, {
+    eq('I1', 'defaults', { lead: dv.lead, why: dv.why, set: dv.set }, {
       lead: '+1 to damage wins here.',
-      rest: ' It adds 0.550 per round; +1 to hit adds 0.225.',
+      why: ' Over 20 rounds it adds 11.0: 1 more on each of your 11 expected hits. +1 to hit adds 4.5: one more hit.',
       set: 'AC 15, d8, +5 to hit, +0 damage, compare at +5',
     });
-    if (verdictCounts.zero !== 28100) record('I1', xp('count'), `zero-hit ${verdictCounts.zero} (want 28,100)`);
-    if (verdictCounts.tie !== 0) record('I1', xp('count'), `tie ${verdictCounts.tie} (want 0)`);
+    // Each pin goes through computeView, so the real crossing is what reaches the sentence.
+    const pins = [
+      [[15, 12, 0, 0], ' Over 20 rounds it adds 6.5: one more hit. +1 to damage adds 6.0: 1 more on each of your 6 expected hits. The curves cross once, between +14 and +15.'],
+      [[25, 12, 0, 0], ' Over 20 rounds +1 to hit adds nothing (still only a natural 20 hits); +1 to damage adds 1.0: 1 more on your 1 expected hit. The curves cross once, between +5 and +6.'],
+      [[15, 8, 13, 0], ' Over 20 rounds +1 to hit adds nothing (it already hits on 2+, the 95% cap); +1 to damage adds 19.0: 1 more on each of your 19 expected hits.'],
+      [[10, 4, -5, -5], ' Over 20 rounds +1 to hit adds nothing (the extra hits deal 0 damage at this penalty); +1 to damage adds 0.6: 1 more on each hit that deals damage.'],
+    ];
+    for (const [args, want] of pins) eq('I1', `AC ${args[0]} d${args[1]} ${args[2]} ${args[3]}`, full(...args).why, want);
+    const tieTail = String(full(10, 4, -4, 8).why);
+    if (!tieTail.endsWith(' The curves cross once, at +18.')) record('I1', xp('tie tail'), JSON.stringify(tieTail));
+    const wantCounts = { zero: 28100, tie: 0, eachHit: 60740, floorWord: 10240, tails: 26192, between: 25318 };
+    for (const [k, want] of Object.entries(wantCounts)) {
+      if (verdictCounts[k] !== want) record('I1', xp('count'), `${k} ${verdictCounts[k]} (want ${want})`);
+    }
     extra.I1 = ` (zero-hit ${verdictCounts.zero}, hit ahead ${verdictCounts.hit}, damage ahead ${verdictCounts.dmg}, ` +
-      `about even ${verdictCounts.even}, tie ${verdictCounts.tie})`;
+      `about even ${verdictCounts.even}, tie ${verdictCounts.tie}; each expected hit ${verdictCounts.eachHit}, ` +
+      `floor ${verdictCounts.floorWord}; crossing tails ${verdictCounts.tails}, between ${verdictCounts.between})`;
   }
 
   // (I3) URL state

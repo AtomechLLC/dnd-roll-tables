@@ -612,7 +612,7 @@ if (fault === null) {
   const rest = restEl ? restEl.children.map(visibleText).join('') : '';
   if (atDefaults) {
     check('verdict: lead at the defaults', lead === '+1 to damage wins here.', `got ${JSON.stringify(lead)}`);
-    check('verdict: rest at the defaults', rest === ' It adds 0.550 per round; +1 to hit adds 0.225.', `got ${JSON.stringify(rest)}`);
+    check('verdict: rest at the defaults', rest === ' Over 20 rounds it adds 11.0: 1 more on each of your 11 expected hits. +1 to hit adds 4.5: one more hit.', `got ${JSON.stringify(rest)}`);
   } else {
     check('verdict: lead is not empty', lead !== '', 'empty');
   }
