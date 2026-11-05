@@ -8,7 +8,7 @@ colors:
   cell-ink-lo: "oklch(0.20 0.03 40)"
   cell-ink-hi: "oklch(1 0 0)"
   miss-bg: "oklch(0.87 0.006 80)"
-  miss-ink: "oklch(0.45 0.01 80)"
+  miss-ink: "oklch(0.40 0.01 80)"
   series-hit: "oklch(0.45 0.13 255)"
   series-dmg: "oklch(0.47 0.12 50)"
   pass: "oklch(0.45 0.11 145)"
@@ -195,7 +195,7 @@ Warm neutrals carry the page, a single ochre accent marks action and crits, and 
 - **Deep Ember** (oklch(0.42 0.16 25)): The high end of the heat ramp, for the most damage on the page.
 - **Cell Ink, Low and High** (oklch(0.20 0.03 40) / oklch(1 0 0)): The number inside a heat cell. It flips from low to high where the ramp crosses its midpoint.
 - **Worn Grey** (oklch(0.87 0.006 80)): The miss cell's ground, under the hatch.
-- **Miss Ink** (oklch(0.45 0.01 80)): The 0 in a miss cell.
+- **Miss Ink** (oklch(0.40 0.01 80)): The 0 in a miss cell, at least 4.5:1 on the darker hatch stripe.
 
 ### Tertiary
 - **Ledger Blue** (oklch(0.45 0.13 255)): The +N to hit series, a solid line.
@@ -251,11 +251,13 @@ Warm neutrals carry the page, a single ochre accent marks action and crits, and 
 
 One full-width column, up to 90rem, with 12px side padding and a 20px gap between sections. Spacing runs 4, 8, 12, 16, 20, 24px. The density is deliberate: 24px table rows, 12px card padding.
 
-Layout responds to container width, not to the viewport. A page at 64rem or wider puts the outcome table's notes in a column beside a 43rem table, and sets the formulas and marginal cards side by side. At 72rem the chart's notes sit beside its plot. The plot is up to 50rem wide, and under the sticky bar it narrows with the window's height, to no less than 36rem, so it fits on screen below the bar. The compare tables are one column, or three at 77rem and up, never two plus one. Stat cards auto-fit tracks of at least 9rem, up to six.
+The page leads with the lesson: header, bar, a one-line preset row, the outcome table with its cards, the chart, then compare, kill, the roll and Try this.
+
+Layout responds to container width, not to the viewport. A page at 64rem or wider puts the two-roll text, legend and cards in a column beside a 43rem table column, with spare height below the cards and the footnote always directly under the table. The cards auto-fit tracks of at least 11rem there, three per row at 1366 and two at 1100, and the marginal and formulas cards span every track. Narrower pages stack them in the same order, on tracks of at least 9rem, up to six. At 72rem the chart's notes sit beside its plot. The plot is up to 50rem wide, and under the sticky bar it narrows with the window's height, to no less than 36rem, so it fits on screen below the bar. The compare section shows +N to hit and +N to damage side by side from a 52rem section width and one at a time below it.
 
 Outcome tables have three size tiers from their own wrapper's width: wide (40px cells, 24px rows), mid under 42rem (24px cells, 24px rows), narrow under 25rem (20px cells, 20px rows). A d12 table still fits a 360px phone, and the page itself never scrolls sideways.
 
-The control bar sticks when the page is at least 70rem wide and the viewport at least 40rem tall, and holds the strip and the verdict on opaque paper over a hairline. Below that the strip scrolls away and only the verdict sticks, with the settings and a Change link. Scroll padding keeps focus and jump targets clear of the sticky area. On a coarse pointer every control reaches 44px; table cells stay as they are, because they are read and not tapped.
+The control bar sticks when the page is at least 70rem wide and the viewport at least 40rem tall, and holds the strip and the verdict on opaque paper over a hairline. Below that the strip scrolls away and only the verdict's lead sticks, with the settings and a Change link; the reason scrolls away with the page, so a phone's sticky area stays short. Scroll padding keeps focus and jump targets clear of the sticky area. On a coarse pointer every control reaches 44px; table cells stay as they are, because they are read and not tapped. On a phone the round log and both derivations start closed; the derivations start closed at every width.
 
 ## Elevation & Depth
 
@@ -284,8 +286,10 @@ Plain, compact and exact: controls look like the form fields of a ruled workshee
 ### Buttons
 - **Shape:** Softly squared corners (4px), at least 32px tall, 44px on a coarse pointer.
 - **Roll:** Accent fill, parchment text, bold Georgia, 16px side padding. The page's one primary action.
-- **Presets:** Parchment fill, faded-ink outline, bold Georgia. Secondary to Roll, and never accent.
+- **Roll beside the table:** The same button and handler as the roll section's, so Roll stays the one accent-filled action. Its note says what it does, what the last run scored, or that the settings moved on.
+- **Presets:** Parchment fill, faded-ink outline, bold Georgia. Secondary to Roll, and never accent. The try row under the bar repeats them at natural width with the preset titles as labels.
 - **Step and Reset:** Parchment fill, faded-ink outline, regular system-ui. Step buttons hold a 120px minimum so a changing label moves nothing.
+- **Steppers:** The Step fill at 44 by 44px either side of the Attack and Damage boxes, on a coarse pointer below the 70rem page only. They add no tab stops anywhere else, and go inert with `aria-disabled` at a limit.
 - **Hover / Focus:** Hover and press mix 15% and 25% ink into the fill (Roll 15% and 30%). Focus is a 2px accent outline at 2px offset. All of it is instant.
 - **Disabled:** Vellum fill, faded-ink text, hairline border. An inert Step or Reset uses `aria-disabled` so focus stays put.
 
@@ -293,6 +297,7 @@ Plain, compact and exact: controls look like the form fields of a ruled workshee
 - **Number input:** 80 by 32px, parchment fill, 1px faded-ink outline, 4px corners, centered tabular numerals, accent caret.
 - **Slider:** Native range with accent fill, 32px tall, paired with its number box or value.
 - **Die selector:** Five joined 48 by 32px segments on vellum over real radios, one tab stop. The checked segment takes the accent fill and bold.
+- **Compare switch:** The same segments at natural width, To hit and To damage, shown only where the compare section is under 52rem. CSS only, with no state and no URL; without `:has()` it stays hidden and both tables show.
 - **Group label:** Bold label over its control, with a muted range hint beside it. A correction sentence appears under the strip only when a typed value changed.
 
 ### Control Strip
@@ -306,10 +311,10 @@ Vellum, 1px hairline, 8px corners, 12 by 16px padding, wrapping groups aligned a
 - **Internal Padding:** 12px, with 8px between label, value and supporting line. Rows of cards use subgrid so those three line up across the row.
 
 ### Verdict Line
-Body type on paper, not a card: a bold lead sentence, then the two values, with a hairline under it where it sticks alone.
+Body type on paper, not a card: a bold lead sentence, then why, in the 20-round numbers the Value of the next +1 card prints, then the chart caption's crossing sentence when the curves cross. The lead and the why are one paragraph flow inside the sticky bar. Below it the lead sticks alone with a hairline under it, and the why reads as the next paragraph.
 
 ### Outcome Table
-The signature component. A semantic table, fixed layout, hairlines on every cell, with a note column on parchment in Georgia italic for "auto-miss", "hits on N+", "hits at +1" and "crit". Heat cells and hatched misses follow the color rules above. The threshold and crit rules are the only heavy lines. Rolled cells get a 2px ink ring with a parchment halo, plus an ink ×N badge when rolled twice or more; a rolled row label keeps the ring and its count moves to the note column, so nothing covers a d20 label.
+The signature component. A semantic table, fixed layout, hairlines on every cell, with a note column on parchment in Georgia italic for "auto-miss", "hits on N+", "hits at +1" and "crit". Heat cells and hatched misses follow the color rules above. The threshold and crit rules are the only heavy lines. Rolled cells get a 2px ink ring with a parchment halo, or a heavier 3px ring when that exact cell came up more than once; crit, miss and nat 1 row labels keep the ring. Every rolled row shows ×N in the note column, how often that d20 face came up, so no mark covers a number. In the narrow tier the notes shorten to "N+", "miss" and "at +1"; the full words stay in the DOM.
 
 ### Exact And Simulated Figures
 Side by side, never alike. See the rule below.

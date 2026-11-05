@@ -4,7 +4,7 @@
 
 A single-file, static web page that shows how one D&D 5e attack roll works, live at https://atomechllc.github.io/dnd-roll-tables/. A d20 to-hit roll against Armor Class is followed by a dX damage roll. The page:
 - renders the full 2D outcome table (a miss deals 0 damage);
-- compares +1 through +20 added to the attack roll against the same bonus added to the damage roll, in three side-by-side tables and an exact sweep chart;
+- compares +1 through +20 added to the attack roll against the same bonus added to the damage roll, in two side-by-side tables and an exact sweep chart;
 - rolls a real 20-round fight next to the exact expected value and its spread;
 - explains every number with live formulas;
 - shows how many hits and rounds it takes to kill an enemy with editable hit points.
@@ -78,7 +78,7 @@ None. Next-milestone requirements are defined by `/gsd:new-milestone`.
 - **Hosting:** GitHub Pages static files only — no server, no build step, one index.html.
 - **Tech stack:** vanilla HTML/CSS/JS, no frameworks, no CDN libraries — the user's preference; it keeps the page portable and zero-maintenance.
 - **Deployment:** the public repo AtomechLLC/dnd-roll-tables. Every push to `main` redeploys the public site, so push only when publishing is intended.
-- **Readability:** the 2D table stays legible at d12 and with three tables side by side on a laptop; mobile stacks. A dense layout (4/8/12/16/20/24 spacing, 32 px controls) is the current baseline.
+- **Readability:** the 2D table stays legible at d12 and with two tables side by side on a laptop; on a phone, one comparison table at a time. A dense layout (4/8/12/16/20/24 spacing, 32 px controls) is the current baseline.
 
 ## Key Decisions
 
