@@ -228,6 +228,7 @@
       font-size: 1rem; line-height: 1.5; color: var(--ink);
     }
     #verdict-lead { font-weight: 700; }
+    #verdict .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
     .verdict-meta { display: block; font-size: 0.875rem; line-height: 1.4; }
     .verdict-set { color: var(--ink-muted); }
     /* Where the strip fits one row and the screen has height to spare, the whole bar sticks.
@@ -245,6 +246,9 @@
         #verdict .verdict-meta, #verdict #verdict-change { display: none; }
         /* "Go to the controls": they are already on screen, so the jump leaves the page where it is. */
         #controls { scroll-margin-top: calc(-1 * var(--scroll-pad)); }
+        /* The chart fits under the bar: 21rem is the bar, heading, intro, readout and y-title; 1.6 is
+           the viewBox ratio. 36rem keeps it readable on short windows, which then scroll a little. */
+        #chart { --plot-w: min(50rem, max(36rem, calc((100svh - 21rem) * 1.6))); }
       }
     }
 
@@ -480,7 +484,7 @@
     .ndot-hit, .ndot-dmg { stroke: var(--paper); stroke-width: 2px; vector-effect: non-scaling-stroke; }
     .ndot-hit { fill: var(--series-hit); }
     .ndot-dmg { fill: var(--series-dmg); }
-    .chart-wrap { container: chart / inline-size; max-width: 50rem; }
+    .chart-wrap { container: chart / inline-size; max-width: var(--plot-w, 50rem); }
     .chart-legend { max-width: 50rem; }   /* the old width cap, now that the legend sits outside .chart-wrap */
     .chart { display: block; width: 100%; height: auto; overflow: visible; }
     .key { width: 32px; height: 16px; overflow: visible; }
@@ -530,7 +534,7 @@
     .plot { touch-action: pan-y; }
     .chart .hit { cursor: crosshair; }
     .readout {
-      margin: var(--sp-2) 0 0; padding: var(--sp-2) var(--sp-3);
+      margin: 0 0 var(--sp-2); padding: var(--sp-2) var(--sp-3);
       background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
       font-family: var(--font-num); font-variant-numeric: tabular-nums;
       font-size: 1rem; line-height: 1.5; color: var(--ink);
@@ -684,6 +688,7 @@
     /* line-height: 1 keeps these mixed-face inline boxes inside the cell's 24px strut, so a kill
        or down row is exactly as tall as the others and an HP edit never moves the rows below. */
     .hp-down, .hp-kill { line-height: 1; }
+    .sim-log tr.kill b { font-weight: 700; }   /* the default `bolder` would compute to 900 in a 700 row */
     .hp-down {
       font-family: var(--font-prose); font-style: italic; font-size: 0.75rem; white-space: nowrap;
     }
@@ -812,7 +817,7 @@
        explanations in a column beside the chart. .chart-wrap stays the 50rem `chart` container. */
     @container page (width >= 72rem) {
       .chart-body {
-        display: grid; grid-template-columns: 50rem minmax(0, 1fr); column-gap: var(--sp-4); align-items: start;
+        display: grid; grid-template-columns: var(--plot-w, 50rem) minmax(0, 1fr); column-gap: var(--sp-4); align-items: start;
         grid-template-areas: "plot legend" "plot caption" "plot explain" "plot .";
         grid-template-rows: auto auto auto 1fr;
       }
@@ -846,10 +851,9 @@
       padding: var(--sp-3); border-radius: 8px;
       background: var(--surface);
       border: 1px solid var(--line);
-      border-left: 4px solid var(--line);
     }
-    #selftest.pass { border-left-color: var(--pass); }
-    #selftest.fail, #engine-error { border-left-color: var(--fail); }
+    #selftest.pass { border-color: var(--pass); }
+    #selftest.fail, #engine-error { border-color: var(--fail); }
     #engine-error { font-size: 1rem; line-height: 1.5; }
     #selftest .summary { font-size: 0.875rem; font-weight: 700; line-height: 1.4; margin: 0; }
     #selftest .summary.pass { color: var(--pass); }
@@ -1047,9 +1051,9 @@
           <div class="legend-item"><svg class="key key-sm" aria-hidden="true" focusable="false"><circle class="cross" cx="12" cy="8" r="6"></circle></svg><span>Where the curves cross, if they do</span></div>
         </div>
         <div class="chart-wrap">
+          <p id="chart-readout" class="readout"></p>
           <p class="chart-ytitle">Expected damage over 20 rounds</p>
           <div class="plot"><svg id="sweep" class="chart" viewBox="0 0 640 400" role="img" aria-labelledby="chart-caption" focusable="false"></svg></div>
-          <p id="chart-readout" class="readout"></p>
           <details class="chart-data">
             <summary id="chart-data-summary">Chart data</summary>
             <table class="chart-data-table">
@@ -3465,10 +3469,22 @@ function renderReset() {
 }
 
 // D3: the answer, under the controls. Text only and not a live region: a drag must never announce.
+// Text with its numbers in the number face (no innerHTML). Written only when the text differs.
+function setNumbered(el, text) {
+  if (el.textContent === text) return;
+  el.replaceChildren(...text.split(/([+−]?\d[\d.]*\d|[+−]?\d)/).map((part, i) => {
+    if (i % 2 === 0) return part;
+    const n = document.createElement('span');
+    n.className = 'num';
+    n.textContent = part;
+    return n;
+  }));
+}
+
 function renderVerdict(view) {
   const v = view.verdict;
-  setText(verdictLeadEl, v.lead);
-  setText(verdictRestEl, v.rest);
+  setNumbered(verdictLeadEl, v.lead);
+  setNumbered(verdictRestEl, v.rest);
   setText(verdictSetEl, v.set);
 }
 
@@ -4171,14 +4187,14 @@ function renderLegend(view) {
 // Crit footnote (TABLE-04), live die size. Adds the floor sentence when D <= -3.
 function renderFootnote(view) {
   const d = 'd' + view.params.die;
-  let text = `* On a natural 20 you roll the damage die twice and add the bonus once (for a ${d}: 2${d} + damage bonus). ` +
-    `Each column is one die face, so the crit row shows 2 × face + damage bonus, and averaged across the row that equals a real 2${d} crit. ` +
-    "So this table's average is exactly the expected damage.";
-  if (view.critFloorDiffers) {
-    text += ' With a damage penalty this large, the 0-damage floor makes the doubled-face shortcut slightly off. ' +
-      'The stat cards below use the real two-dice rule.';
-  }
-  critNoteEl.textContent = text;
+  const rule = `* On a natural 20 you roll the damage die twice and add the bonus once (for a ${d}: 2${d} + damage bonus). `;
+  // "exactly" only while it is true: past the 0-damage floor the crit row is not a real two-dice crit.
+  critNoteEl.textContent = view.critFloorDiffers
+    ? rule + 'Each column is one die face, so the crit row shows 2 × face + damage bonus. ' +
+      "With a damage penalty this large, the 0-damage floor makes the doubled-face shortcut slightly off, so this table's average is close to the expected damage. " +
+      'The stat cards below use the real two-dice rule.'
+    : rule + `Each column is one die face, so the crit row shows 2 × face + damage bonus, and averaged across the row that equals a real 2${d} crit. ` +
+      "So this table's average is exactly the expected damage.";
 }
 
 function fmtValue(v) {
@@ -4438,7 +4454,8 @@ function runUiSmoke() {
     check('d4 D-5: footnote never claims the table is exact here', critNoteEl.textContent.includes('exactly'), false);
     check('d4 D-5: footnote says close to', critNoteEl.textContent.includes('close to the expected damage'), true);
     check('d4 D-5: verdict numbers use the number face',
-      node('verdict-rest').querySelectorAll('.num').length > 0 && node('verdict-lead').querySelector('.num') !== null, true);
+      [...verdictLeadEl.querySelectorAll('.num'), ...verdictRestEl.querySelectorAll('.num')].map((n) => n.textContent).join(' '),
+      '+1 +1 0 +1 0.030');
     check('chart: the readout sits above the plot',
       Boolean(chartReadoutEl.compareDocumentPosition(sweepEl) & Node.DOCUMENT_POSITION_FOLLOWING), true);
   } catch (err) {
