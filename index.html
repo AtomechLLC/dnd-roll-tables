@@ -70,11 +70,13 @@
       line-height: 1.5;
     }
     /* Page frame (D-01, D-02): one full-width column up to 90rem. Since 260927-1ty `main` is the
-       named `page` container: at >= 64rem the outcome-table notes, the formulas / marginal cards
-       and the compare intro / N strip use side columns; at >= 72rem the chart notes sit beside
-       the chart (see the @container page blocks near the end). Narrower widths stay one column. */
+       named `page` container: at >= 64rem the outcome-table notes and the formulas / marginal
+       cards use side columns; at >= 72rem the chart notes sit beside the chart (see the
+       @container page blocks near the end). Narrower widths stay one column. A flex column, not a
+       grid, since 261104-vx6: a sticky grid item would only stick inside its own grid area. */
     main, footer { max-width: 90rem; margin-inline: auto; padding-inline: var(--sp-3); }
-    main { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); container: page / inline-size; }
+    main { display: flex; flex-direction: column; gap: var(--sp-5); container: page / inline-size; }
+    main > * { min-width: 0; }
     header { padding-top: var(--sp-4); }
     /* Community link (quick 261103-d9g, PRODUCT.md Brand Commitments): Funsmith Club with the
        Discord mark, on the title's row at the right. Muted 14px text, no fill, no accent: the
@@ -127,8 +129,11 @@
     .group-label { font-size: 0.875rem; font-weight: 700; line-height: 1.4; }
     .hint { font-weight: 400; font-size: 0.75rem; margin-left: var(--sp-1); color: var(--ink-muted); }
     .pair { display: flex; gap: var(--sp-2); align-items: center; }
+    /* The two slider groups take the strip's spare width, so a slider starts small enough for one
+       row (261104-vx6) and grows from there. */
+    .group-slider { flex: 1 1 auto; }
     /* 32px tall like the other controls (260927-1ty); the track and thumb stay centered. */
-    .pair input[type="range"] { flex: 1 1 192px; width: 192px; height: 32px; margin: 0; accent-color: var(--accent); }
+    .pair input[type="range"] { flex: 1 1 7rem; width: 7rem; min-width: 6.5rem; height: 32px; margin: 0; accent-color: var(--accent); }
     input[type="number"] {
       width: 80px; height: 32px; font: inherit; font-family: var(--font-num);
       font-variant-numeric: tabular-nums; text-align: center;
@@ -160,10 +165,9 @@
       position: relative; z-index: 1;
       outline: 2px solid var(--accent); outline-offset: 2px;
     }
-    /* Top alignment for the main strip only (UI-SPEC A3): the HP group alone has a line under its
-       control, so with bottom alignment the other controls would line up with that line instead of
-       the HP box. #compare-controls keeps .strip's flex-end. */
-    #controls { align-items: flex-start; }
+    /* A sentence under a control strip saying what a typed value became (D9). A full row of its
+       own, ink, shown only while it has something to say. */
+    .ctl-note { flex: 1 0 100%; margin: 0; font-size: 0.875rem; line-height: 1.4; color: var(--ink); }
     /* Enemy HP (Phase 5, KILL-01, KILL-02): the box and the two hit step buttons on one row; on a
        phone the buttons wrap together under the box (.hp-steps never splits), then the hits line. */
     .hp-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
@@ -175,17 +179,64 @@
     /* The .btn-preset fill, border and mixes. min-width fits the widest label (−1 hit (−27 HP)), so
        a step going from 1 to 2 digits never moves anything. Inert is aria-disabled (focus stays);
        :disabled is only the pre-init and failPage state. No transitions. */
-    .btn-step {
+    .btn-step, .btn-reset {
       background: var(--paper); color: var(--ink);
       border: 1px solid var(--ink-muted); border-radius: 4px;
       font: 400 0.875rem/1.4 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap;
-      height: 32px; min-width: 120px; padding: 0 var(--sp-2);
+      height: 32px; padding: 0 var(--sp-2);
       cursor: pointer; touch-action: manipulation;
     }
-    .btn-step:hover:not([aria-disabled="true"]):not(:disabled) { background: color-mix(in oklch, var(--paper) 85%, var(--ink)); }
-    .btn-step:active:not([aria-disabled="true"]):not(:disabled) { background: color-mix(in oklch, var(--paper) 75%, var(--ink)); }
-    .btn-step[aria-disabled="true"], .btn-step:disabled {
+    .btn-step { min-width: 120px; }
+    .btn-reset { padding-inline: var(--sp-3); }   /* natural width; never .btn-step (check-page counts those) */
+    .btn-step:hover:not([aria-disabled="true"]):not(:disabled),
+    .btn-reset:hover:not([aria-disabled="true"]):not(:disabled) { background: color-mix(in oklch, var(--paper) 85%, var(--ink)); }
+    .btn-step:active:not([aria-disabled="true"]):not(:disabled),
+    .btn-reset:active:not([aria-disabled="true"]):not(:disabled) { background: color-mix(in oklch, var(--paper) 75%, var(--ink)); }
+    .btn-step[aria-disabled="true"], .btn-step:disabled,
+    .btn-reset[aria-disabled="true"], .btn-reset:disabled {
       background: var(--surface); color: var(--ink-muted); border-color: var(--line); cursor: not-allowed;
+    }
+
+    /* Sticky bar and verdict (261104-vx6, D1, D3). The base is the fallback for every viewport
+       the strip does not fit: #bar drops out of the box tree, the strip scrolls away with the page
+       and only #verdict sticks, carrying the settings and a Change link so the reader can still
+       see what the sentence is about. z-index 2 clears the table's roll badges (1). Flat on paper
+       with a hairline rule, like every other surface; no shadow. */
+    #bar { display: contents; }
+    /* Jumps and tabbing stop below the sticky area (WCAG 2.4.11). The root cannot use @container
+       page, so these are viewport rules: 70rem page + 1.5rem main padding. The values are measured
+       worst cases plus 8px: the 129-character verdict at 320px (152px), and the bar with that
+       verdict and a clamp sentence showing (162px). */
+    :root { --scroll-pad: 10rem; }
+    @media (min-width: 71.5rem) and (min-height: 40rem) { :root { --scroll-pad: 10.75rem; } }
+    html { scroll-padding-top: var(--scroll-pad); }
+    /* What is inside the sticky area is already on screen, but it sits within that padding, so
+       focusing it would scroll the page away from what the reader was looking at. The negative
+       margin cancels the padding for those elements only. */
+    #verdict, #verdict * { scroll-margin-top: calc(-1 * var(--scroll-pad)); }
+    #verdict {
+      position: sticky; top: 0; z-index: 2;
+      margin: 0; padding-block: var(--sp-2);
+      background: var(--paper); border-bottom: 1px solid var(--line);
+      font-size: 1rem; line-height: 1.5; color: var(--ink);
+    }
+    #verdict-lead { font-weight: 700; }
+    .verdict-meta { display: block; font-size: 0.875rem; line-height: 1.4; }
+    .verdict-set { color: var(--ink-muted); }
+    /* Where the strip fits one row and the screen has height to spare, the whole bar sticks.
+       Measured: every group and Reset share one row from a 68.625rem page; 70rem leaves room for
+       other platforms' font metrics. */
+    @media (min-height: 40rem) {
+      @container page (width >= 70rem) {
+        #bar {
+          display: block; position: sticky; top: 0; z-index: 2;
+          padding-block: var(--sp-2);
+          background: var(--paper); border-bottom: 1px solid var(--line);
+        }
+        #verdict { position: static; margin-top: var(--sp-2); padding-block: 0; background: none; border-bottom: 0; }
+        .verdict-meta, #verdict-change { display: none; }
+        #bar, #bar * { scroll-margin-top: calc(-1 * var(--scroll-pad)); }
+      }
     }
 
     /* Stat cards */
@@ -193,13 +244,17 @@
        the track minimum raised to a sixth of the row so there are never more than six tracks:
        the full-row marginal card (grid-column: 1 / -1) would otherwise keep a seventh, empty
        track alive and leave a gap on wide screens. */
-    #stats {
+    #stats, #kill {
       display: grid; gap: var(--sp-3);
       grid-template-columns: repeat(auto-fit, minmax(max(9rem, (100% - 5 * var(--sp-3)) / 6), 1fr));
     }
     /* Each stat card spans three subgrid rows so labels, values and sub-lines line up across a
        row even when one label wraps. */
-    #stats > .card:not(.marginal):not(.formulas) { grid-row: span 3; grid-template-rows: subgrid; }
+    #stats > .card:not(.marginal):not(.formulas), #kill > .card { grid-row: span 3; grid-template-rows: subgrid; }
+    /* Kill section (D2): the heading, intro and HP strip each take a full row above the cards. */
+    #kill > h2, #kill > .section-intro, #kill > form { grid-column: 1 / -1; }
+    #kill > h2, #kill > .section-intro { margin: 0; }
+    #kill-controls { width: fit-content; max-width: 100%; }
     .card {
       display: grid; gap: var(--sp-2); padding: var(--sp-3); align-content: start;
       background: var(--surface);
@@ -215,9 +270,6 @@
     /* "Value of the next +1" (STAT-03): full grid row, h2 then two Body lines. */
     .card.marginal { grid-column: 1 / -1; container: formula / inline-size; }
     .card.marginal h2 { margin: 0; }
-    /* Kill heading (Phase 5): a full row under the attack cards; 12px gap + 8px = the 20px section
-       break. The .card.kill cards match the subgrid rule above, so they need no card CSS. */
-    #stats > .stats-h { grid-column: 1 / -1; margin: 0; padding-top: var(--sp-2); }
     .marg-line { margin: 0; font-size: 1rem; line-height: 1.5; }
     .marg-line .lead { font-weight: 700; }
     .marg-line .mv { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; }
@@ -272,6 +324,7 @@
     .note-miss { color: var(--ink-muted); font-weight: 400; }
     .note-th { color: var(--ink); font-weight: 700; }
     .note-crit { color: var(--accent); font-weight: 700; }
+    .note-flip { color: var(--ink-muted); font-weight: 400; }
     /* mid tier (Phase 2 three-up at 1366px) and narrow tier (phones): D-18 compact sizes.
        Kept after the base table rules so equal-specificity overrides win. */
     @container (width < 42rem) {
@@ -379,13 +432,12 @@
     /* Compact tables stay in the mid (or narrow) tier even when stacked full width. */
     .trio .table-wrap { max-width: calc(42rem - 1px); }
     /* Hierarchy (UI-SPEC Compare section): the three tables and their stats lines are the
-       anchor; the N strip is the secondary control; the intro is muted support text.
-       Phase 1 tokens only, nothing moves; accent only via the slider and the focus ring. */
+       anchor; the summary line says it in words; the intro is muted support text.
+       Phase 1 tokens only, nothing moves. */
     .section-intro {
       margin: 0 0 var(--sp-3); max-width: 72ch;
       font-size: 0.875rem; line-height: 1.4; color: var(--ink-muted);
     }
-    .n-strip { width: fit-content; max-width: 100%; margin-bottom: var(--sp-3); }
     #n-out {
       display: inline-block; min-width: 48px; height: 32px; line-height: 32px; text-align: center;
       font-family: var(--font-num); font-variant-numeric: tabular-nums;
@@ -465,6 +517,17 @@
       font-size: 1rem; line-height: 1.5; color: var(--ink);
       min-height: calc(1.5em + 18px);
     }
+    /* Chart data (D12): every value the chart draws, as a table. Closed by default. Not .outcome,
+       so none of the outcome-table tiers or check-page's miss guard apply. */
+    .chart-data { margin-top: var(--sp-2); font-family: var(--font-prose); font-size: 0.875rem; line-height: 1.4; }
+    .chart-data > summary { cursor: pointer; }
+    .chart-data-table { border-collapse: collapse; margin-top: var(--sp-2); }
+    .chart-data-table th, .chart-data-table td {
+      height: 24px; line-height: 24px; padding: 0 var(--sp-3); border-bottom: 1px solid var(--line);
+      font-family: var(--font-num); font-variant-numeric: tabular-nums;
+      font-size: 0.875rem; font-weight: 400; text-align: right;
+    }
+    .chart-data-table thead th { background: var(--surface); font-weight: 700; }
     @container chart (width < 43rem) {
       .chart text { font-size: 14px; }
       .chart .ndot { r: 6px; }
@@ -626,7 +689,7 @@
     .chart-explain .explain { margin: 0; }
     /* Kill note (D-07): a full row under the kill cards (beside them at >= 64rem, in the page
        container block below). After .explain so the equal-specificity margin override wins;
-       the #stats grid gap spaces it. */
+       the #kill grid gap spaces it. */
     .kill-note { grid-column: 1 / -1; margin: 0; }
     .card.formulas { grid-column: 1 / -1; container: formula / inline-size; }
     .card.formulas h2 { margin: 0; }
@@ -657,6 +720,12 @@
     .nw { white-space: nowrap; }
     /* Inside the marginal card: a hairline separates the two readout lines from their derivation. */
     .f-marg { margin-top: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--line); }
+    /* Folds (D11): open on a laptop, closed by init on a phone. The heading stays inline so the
+       disclosure marker sits on its line. The named formula container is the card, so the
+       .formula column queries work the same inside a fold. */
+    .fold > summary { cursor: pointer; }
+    .fold[open] > summary { margin-bottom: var(--sp-3); }
+    .fold > summary h2 { display: inline; }
 
     /* Try this (COPY-05, UI-SPEC #explore and Preset Button). Cards share the #stats subgrid
        technique so titles, descriptions, Sets lines and buttons line up across a row. The
@@ -719,11 +788,6 @@
       /* The three kill cards take columns 1-3 and the note sits beside them in the same three
          subgrid rows; padding-top lines its first line up with the card labels. */
       .kill-note { grid-column: 4 / -1; grid-row: span 3; align-self: start; padding-top: var(--sp-3); }
-      /* The compare intro and the N strip share a row; #compare keeps its inline size, so the
-         77rem three-up rule is unaffected. */
-      #compare { display: flex; flex-wrap: wrap; align-items: flex-end; column-gap: var(--sp-4); }
-      #compare > h2, #compare > .trio { flex: 1 0 100%; }
-      #compare > .section-intro { flex: 0 1 40rem; }
     }
     /* 50rem chart + 16px gap + at least 20rem of notes: legend, caption and the three
        explanations in a column beside the chart. .chart-wrap stays the 50rem `chart` container. */
@@ -782,45 +846,46 @@
 
     <noscript><p>This page needs JavaScript to calculate the table. Everything runs in your browser; nothing is sent anywhere.</p></noscript>
 
-    <form id="controls" class="strip" novalidate>
-      <div class="group">
-        <label class="group-label" for="ac-range">Target AC <span class="hint">10 to 30</span></label>
-        <div class="pair">
-          <input type="range" id="ac-range" data-key="ac" min="10" max="30" step="1">
-          <input type="number" id="ac-num" data-key="ac" min="10" max="30" step="1" aria-label="Target AC (exact value)">
+    <div id="bar">
+      <form id="controls" class="strip" novalidate>
+        <div class="group group-slider">
+          <label class="group-label" for="ac-range">Target AC <span class="hint">10 to 30</span></label>
+          <div class="pair">
+            <input type="range" id="ac-range" data-key="ac" min="10" max="30" step="1">
+            <input type="number" id="ac-num" data-key="ac" min="10" max="30" step="1" aria-label="Target AC (exact value)">
+          </div>
         </div>
-      </div>
-      <fieldset class="group dice">
-        <legend class="group-label">Damage die</legend>
-        <div class="segs">
-          <label><input type="radio" name="die" value="4" data-key="die" class="vh"><span>d4</span></label>
-          <label><input type="radio" name="die" value="6" data-key="die" class="vh"><span>d6</span></label>
-          <label><input type="radio" name="die" value="8" data-key="die" class="vh"><span>d8</span></label>
-          <label><input type="radio" name="die" value="10" data-key="die" class="vh"><span>d10</span></label>
-          <label><input type="radio" name="die" value="12" data-key="die" class="vh"><span>d12</span></label>
+        <fieldset class="group dice">
+          <legend class="group-label">Damage die</legend>
+          <div class="segs">
+            <label><input type="radio" name="die" value="4" data-key="die" class="vh"><span>d4</span></label>
+            <label><input type="radio" name="die" value="6" data-key="die" class="vh"><span>d6</span></label>
+            <label><input type="radio" name="die" value="8" data-key="die" class="vh"><span>d8</span></label>
+            <label><input type="radio" name="die" value="10" data-key="die" class="vh"><span>d10</span></label>
+            <label><input type="radio" name="die" value="12" data-key="die" class="vh"><span>d12</span></label>
+          </div>
+        </fieldset>
+        <div class="group">
+          <label class="group-label" for="atk-num">Attack bonus <span class="hint">−5 to +20</span></label>
+          <input type="number" id="atk-num" data-key="atk" min="-5" max="20" step="1">
         </div>
-      </fieldset>
-      <div class="group">
-        <label class="group-label" for="atk-num">Attack bonus <span class="hint">−5 to +20</span></label>
-        <input type="number" id="atk-num" data-key="atk" min="-5" max="20" step="1">
-      </div>
-      <div class="group">
-        <label class="group-label" for="dmg-num">Damage bonus <span class="hint">−5 to +20</span></label>
-        <input type="number" id="dmg-num" data-key="dmg" min="-5" max="20" step="1">
-      </div>
-      <div class="group hp">
-        <label class="group-label" for="hp-num">Enemy HP <span class="hint">1 to 500</span></label>
-        <div class="hp-row">
-          <input type="number" id="hp-num" data-key="hp" min="1" max="500" step="1" aria-describedby="hp-hits">
-          <span class="hp-steps">
-            <button type="button" id="hp-minus" class="btn-step" data-step="-1" aria-describedby="hp-hits" disabled>−1 hit (−5 HP)</button>
-            <button type="button" id="hp-plus" class="btn-step" data-step="1" aria-describedby="hp-hits" disabled>+1 hit (+5 HP)</button>
-          </span>
+        <div class="group">
+          <label class="group-label" for="dmg-num">Damage bonus <span class="hint">−5 to +20</span></label>
+          <input type="number" id="dmg-num" data-key="dmg" min="-5" max="20" step="1">
         </div>
-        <p id="hp-hits" class="hp-hits">≈ 8.1 average hits (1 hit ≈ 4.91 HP)</p>
-        <p id="hp-status" class="vh" role="status"></p>
-      </div>
-    </form>
+        <div class="group group-slider">
+          <label class="group-label" for="n-range">Compare at +N <span class="hint">0 to 20</span></label>
+          <div class="pair">
+            <input type="range" id="n-range" data-key="n" step="1">
+            <output id="n-out" for="n-range"></output>
+          </div>
+        </div>
+        <button type="button" id="reset" class="btn-reset" disabled>Reset</button>
+        <p id="reset-status" class="vh" role="status"></p>
+        <p id="ctl-note" class="ctl-note" role="status" hidden></p>
+      </form>
+      <p id="verdict" hidden><b id="verdict-lead"></b><span id="verdict-rest"></span><span class="verdict-meta"><span class="verdict-set" id="verdict-set"></span> <a id="verdict-change" href="#controls">Change</a></span></p>
+    </div>
 
     <section id="tables">
       <h2>Outcome table</h2>
@@ -863,79 +928,59 @@
         <span class="value" id="stat-e20"></span>
         <span class="sub" id="stat-e20-sub"></span>
       </div>
-      <h2 id="kill-h" class="stats-h"></h2>
-      <div class="card kill">
-        <span class="label">Hits to kill</span>
-        <span class="value" id="stat-khits"></span>
-        <span class="sub" id="stat-khits-sub"></span>
-      </div>
-      <div class="card kill">
-        <span class="label">Rounds to kill</span>
-        <span class="value" id="stat-krounds"></span>
-        <span class="sub" id="stat-krounds-sub"></span>
-      </div>
-      <div class="card kill">
-        <span class="label">Kill within 20 rounds</span>
-        <span class="value" id="stat-k20"></span>
-        <span class="sub" id="stat-k20-sub"></span>
-      </div>
-      <p class="explain kill-note" id="kill-note"></p>
       <div class="card formulas" id="formulas">
-        <h2>How these numbers are worked out</h2>
-        <dl class="formulas">
-          <div class="formula" id="f-hit">
-            <dt>Hit chance</dt>
-            <dd class="f-rule">= d20 faces that hit / <span class="num">20</span></dd>
-            <dd class="f-rule">= <span class="nw">(<span class="num">21</span> − (AC − attack bonus))</span> / <span class="num">20</span>, kept between <span class="num">1</span> and <span class="num">19</span> faces</dd>
-            <dd class="f-key">A natural 1 always misses and a natural 20 always hits, so it is always 1 to 19 faces: 5% to 95%.</dd>
-            <dd class="f-live" id="f-hit-live"></dd>
-          </div>
-          <div class="formula" id="f-round">
-            <dt>Expected per round</dt>
-            <dd class="f-rule">= <span class="nw">P(normal hit) × (avg die + D)</span> + <span class="nw">P(crit) × (<span class="num">2</span> × avg die + D)</span></dd>
-            <dd class="f-key" id="f-round-key"></dd>
-            <dd class="f-live" id="f-round-l1"></dd>
-            <dd class="f-live" id="f-round-l2"></dd>
-            <dd class="f-note" id="f-round-note" hidden></dd>
-          </div>
-        </dl>
+        <details class="fold" open>
+          <summary id="fold-formulas"><h2>How these numbers are worked out</h2></summary>
+          <dl class="formulas">
+            <div class="formula" id="f-hit">
+              <dt>Hit chance</dt>
+              <dd class="f-rule">= d20 faces that hit / <span class="num">20</span></dd>
+              <dd class="f-rule">= <span class="nw">(<span class="num">21</span> − (AC − attack bonus))</span> / <span class="num">20</span>, kept between <span class="num">1</span> and <span class="num">19</span> faces</dd>
+              <dd class="f-key">A natural 1 always misses and a natural 20 always hits, so it is always 1 to 19 faces: 5% to 95%.</dd>
+              <dd class="f-live" id="f-hit-live"></dd>
+            </div>
+            <div class="formula" id="f-round">
+              <dt>Expected per round</dt>
+              <dd class="f-rule">= <span class="nw">P(normal hit) × (avg die + D)</span> + <span class="nw">P(crit) × (<span class="num">2</span> × avg die + D)</span></dd>
+              <dd class="f-key" id="f-round-key"></dd>
+              <dd class="f-live" id="f-round-l1"></dd>
+              <dd class="f-live" id="f-round-l2"></dd>
+              <dd class="f-note" id="f-round-note" hidden></dd>
+            </div>
+          </dl>
+        </details>
       </div>
       <div class="card marginal" id="marginal">
         <h2>Value of the next +1</h2>
         <p class="marg-line" id="marg-hit"><span class="lead">+1 to hit:</span> <span class="mv" id="marg-hit-v"></span><span class="mnote" id="marg-hit-n"></span></p>
         <p class="marg-line" id="marg-dmg"><span class="lead">+1 to damage:</span> <span class="mv" id="marg-dmg-v"></span></p>
-        <dl class="formulas f-marg">
-          <div class="formula" id="f-plus-hit">
-            <dt>+1 to hit</dt>
-            <dd class="f-rule">= <span class="nw">(avg die + D) / <span class="num">20</span></span> per round: one more d20 face becomes a normal hit. <span class="num">0</span> once capped.</dd>
-            <dd class="f-live" id="f-plus-hit-live"></dd>
-          </div>
-          <div class="formula" id="f-plus-dmg">
-            <dt>+1 to damage</dt>
-            <dd class="f-rule">= P(hit) per round: every hit deals <span class="num">1</span> more.</dd>
-            <dd class="f-live" id="f-plus-dmg-live"></dd>
-          </div>
-          <div class="formula" id="f-plus-win">
-            <dt>Which wins</dt>
-            <dd class="f-rule">+<span class="num">1</span> to hit wins only while avg die + D &gt; <span class="nw"><span class="num">20</span> × P(hit)</span>.</dd>
-            <dd class="f-live" id="f-plus-win-live"></dd>
-          </div>
-        </dl>
+        <details class="fold f-marg" open>
+          <summary id="fold-marginal">How this is worked out</summary>
+          <dl class="formulas">
+            <div class="formula" id="f-plus-hit">
+              <dt>+1 to hit</dt>
+              <dd class="f-rule">= <span class="nw">(avg die + D) / <span class="num">20</span></span> per round: one more d20 face becomes a normal hit. <span class="num">0</span> once capped.</dd>
+              <dd class="f-live" id="f-plus-hit-live"></dd>
+            </div>
+            <div class="formula" id="f-plus-dmg">
+              <dt>+1 to damage</dt>
+              <dd class="f-rule">= P(hit) per round: every hit deals <span class="num">1</span> more.</dd>
+              <dd class="f-live" id="f-plus-dmg-live"></dd>
+            </div>
+            <div class="formula" id="f-plus-win">
+              <dt>Which wins</dt>
+              <dd class="f-rule">+<span class="num">1</span> to hit wins only while avg die + D &gt; <span class="nw"><span class="num">20</span> × P(hit)</span>.</dd>
+              <dd class="f-live" id="f-plus-win-live"></dd>
+            </div>
+          </dl>
+        </details>
       </div>
     </section>
 
     <section id="compare" aria-labelledby="compare-h">
       <h2 id="compare-h">Compare +N to hit vs +N to damage</h2>
       <p class="section-intro">The same attack three ways: as set above, with +N added to the attack roll, and with +N added to the damage roll. All tables share the color scale in the legend above, so the same damage is the same color everywhere.</p>
-      <form id="compare-controls" class="strip n-strip" novalidate>
-        <div class="group">
-          <label class="group-label" for="n-range">Compare at +N <span class="hint">0 to 20</span></label>
-          <div class="pair">
-            <input type="range" id="n-range" data-key="n" step="1">
-            <output id="n-out" for="n-range"></output>
-          </div>
-        </div>
-      </form>
+      <p class="explain" id="cmp-summary"></p>
       <div class="trio">
         <div class="cmp">
           <div class="table-wrap"><table class="outcome" id="cmp-base" aria-describedby="cmp-base-stats"><caption></caption><thead></thead><tbody></tbody></table></div>
@@ -967,6 +1012,14 @@
           <p class="chart-ytitle">Expected damage over 20 rounds</p>
           <div class="plot"><svg id="sweep" class="chart" viewBox="0 0 640 400" role="img" aria-labelledby="chart-caption" focusable="false"></svg></div>
           <p id="chart-readout" class="readout"></p>
+          <details class="chart-data">
+            <summary id="chart-data-summary">Chart data</summary>
+            <table class="chart-data-table">
+              <caption class="vh">Expected damage over 20 rounds for every bonus from +0 to +20</caption>
+              <thead><tr><th scope="col">N</th><th scope="col">+N to hit</th><th scope="col">+N to damage</th></tr></thead>
+              <tbody id="chart-data-body"></tbody>
+            </table>
+          </details>
         </div>
         <p id="chart-caption" class="chart-caption"></p>
         <div class="chart-explain">
@@ -975,6 +1028,42 @@
           <p class="explain" id="explain-cross"><b>What moves the crossover.</b> <span></span></p>
         </div>
       </div>
+    </section>
+
+    <section id="kill" aria-labelledby="kill-h">
+      <h2 id="kill-h">Killing a 40 HP enemy</h2>
+      <p class="section-intro">Rounds after a kill still roll and count toward the total. Changing Enemy HP re-scores the last roll below instead of rolling again.</p>
+      <form id="kill-controls" class="strip" novalidate>
+        <div class="group hp">
+          <label class="group-label" for="hp-num">Enemy HP <span class="hint">1 to 500</span></label>
+          <div class="hp-row">
+            <input type="number" id="hp-num" data-key="hp" min="1" max="500" step="1" aria-describedby="hp-hits">
+            <span class="hp-steps">
+              <button type="button" id="hp-minus" class="btn-step" data-step="-1" aria-describedby="hp-hits" disabled>−1 hit (−5 HP)</button>
+              <button type="button" id="hp-plus" class="btn-step" data-step="1" aria-describedby="hp-hits" disabled>+1 hit (+5 HP)</button>
+            </span>
+          </div>
+          <p id="hp-hits" class="hp-hits">≈ 8.1 average hits (1 hit ≈ 4.91 HP)</p>
+          <p id="hp-status" class="vh" role="status"></p>
+        </div>
+        <p id="hp-note" class="ctl-note" role="status" hidden></p>
+      </form>
+      <div class="card kill">
+        <span class="label">Hits to kill</span>
+        <span class="value" id="stat-khits"></span>
+        <span class="sub" id="stat-khits-sub"></span>
+      </div>
+      <div class="card kill">
+        <span class="label">Rounds to kill</span>
+        <span class="value" id="stat-krounds"></span>
+        <span class="sub" id="stat-krounds-sub"></span>
+      </div>
+      <div class="card kill">
+        <span class="label">Kill within 20 rounds</span>
+        <span class="value" id="stat-k20"></span>
+        <span class="sub" id="stat-k20-sub"></span>
+      </div>
+      <p class="explain kill-note" id="kill-note"></p>
     </section>
 
     <section id="sim" aria-labelledby="sim-h">
@@ -3018,8 +3107,19 @@ const margHitNEl = document.getElementById('marg-hit-n');
 const margDmgVEl = document.getElementById('marg-dmg-v');
 const legendEl = document.getElementById('legend');
 const critNoteEl = document.getElementById('crit-note');
-// Compare section (Phase 2): a second control root plus three compact tables.
-const compareForm = document.getElementById('compare-controls');
+// The kill section's Enemy HP strip is the second control root (261104-vx6).
+const killForm = document.getElementById('kill-controls');
+// The sticky bar's verdict line and Reset, and the two clamp sentences (261104-vx6, D3, D7, D9).
+const verdictEl = document.getElementById('verdict');
+const verdictLeadEl = document.getElementById('verdict-lead');
+const verdictRestEl = document.getElementById('verdict-rest');
+const verdictSetEl = document.getElementById('verdict-set');
+const resetEl = document.getElementById('reset');
+const resetStatusEl = document.getElementById('reset-status');
+const ctlNoteEl = document.getElementById('ctl-note');
+const hpNoteEl = document.getElementById('hp-note');
+// Compare section (Phase 2): three compact tables, with the N slider now in the bar.
+const cmpSummaryEl = document.getElementById('cmp-summary');
 const nRangeEl = document.getElementById('n-range');
 const nOutEl = document.getElementById('n-out');
 const CMP_KEYS = ['base', 'hit', 'dmg'];
@@ -3031,6 +3131,7 @@ const cmpEls = Object.fromEntries(CMP_KEYS.map((k) => [k, {
 const sweepEl = document.getElementById('sweep');
 const chartCaptionEl = document.getElementById('chart-caption');
 const chartReadoutEl = document.getElementById('chart-readout');
+const chartDataBodyEl = document.getElementById('chart-data-body');
 // Roll-20-rounds section (Phase 3): figures, lines, rolled-at note, Now:, tally and the log.
 const simEl = document.getElementById('sim');
 const simBodyEl = simEl.querySelector('.sim-body');
@@ -3072,7 +3173,7 @@ const hpHitsEl = document.getElementById('hp-hits');
 const hpStatusEl = document.getElementById('hp-status');
 const hpMinusEl = document.getElementById('hp-minus');
 const hpPlusEl = document.getElementById('hp-plus');
-const stepBtns = Array.from(document.querySelectorAll('#controls button.btn-step'));
+const stepBtns = Array.from(document.querySelectorAll('#kill-controls button.btn-step'));
 // Kill heading over the three kill cards (Phase 5); the cards go through setCard.
 const killHeadEl = document.getElementById('kill-h');
 // The kill note beside / under the kill cards (D-07); written from view.kill.note only.
@@ -3081,8 +3182,8 @@ const killNoteEl = document.getElementById('kill-note');
 // Filled from VM.DEFAULT_STATE in init(), after the engine check, so a broken engine block
 // cannot crash this block before the error banner is shown.
 const state = {};
-const RENDERERS = [renderControls, renderHp, renderStats, renderFormulas, renderTable, renderTwoRolls, renderLegend,
-  renderFootnote, renderCompare, renderChart, renderExplain, renderSim];
+const RENDERERS = [renderControls, renderVerdict, renderReset, renderHp, renderStats, renderFormulas, renderTable,
+  renderTwoRolls, renderLegend, renderFootnote, renderCompare, renderChart, renderExplain, renderSim];
 
 // The last run lives here, never in state (RESEARCH Pattern 2, Pitfall 2): a run is an event,
 // not a derivation. init() and the UI smoke do Object.assign(state, DEFAULT_STATE), which would
@@ -3124,6 +3225,20 @@ let rollStatusHp = null;
 // The clear is silent, like the preset status. The UI smoke resets it to null.
 let lastHpStatus = null;
 const HP_STATUS_KEYS = ['ac', 'die', 'atk', 'dmg', 'hp'];
+
+// The defaults the last Reset click announced in #reset-status, or null (D7). The same pattern
+// as lastPreset: only onReset writes it; render() only clears it once state moves on.
+let lastReset = null;
+
+// What each clamp sentence reported (D9): note element -> { key, value } or nothing. render()
+// clears a sentence once state[key] is no longer the value it names, so a preset, Reset or hit
+// step never leaves a stale one. onControl clears its own form's sentence on the next input.
+const clampNotes = new Map();
+
+// Settings in the address (D8). Off under ?test, so the self-test stays deterministic; lastQuery
+// is the query string the address holds, so a render that changes nothing writes nothing.
+let urlSync = false;
+let lastQuery = '';
 
 let pending = false;
 // Latched by any failed render (03-REVIEW WR-04, 04-REVIEW WR-03): no later render is ever scheduled.
@@ -3173,18 +3288,47 @@ function render() {
     lastHpStatus = null;
     setText(hpStatusEl, '');
   }
+  // D7: the same guard for the Reset status; D9: a clamp sentence ends when its value does.
+  if (lastReset && Object.keys(lastReset).some((k) => state[k] !== lastReset[k])) {
+    lastReset = null;
+    setText(resetStatusEl, '');
+  }
+  for (const [el, rec] of clampNotes) if (state[rec.key] !== rec.value) clearClampNote(el);
   for (const r of RENDERERS) r(view, simCtx);
   lastView = view;
   paintReadout();
+  writeUrl();
+}
+
+// D8: the address follows the settings, last in render, only when the string changes. Never throws
+// into render: file:// and browser rate limits can refuse a replaceState, and a refused write
+// leaves lastQuery alone, so the next change tries again.
+function writeUrl() {
+  if (!urlSync) return;
+  try {
+    const q = VM.queryFromState(state, location.search);
+    if (q === lastQuery) return;
+    history.replaceState(null, '', location.pathname + q + location.hash);
+    lastQuery = q;
+  } catch { /* the page works the same without the address */ }
 }
 
 // Signed display value (VM.signed), looked up lazily so a broken VM block cannot
 // crash this block before the error banner is shown.
 const signed = (n) => VM.signed(n);
 
+// D9: hide and empty one clamp sentence.
+function clearClampNote(el) {
+  clampNotes.delete(el);
+  el.hidden = true;
+  el.textContent = '';
+}
+const noteElFor = (root) => (root === killForm ? hpNoteEl : ctlNoteEl);
+
 function onControl(e) {
   const key = e.target.dataset && e.target.dataset.key;
   if (!key) return;
+  if (e.currentTarget === form || e.currentTarget === killForm) clearClampNote(noteElFor(e.currentTarget));
   const v = VM.parseControl(key, e.target.value, state[key]);
   if (v !== state[key]) setState({ [key]: v });
   else scheduleRender();
@@ -3240,10 +3384,54 @@ function onStepClick(e) {
 }
 
 function onChange(e) {
+  const raw = e.target.value;   // before the box is normalized below: the clamp sentence quotes it
   onControl(e);
-  if (e.target.type === 'number' && e.target.dataset.key) {
-    e.target.value = String(state[e.target.dataset.key]);   // normalize the committed box
+  const key = e.target.dataset && e.target.dataset.key;
+  if (e.target.type === 'number' && key) {
+    e.target.value = String(state[key]);   // normalize the committed box
+    // D9: number boxes only, on commit only, so a slider drag never writes or announces. Unhide,
+    // then write in the next frame so the live region announces. The record guard drops the write
+    // if the value moved on first.
+    const text = VM.clampNote(key, raw, state[key]);
+    if (text) {
+      const el = noteElFor(e.currentTarget);
+      const rec = Object.freeze({ key, value: state[key] });
+      clampNotes.set(el, rec);
+      el.hidden = false;
+      requestAnimationFrame(() => { if (clampNotes.get(el) === rec) el.textContent = text; });
+    }
   }
+}
+
+// Reset (D7): every key through the one parse path, then ONE setState. At the defaults it is inert
+// (aria-disabled, focus kept) and returns before any write, so nothing announces. The status
+// follows applyPreset: cleared, then written in the next frame behind the lastReset guard.
+const atDefaults = () => Object.keys(VM.DEFAULT_STATE).every((k) => state[k] === VM.DEFAULT_STATE[k]);
+function onReset() {
+  if (resetEl.disabled || atDefaults()) return;
+  const patch = {};
+  for (const k of Object.keys(VM.DEFAULT_STATE)) patch[k] = VM.parseControl(k, VM.DEFAULT_STATE[k], state[k]);
+  const applied = Object.freeze({ ...patch });
+  lastReset = applied;
+  setState(patch);
+  resetStatusEl.textContent = '';
+  const msg = VM.resetStatus();
+  requestAnimationFrame(() => { if (lastReset === applied) resetStatusEl.textContent = msg; });
+}
+
+// Reads state only, so it is true however the state got there. Written only on change.
+function renderReset() {
+  const inert = atDefaults();
+  if (inert && resetEl.getAttribute('aria-disabled') !== 'true') resetEl.setAttribute('aria-disabled', 'true');
+  else if (!inert && resetEl.hasAttribute('aria-disabled')) resetEl.removeAttribute('aria-disabled');
+}
+
+// D3: the answer, under the controls. Text only and not a live region: a drag must never announce.
+function renderVerdict(view) {
+  const v = view.verdict;
+  setText(verdictLeadEl, v.lead);
+  setText(verdictRestEl, v.rest);
+  setText(verdictSetEl, v.set);
 }
 
 // Every control on the page, in both control roots (RESEARCH Pattern 1).
@@ -3374,7 +3562,7 @@ function noteFor(row, threshold) {
 // suffix is a .vh span built with createElement. marks (D-11, D-12; #outcome only) is
 // Sim.runMarks output: hit cells get class roll (data-n from 2 up), and crit / miss / nat 1
 // rows count on their row header. Counts are integers coerced with | 0 (T-03-11).
-function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captionHidden, marks }) {
+function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captionHidden, marks, flipRow }) {
   const X = Number(die) | 0;
   const head = `<tr><th scope="col" class="corner">d20<span class="cd"> \\ d${X}</span></th>` +
     Array.from({ length: X }, (_, i) => `<th scope="col">${i + 1}</th>`).join('') +
@@ -3395,11 +3583,12 @@ function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captio
       const badge = n >= 2 ? ` data-n="${n | 0}"` : '';
       return `<td class="h${t >= 0.5 ? ' hi' : ''}${roll}"${badge} style="--t:${t.toFixed(3)}">${d}</td>`;
     }).join('');
-    // scope="row" stays the first attribute: check-page counts the literal '<th scope="row"'
     const rn = marks ? (marks.rows.get(row.d20) | 0) : 0;
     chain = chain && rn > 0 && row.d20 !== 20;
     const th = rn > 0 ? `<th scope="row" class="roll" data-n="${rn | 0}"${chain ? ' data-down' : ''}>` : '<th scope="row">';
-    return `<tr class="${cls}">${th}${row.d20}</th>${cells}<td class="note">${noteFor(row, threshold)}</td></tr>`;
+    // D4: the row +1 to hit would flip; the main table only. noteFor is '' on threshold - 1.
+    const note = row.d20 === flipRow ? '<span class="note-flip">hits at +1</span>' : noteFor(row, threshold);
+    return `<tr class="${cls}">${th}${row.d20}</th>${cells}<td class="note">${note}</td></tr>`;
   }).join('');
   el.style.setProperty('--cols', String(X));
   el.tHead.innerHTML = head;
@@ -3426,6 +3615,7 @@ function renderTable(view, simCtx) {
     captionHidden: marked ? ' Outlined cells and d20 labels show your last roll of 20 rounds; ' +
       'the round-by-round log is in the section below the chart.' : undefined,
     marks: simCtx ? simCtx.marks : null,
+    flipRow: view.flipRow,
   });
 }
 
@@ -3440,7 +3630,8 @@ function num(text) {
 }
 
 function renderCompare(view) {
-  const { heatMax, tables } = view.compare;
+  const { heatMax, tables, summaryText } = view.compare;
+  setText(cmpSummaryEl, summaryText);
   for (const key of CMP_KEYS) {
     const t = tables[key];
     renderOutcomeTable(cmpEls[key].table, {
@@ -3523,7 +3714,6 @@ function logBodyHtml(run) {
   return run.rounds.map((r) => {
     const cell = Object.hasOwn(LOG_RESULT_CELL, r.result) ? LOG_RESULT_CELL[r.result] : '<td></td>';
     const dice = r.dice.length ? r.dice.map((d) => d | 0).join(' + ') : '\u2014';
-    // scope="row" stays the first attribute: check-page counts the literal '<th scope="row"'.
     return `<tr><th scope="row">${r.round | 0}</th><td>${r.d20 | 0}</td>${cell}` +
       `<td>${dice}</td><td>${r.damage | 0}</td><td></td></tr>`;   // Enemy HP: filled by renderSim
   }).join('');
@@ -3694,6 +3884,7 @@ const SVGNS = 'http://www.w3.org/2000/svg';
 const VB_W = 640, PLOT_L = 64, PLOT_R = 544, PLOT_T = 32, PLOT_B = 336;
 const BAND_T = 4;   // band rects start above the plot so the band label strip is shaded too
 const chart = {};        // element references, filled by chartInit()
+let chartDataKey = '';   // the values the data table shows (D12)
 let xScale = null;
 // Hover readout (D-13, RESEARCH Pattern 6). The hovered N lives here, never in state: hover
 // never calls setState / scheduleRender / render, and nothing on the chart sets N.
@@ -3739,6 +3930,16 @@ function linearScale(d0, d1, r0, r1) {
 // direct labels, tick labels + marker label, axis title.
 function chartInit() {
   const maxN = VM.CONTROL_SPEC.n.max;
+  // D12: the data table's rows, built once. renderChart fills the two value cells.
+  chart.dataRows = [];
+  for (let k = 0; k <= maxN; k++) {
+    const row = chartDataBodyEl.insertRow();
+    const head = document.createElement('th');
+    head.scope = 'row';
+    head.textContent = signed(k);
+    row.append(head);
+    chart.dataRows.push([row.insertCell(), row.insertCell()]);
+  }
   xScale = linearScale(0, VM.CONTROL_SPEC.n.max, PLOT_L, PLOT_R);
   const add = (parent, tag, attrs, text) => parent.appendChild(svgEl(tag, attrs, text));
   const s = sweepEl;
@@ -3872,6 +4073,16 @@ function renderChart(view) {
   }));
 
   chartCaptionEl.textContent = c.caption;
+
+  // D12: the same strings the readout prints, written only when a value changes (an N drag never).
+  const dataKey = c.attackText.join() + '|' + c.damageText.join();
+  if (dataKey !== chartDataKey) {
+    chartDataKey = dataKey;
+    chart.dataRows.forEach(([hitCell, dmgCell], k) => {
+      hitCell.textContent = c.attackText[k];
+      dmgCell.textContent = c.damageText[k];
+    });
+  }
 }
 
 // Chart explanations (COPY-03, COPY-04): text only, not live regions. The object comes from the
@@ -4472,9 +4683,9 @@ function runUiSmoke() {
     check('sim ui: button enabled after init', btn.disabled, false);
     check('sim ui: button label', btn.textContent, 'Roll 20 ' + 'rounds');
     const simSec = document.getElementById('sim');
-    check('sim ui: section sits between the chart and Try this',
+    check('sim ui: section sits between the kill section and Try this',
       (simSec.previousElementSibling && simSec.previousElementSibling.id) + ' < sim < ' +
-      (simSec.nextElementSibling && simSec.nextElementSibling.id), 'chart < sim < explore');
+      (simSec.nextElementSibling && simSec.nextElementSibling.id), 'kill < sim < explore');
 
     // Before any roll the exact figure follows the controls live (D-02)
     send(acRange, '16');
@@ -4580,7 +4791,7 @@ function runUiSmoke() {
     check('sim log ui: now line hidden when fresh', hid($('#sim-now')), true);
     check('sim log ui: tally hidden after one run', hid($('#sim-tally')), true);
     check('sim log ui: fresh run is not stale', isStale(), false);
-    check('sim log ui: page row headers with a run', document.querySelectorAll('th[scope="row"]').length, 101);
+    check('sim log ui: page row headers with a run', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 101);
 
     // 2. No flicker (D-09, SC3): later frames reuse the rows and the button
     const row0 = body().rows[0];
@@ -4673,7 +4884,7 @@ function runUiSmoke() {
     check('sim log ui: body emptied after reset', body().rows.length, 0);
     check('sim log ui: foot emptied after reset', logEl.tFoot.rows.length, 0);
     check('sim log ui: note hidden after reset', hid($('#sim-note')), true);
-    check('sim log ui: page row headers after reset', document.querySelectorAll('th[scope="row"]').length, 80);
+    check('sim log ui: page row headers after reset', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 80);
   } catch (err) {
     results.push({ name: 'sim log ui smoke crashed: ' + (err && err.message), ok: false });
   } finally {
@@ -4850,7 +5061,7 @@ function runUiSmoke() {
     show({});
     check('sim kill ui: kill line hidden after reset', hid(killEl()), true);
     check('sim kill ui: kill line empty after reset', killEl() ? killEl().childNodes.length : null, 0);
-    check('sim kill ui: page row headers after reset', document.querySelectorAll('th[scope="row"]').length, 80);
+    check('sim kill ui: page row headers after reset', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 80);
   } catch (err) {
     results.push({ name: 'sim kill ui smoke crashed: ' + (err && err.message), ok: false });
   } finally {
@@ -4948,7 +5159,7 @@ function runUiSmoke() {
     resetSim();
     show({});
     check('sim marks ui: no marks after reset', rolls(), 0);
-    check('sim marks ui: page row headers after reset', document.querySelectorAll('th[scope="row"]').length, 80);
+    check('sim marks ui: page row headers after reset', document.querySelectorAll('th[scope="row"]:not(.chart-data th)').length, 80);
   } catch (err) {
     results.push({ name: 'sim marks ui smoke crashed: ' + (err && err.message), ok: false });
   } finally {
@@ -5036,7 +5247,7 @@ function runUiSmoke() {
     const proxy = document.createElement('input');
     proxy.type = 'text';
     proxy.dataset.key = 'hp';
-    form.append(proxy);
+    killForm.append(proxy);
     send(proxy, '12abc');
     proxy.remove();
     render();
@@ -5371,6 +5582,155 @@ function runUiSmoke() {
     try { resetSim(); } catch { /* resetSim missing: the crash above is already reported */ }
   }
 
+  // Quick 261104-vx6: the sticky bar's pieces, read off the live DOM. Frames a click queues are held
+  // and run here in order, so the real write path, guard included, lands before the checks. Names
+  // avoid visible copy; expected literals are split (IN-06).
+  try {
+    const node = (id) => document.getElementById(id);
+    const show = (patch) => { Object.assign(state, VM.DEFAULT_STATE, patch); renderControls(); render(); };
+    const held = (fn) => {
+      const queued = [];
+      const realRaf = window.requestAnimationFrame;
+      window.requestAnimationFrame = (cb) => { queued.push(cb); return 0; };
+      try { fn(); } finally { window.requestAnimationFrame = realRaf; }
+      render();
+      for (const cb of queued) cb(performance.now());
+    };
+
+    // The verdict agrees with Which wins at each kind of setting; its settings line follows n.
+    const WIN = (patch) => {
+      show(patch);
+      const b = node('f-plus-win-live').querySelector('b');
+      return [node('verdict-lead').textContent.toLowerCase(), b.textContent.replace(/\.$/, ' here.').toLowerCase()];
+    };
+    for (const [name, patch, want] of [
+      ['defaults', {}, '+1 to damage ' + 'wins here.'],
+      ['cap', { atk: 13 }, '+1 to damage ' + 'wins here.'],
+      ['floor', { ac: 25, atk: 0 }, '+1 to damage ' + 'wins here.'],
+      ['hit ahead', { ac: 25, atk: 10, die: 12 }, '+1 to hit ' + 'wins here.'],
+    ]) {
+      const [lead, win] = WIN(patch);
+      check('verdict ui: agrees with the formula line at ' + name, lead, win);
+      check('verdict ui: lead at ' + name, node('verdict-lead').textContent, want);
+    }
+    show({ atk: 13 });
+    check('verdict ui: the cap says why', node('verdict-rest').textContent.includes('it already hits ' + 'on 2+'), true);
+    show({ n: 12 });
+    check('verdict ui: settings line follows n', node('verdict-set').textContent,
+      VM.settingsText(state) + ', compare at ' + '+12');
+    check('verdict ui: not a live region', node('verdict').hasAttribute('role') || node('verdict').hasAttribute('aria-live'), false);
+
+    // The +1 flip note: one row of the main table only.
+    show({});
+    const flips = () => tableEl.querySelectorAll('.note-flip');
+    check('flip ui: one flip note at the defaults', flips().length, 1);
+    check('flip ui: on row threshold - 1', flips()[0].closest('tr').cells[0].textContent, String(VM.computeView(state).threshold - 1));
+    check('flip ui: wording', flips()[0].textContent, 'hits at ' + '+1');
+    check('flip ui: compact tables carry none', node('compare').querySelectorAll('.note-flip').length, 0);
+    show({ atk: 13 });
+    check('flip ui: none at a capped setting', flips().length, 0);
+    show({ ac: 25, atk: 0 });
+    check('flip ui: none while +1 stays on the floor', flips().length, 0);
+
+    // Reset
+    show({});
+    const status = () => resetStatusEl.textContent;
+    const keysNow = () => Object.keys(VM.DEFAULT_STATE).map((k) => state[k]).join(' ');
+    const defaults = Object.values(VM.DEFAULT_STATE).join(' ');
+    check('reset ui: inert at the defaults', resetEl.getAttribute('aria-disabled'), 'true');
+    check('reset ui: enabled after init', resetEl.disabled, false);
+    resetEl.focus({ preventScroll: true });
+    held(() => resetEl.click());
+    check('reset ui: an inert click writes nothing', keysNow() + '|' + status(), defaults + '|');
+    check('reset ui: an inert click keeps focus', document.activeElement === resetEl, true);
+    resetEl.blur();
+    show({ ac: 20, die: 12, atk: 1, dmg: 2, n: 3, hp: 100 });
+    check('reset ui: active away from the defaults', resetEl.hasAttribute('aria-disabled'), false);
+    let sets = 0;
+    const realAssign = Object.assign;
+    held(() => {
+      Object.assign = (t, ...rest) => { if (t === state) sets++; return realAssign(t, ...rest); };
+      try { resetEl.click(); } finally { Object.assign = realAssign; }
+    });
+    check('reset ui: one setState', sets, 1);
+    check('reset ui: all six keys restored', keysNow(), defaults);
+    check('reset ui: announced in its frame', status(), VM.resetStatus());
+    check('reset ui: inert again', resetEl.getAttribute('aria-disabled'), 'true');
+    send(acRange, '20');
+    render();
+    check('reset ui: a later change clears the status', status(), '');
+    check('reset ui: and the record', lastReset, null);
+
+    // Clamp sentences
+    show({});
+    const commit = (el, value) => held(() => {
+      el.value = value;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const acBox = node('ac-num'), hpBox = node('hp-num');
+    commit(acBox, '40');
+    check('clamp ui: the sentence shows', ctlNoteEl.textContent, 'Target AC goes up ' + 'to 30, so 40 became 30.');
+    check('clamp ui: unhidden', ctlNoteEl.hidden, false);
+    check('clamp ui: the box is normalized', acBox.value, '30');
+    send(acBox, '20');
+    check('clamp ui: the next input clears it', ctlNoteEl.textContent + '|' + ctlNoteEl.hidden, '|true');
+    show({});
+    commit(acRange, '20');
+    check('clamp ui: a range change writes nothing', ctlNoteEl.textContent + '|' + ctlNoteEl.hidden, '|true');
+    commit(acBox, '40');
+    check('clamp ui: written before Reset', ctlNoteEl.hidden, false);
+    held(() => resetEl.click());
+    check('clamp ui: Reset clears a sentence whose key moved', ctlNoteEl.textContent + '|' + ctlNoteEl.hidden, '|true');
+    commit(acBox, '40');
+    held(() => document.querySelector('button.btn-preset').click());
+    check('clamp ui: a preset clears a sentence whose key moved', ctlNoteEl.textContent + '|' + ctlNoteEl.hidden, '|true');
+    show({});
+    commit(hpBox, '0');
+    check('clamp ui: the HP box writes its own note', hpNoteEl.textContent, 'Enemy ' + 'HP goes down to 1, so 0 became 1.');
+    check('clamp ui: the HP note is unhidden', hpNoteEl.hidden, false);
+    check('clamp ui: the bar note stays empty', ctlNoteEl.hidden, true);
+    send(hpBox, '40');
+    check('clamp ui: the next input clears the HP note', hpNoteEl.textContent + '|' + hpNoteEl.hidden, '|true');
+
+    // Chart data
+    show({ n: 7 });
+    const dataRows = () => Array.from(chartDataBodyEl.rows);
+    const chartNow = () => VM.computeView(state).chart;
+    check('chart data ui: 21 body rows', dataRows().length, 21);
+    const rowText = (k) => Array.from(dataRows()[k].cells).map((c) => c.textContent).join(' ');
+    check('chart data ui: the row at n', rowText(7), ['+7', chartNow().attackText[7], chartNow().damageText[7]].join(' '));
+    check('chart data ui: first row', rowText(0), ['+0', chartNow().attackText[0], chartNow().damageText[0]].join(' '));
+    show({ ac: 25, die: 12, atk: 0, n: 7 });
+    check('chart data ui: values follow a setting', rowText(20), ['+20', chartNow().attackText[20], chartNow().damageText[20]].join(' '));
+    check('chart data ui: no outcome class', document.querySelector('.chart-data table').classList.contains('outcome'), false);
+
+    // Compare summary
+    show({ n: 9 });
+    check('compare ui: the summary is the view\'s string', cmpSummaryEl.textContent, VM.computeView(state).compare.summaryText);
+
+    // The sticky bar and sideways scroll
+    show({});
+    const barSticky = getComputedStyle(node('bar')).position === 'sticky';
+    if (barSticky) check('bar ui: Change is gone where the whole bar sticks', getComputedStyle(node('verdict-change')).display, 'none');
+    else check('bar ui: the verdict sticks alone', getComputedStyle(node('verdict')).position, 'sticky');
+    const root = document.documentElement;
+    check('bar ui: the page never scrolls sideways', root.scrollWidth <= root.clientWidth, true);
+  } catch (err) {
+    results.push({ name: 'bar ui smoke crashed: ' + (err && err.message), ok: false });
+  } finally {
+    try {
+      lastReset = null;
+      lastPreset = null;
+      clearClampNote(ctlNoteEl);
+      clearClampNote(hpNoteEl);
+      requestAnimationFrame(() => { resetStatusEl.textContent = ''; exploreStatusEl.textContent = ''; });
+    } catch { /* a missing name: the crash above is already reported */ }
+    Object.assign(state, VM.DEFAULT_STATE);
+    renderControls();
+    render();
+  }
+
   // Phase 4 accessibility (DEPLOY-04, D-09): each control, in the Tab order check-page's guard
   // (11) expects (since 261103-d9g it starts with the header's Funsmith Club link), really takes focus in Chrome, and the label a sighted user reads beside it is
   // rendered (checkVisibility and a non-zero box). A DOM dump cannot prove either (RESEARCH
@@ -5381,7 +5741,10 @@ function runUiSmoke() {
     render();
     const presetBtn = (k) => Array.from(document.querySelectorAll('button.btn-preset'))
       .find((b) => b.dataset.preset === k) || null;
-    const jump = (h) => Array.from(document.querySelectorAll('a[href]')).find((a) => a.getAttribute('href') === h) || null;
+    // Through .explore-jump: the verdict's Change link has the same href and comes first.
+    const jump = (h) => (h === 'https://funsmith.club'
+      ? document.querySelector('a.community')
+      : Array.from(document.querySelectorAll('.explore-jump a[href]')).find((a) => a.getAttribute('href') === h)) || null;
     const find = (key) => {
       if (key === 'die') return document.querySelector('#controls input[name="die"]:checked');
       if (key === 'cross' || key === 'dmg' || key === 'cap') return presetBtn(key);
@@ -5393,15 +5756,18 @@ function runUiSmoke() {
         const fs = el.closest('fieldset');
         return fs ? fs.querySelector('legend') : null;
       }
-      if (el.tagName === 'BUTTON' || el.tagName === 'A') return el;   // named by their own text
+      if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.tagName === 'SUMMARY') return el;   // named by their own text
       if (el.labels && el.labels.length) return el.labels[0];
       const group = el.closest('.group');       // #ac-num: aria-label, shown as the group label
       return group ? group.querySelector('.group-label') : null;
     };
-    const order = ['https://funsmith.club', 'ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'hp-num', 'hp-minus', 'hp-plus', 'n-range', 'roll',
+    const order = ['https://funsmith.club', 'ac-range', 'ac-num', 'die', 'atk-num', 'dmg-num', 'n-range', 'reset', 'verdict-change',
+      'fold-formulas', 'fold-marginal', 'chart-data-summary', 'hp-num', 'hp-minus', 'hp-plus', 'roll',
       'cross', 'dmg', 'cap', '#chart', '#controls'];
     for (const key of order) {
       const el = find(key);
+      // Change is display: none where the whole bar sticks: it has nowhere to send anyone.
+      if (key === 'verdict-change' && el && getComputedStyle(el).display === 'none') continue;
       if (el) el.focus({ preventScroll: true });
       check('a11y ui: focus reaches ' + key, el !== null && document.activeElement === el, true);
       const lab = el ? labelOf(key, el) : null;
@@ -5452,11 +5818,11 @@ function showEngineError() {
 }
 
 // Sections a failed render may have half painted; hidden under the banner.
-const PAINTED_SECTIONS = ['tables', 'stats', 'compare', 'chart', 'sim', 'explore'];
+const PAINTED_SECTIONS = ['tables', 'stats', 'compare', 'chart', 'kill', 'sim', 'explore'];
 
 // The one failure path for a render that throws, first or later (04-REVIEW WR-03): latch
-// `broken` so nothing repaints, hide every painted section, show the banner, and disable Roll,
-// the presets and the two hit step buttons (a later failure finds them enabled).
+// `broken` so nothing repaints, hide every painted section and the verdict, show the banner, and
+// disable Roll, the presets, the two hit step buttons and Reset (a later failure finds them enabled).
 function failPage(err) {
   broken = true;
   console.error('render failed:', err);
@@ -5468,6 +5834,8 @@ function failPage(err) {
   rollBtn.disabled = true;
   for (const b of presetBtns) b.disabled = true;
   for (const b of stepBtns) b.disabled = true;
+  resetEl.disabled = true;
+  verdictEl.hidden = true;
   showEngineError();
 }
 
@@ -5492,20 +5860,33 @@ function init() {
     nRangeEl.max = String(VM.CONTROL_SPEC.n.max);
     chartInit();                             // SVG skeleton once, before the first render (D-09)
     Object.assign(state, VM.DEFAULT_STATE);
+    // D8: a shared link opens at its settings; ?test ignores the address and never writes it.
+    urlSync = !testMode;
+    if (urlSync) {
+      lastQuery = location.search;
+      Object.assign(state, VM.stateFromQuery(location.search));
+    }
+    // D11: the long derivations start closed on a phone; the reader opens what they want.
+    if (matchMedia('(width < 40rem)').matches) {
+      for (const d of document.querySelectorAll('details.fold')) d.open = false;
+    }
     renderControls();                        // D-04: state -> controls, never the reverse
     render();                                // guarded first render: nothing is wired yet
-    for (const root of [form, compareForm]) {   // two control roots, one handler (Pattern 1)
+    for (const root of [form, killForm]) {   // two control roots, one handler (Pattern 1)
       root.addEventListener('submit', (e) => e.preventDefault());
       root.addEventListener('input', onControl);
       root.addEventListener('change', onChange);
     }
     rollBtn.addEventListener('click', onRoll);
     exploreListEl.addEventListener('click', onPresetClick);   // Try this: one delegated listener
-    form.addEventListener('click', onStepClick);             // Enemy HP hit steps (KILL-02)
+    killForm.addEventListener('click', onStepClick);         // Enemy HP hit steps (KILL-02)
+    resetEl.addEventListener('click', onReset);              // Reset (D7)
     simBodyEl.hidden = false;
     rollBtn.disabled = false;
     for (const b of presetBtns) b.disabled = false;          // enabled with Roll, last (D-09)
     for (const b of stepBtns) b.disabled = false;            // the hit steps too (UI-SPEC)
+    resetEl.disabled = false;                                // and Reset (D7)
+    verdictEl.hidden = false;                                // the verdict shows only once it is true
   } catch (err) {
     failPage(err);
     const st = selfTestIfLoaded();
