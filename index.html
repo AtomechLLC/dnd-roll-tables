@@ -112,6 +112,12 @@
       font-variant-caps: small-caps; letter-spacing: 0.04em; margin: 0 0 var(--sp-3);
     }
     .lede { margin: 0; max-width: 72ch; font-size: 1rem; font-weight: 400; line-height: 1.5; }
+    h1, h2 { text-wrap: balance; }
+    .lede, .explain, .section-intro, .footnote, footer p { text-wrap: pretty; }
+    /* Browser surfaces (D14): selection, caret and scrollbar from the theme's own tokens. */
+    ::selection { background: var(--accent); color: var(--paper); }
+    input { caret-color: var(--accent); }
+    html { scrollbar-color: var(--ink-muted) var(--paper); }
     .vh {
       position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
       overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -210,13 +216,14 @@
     :root { --scroll-pad: 10rem; }
     @media (min-width: 71.5rem) and (min-height: 40rem) { :root { --scroll-pad: 10.75rem; } }
     html { scroll-padding-top: var(--scroll-pad); }
-    /* What is inside the sticky area is already on screen, but it sits within that padding, so
-       focusing it would scroll the page away from what the reader was looking at. The negative
-       margin cancels the padding for those elements only. */
-    #verdict, #verdict * { scroll-margin-top: calc(-1 * var(--scroll-pad)); }
+    /* Focus in the strip or the verdict is already on screen, but it sits within that padding, so
+       tabbing in, or the caret while typing in a box, would scroll the page away from what the
+       reader was looking at. No padding while focus is there. Below the sticky widths nothing can
+       cover the strip: the verdict's natural place is under it. */
+    html:has(#controls :focus, #verdict :focus) { scroll-padding-top: 0; }
     #verdict {
       position: sticky; top: 0; z-index: 2;
-      margin: 0; padding-block: var(--sp-2);
+      margin: 0; padding: var(--sp-2) 0;
       background: var(--paper); border-bottom: 1px solid var(--line);
       font-size: 1rem; line-height: 1.5; color: var(--ink);
     }
@@ -233,9 +240,11 @@
           padding-block: var(--sp-2);
           background: var(--paper); border-bottom: 1px solid var(--line);
         }
-        #verdict { position: static; margin-top: var(--sp-2); padding-block: 0; background: none; border-bottom: 0; }
-        .verdict-meta, #verdict-change { display: none; }
-        #bar, #bar * { scroll-margin-top: calc(-1 * var(--scroll-pad)); }
+        #verdict { position: static; margin-top: var(--sp-2); padding: 0; background: none; border-bottom: 0; }
+        /* Two ids, so the touch-target rule for Change near the end of the sheet cannot bring it back. */
+        #verdict .verdict-meta, #verdict #verdict-change { display: none; }
+        /* "Go to the controls": they are already on screen, so the jump leaves the page where it is. */
+        #controls { scroll-margin-top: calc(-1 * var(--scroll-pad)); }
       }
     }
 
@@ -325,6 +334,13 @@
     .note-th { color: var(--ink); font-weight: 700; }
     .note-crit { color: var(--accent); font-weight: 700; }
     .note-flip { color: var(--ink-muted); font-weight: 400; }
+    /* line-height: 1 keeps the mixed-face box inside the row's strut, so a roll never changes a
+       row's height. */
+    .note-count {
+      margin-left: var(--sp-1); line-height: 1;
+      font-family: var(--font-num); font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums;
+      color: var(--ink);
+    }
     /* mid tier (Phase 2 three-up at 1366px) and narrow tier (phones): D-18 compact sizes.
        Kept after the base table rules so equal-specificity overrides win. */
     @container (width < 42rem) {
@@ -333,7 +349,11 @@
       .outcome thead th.corner .cd { display: none; }
     }
     @container (width < 25rem) {
-      .outcome { --cell: 20px; --row: 20px; --rowhead: 24px; --note: 64px; font-size: 0.75rem; }
+      /* d12: 23 + 240 + 72 + 1 (the collapsed outer border) = 336, a 360px phone. The note insets
+         are 1px so "auto-miss ×2" stays on one line. */
+      .outcome { --cell: 20px; --row: 20px; --rowhead: 23px; --note: 72px; font-size: 0.75rem; }
+      .outcome td.note { padding-left: 1px; }
+      .note-count { margin-left: 1px; }
       /* "hits on N+" -> "N+": the phrase stays in the DOM and the accessible text; only the
          visual label shortens. Both boxes are pinned to the top of the row-high line box so
          the zero-size hidden text cannot shift the label off center. */
@@ -370,9 +390,10 @@
     /* Run marks (D-11, D-12), #outcome only, plus the legend swatch that explains them.
        A two-tone ring (2px ink, 1px paper halo) drawn by a pseudo-element, so it never
        touches the threshold / crit box-shadows and shifts no layout; it reads on every heat
-       color and without color. The x-N badge straddles the top edge (the bottom edge in the
-       first body row, clear of the header). Its alt text is "" (the caption suffix and the
-       log carry the run for assistive tech); the first content line is the fallback for
+       color and without color. A hit cell rolled twice or more also gets an x-N badge straddling
+       its top edge. Row labels keep only the ring: their counts sit in the note column (.note-count,
+       261104-vx6 D5), so nothing covers a d20 label. The badge's alt text is "" (the caption suffix
+       and the log carry the run for assistive tech); the first content line is the fallback for
        engines without alt-text syntax. Kept after the heat and rule styles so order never loses. */
     .outcome .roll, .swatch.roll { position: relative; }
     .outcome .roll::before, .swatch.roll::before {
@@ -388,8 +409,6 @@
       font: 700 12px/12px var(--font-num); font-variant-numeric: tabular-nums;
       text-align: center; white-space: nowrap;
     }
-    .outcome tbody tr:first-child .roll[data-n]::after,
-    .outcome th.roll[data-down]::after { top: auto; bottom: -6px; }
 
     /* Legend (TABLE-05): one wrapping row between the h2 and the table; at page width >= 64rem
        it sits in the text column left of the table, under the two-roll paragraph (260927-1ty). */
@@ -803,6 +822,25 @@
       .chart-body > .chart-explain { grid-area: explain; }
     }
 
+    /* Touch targets (D14): every control reaches 44px on a coarse pointer. Outcome table cells stay
+       as they are: they are read, not tapped. Kept late so equal-specificity rules lose. A summary
+       keeps display: list-item (inline-flex would drop its marker), so padding sets its height. */
+    @media (pointer: coarse) {
+      input[type="number"], .pair input[type="range"], .segs span, .btn-step, .btn-reset { height: 44px; }
+      #n-out { height: 44px; line-height: 44px; }
+      .btn-roll, .btn-preset { min-height: 44px; }
+      .community { min-height: 44px; }
+      #verdict-change, .explore-jump a { display: inline-flex; align-items: center; min-height: 44px; }
+      .fold > summary, .chart-data > summary { min-height: 44px; padding-block: var(--sp-3); }
+      .fold[open] > summary { margin-bottom: 0; }
+      /* The sticky area is taller here. Measured worst cases plus 8px, as above: the verdict at
+         320px (177px) and the bar with a clamp sentence showing (174px). */
+      :root { --scroll-pad: 11.75rem; }
+    }
+    @media (pointer: coarse) and (min-width: 71.5rem) and (min-height: 40rem) {
+      :root { --scroll-pad: 11.5rem; }
+    }
+
     /* Self-test panel and engine-error banner (UI-SPEC Self-test Panel, States) */
     #selftest, #engine-error {
       padding: var(--sp-3); border-radius: 8px;
@@ -841,7 +879,7 @@
     <header>
       <h1>D&amp;D Combat Roll Simulator</h1>
       <a class="community" href="https://funsmith.club"><svg class="community-mark" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg><span>Funsmith Club</span></a>
-      <p class="lede">One attack roll, laid out as a table: a d20 to hit against Armor Class, then a damage die. Change the numbers and every outcome updates. Further down, the page answers a design question: is a bonus worth more on the attack roll or on the damage roll?</p>
+      <p class="lede">One attack roll, laid out as a table: a d20 to hit against Armor Class, then a damage die. Change the numbers and every outcome updates. The line under the controls answers a design question: is the next +1 worth more on the attack roll or on the damage roll?</p>
     </header>
 
     <noscript><p>This page needs JavaScript to calculate the table. Everything runs in your browser; nothing is sent anywhere.</p></noscript>
@@ -998,8 +1036,8 @@
     </section>
 
     <section id="chart" aria-labelledby="chart-h">
-      <h2 id="chart-h">Bonus sweep, +0 to +20</h2>
-      <p class="section-intro">Expected damage over 20 rounds for every extra bonus from +0 to +20, at the settings above. Point at or drag across the chart to read any N; the slider sets the marker.</p>
+      <h2 id="chart-h">Every bonus from +0 to +20</h2>
+      <p class="section-intro">Expected damage over 20 rounds for every extra bonus from +0 to +20, at the settings above. Point at or drag across the chart to read any N; the +N slider in the controls sets the marker.</p>
       <div class="chart-body">
         <div class="legend chart-legend">
           <div class="legend-item"><svg class="key" aria-hidden="true" focusable="false"><line class="series-hit" x1="0" y1="8" x2="32" y2="8"></line></svg><span>+N to hit (added to the attack roll)</span></div>
@@ -1068,7 +1106,7 @@
 
     <section id="sim" aria-labelledby="sim-h">
       <h2 id="sim-h">20 rounds, rolled for real</h2>
-      <p class="section-intro">The numbers above are exact averages. This rolls a real d20 and real damage dice for 20 rounds at the settings above (two damage dice on a crit), so you can see how far one fight lands from the average. Nothing rolls until you click, and changing a setting never re-rolls. The Enemy HP column tracks the enemy from the top of the page: rounds after a kill still roll and count toward the total, and changing Enemy HP re-scores the same rolls.</p>
+      <p class="section-intro">The numbers above are exact averages. This rolls real dice for 20 rounds, so you can see how far one fight lands from the average. Nothing rolls until you click, and changing a setting never re-rolls.</p>
       <div class="sim-body" hidden>
         <div class="sim-result">
           <p id="sim-note" class="sim-note" hidden><span class="note-base"></span><b class="note-stale" hidden> Settings changed. Roll again to compare.</b></p>
@@ -1140,7 +1178,7 @@
   </main>
 
   <footer>
-    <p>D&amp;D 5e rules for a single attack: a natural 1 always misses, a natural 20 always hits and crits, and damage never goes below 0. Every number is exact and computed in your browser. Add ?test to the address to see the self-test.</p>
+    <p>D&amp;D 5e rules for a single attack: a natural 1 always misses, a natural 20 always hits and crits, and damage never goes below 0. Every number is exact and computed in your browser. Add ?test to the address to see the self-test that checks them.</p>
   </footer>
 
   <script id="dice-math">
@@ -3561,17 +3599,13 @@ function noteFor(row, threshold) {
 // innerHTML (T-01-01, T-02-01); captions use textContent, and the optional hidden caption
 // suffix is a .vh span built with createElement. marks (D-11, D-12; #outcome only) is
 // Sim.runMarks output: hit cells get class roll (data-n from 2 up), and crit / miss / nat 1
-// rows count on their row header. Counts are integers coerced with | 0 (T-03-11).
+// rows get a ring on their row header and a count in the note column (261104-vx6 D5). Counts are
+// integers coerced with | 0 (T-03-11).
 function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captionHidden, marks, flipRow }) {
   const X = Number(die) | 0;
   const head = `<tr><th scope="col" class="corner">d20<span class="cd"> \\ d${X}</span></th>` +
     Array.from({ length: X }, (_, i) => `<th scope="col">${i + 1}</th>`).join('') +
     '<th scope="col" class="note"><span class="vh">Notes</span></th></tr>';
-  // Label badges straddle the top edge, but row 1's drops to its bottom edge (clear of the
-  // header), so a label directly below a marked row 1 would meet it on the same line. While
-  // the marked labels run unbroken from row 1, each drops too (data-down); the first unmarked
-  // label ends the run, so no two label badges ever share an edge. Row 20 always stays up.
-  let chain = true;
   const body = rows.map((row) => {
     const cls = [row.kind, row.d20 === threshold ? 'threshold' : ''].join(' ').trim();
     const cells = row.cells.map((d, i) => {
@@ -3584,11 +3618,13 @@ function renderOutcomeTable(el, { rows, die, threshold, heatMax, caption, captio
       return `<td class="h${t >= 0.5 ? ' hi' : ''}${roll}"${badge} style="--t:${t.toFixed(3)}">${d}</td>`;
     }).join('');
     const rn = marks ? (marks.rows.get(row.d20) | 0) : 0;
-    chain = chain && rn > 0 && row.d20 !== 20;
-    const th = rn > 0 ? `<th scope="row" class="roll" data-n="${rn | 0}"${chain ? ' data-down' : ''}>` : '<th scope="row">';
+    const th = rn > 0 ? '<th scope="row" class="roll">' : '<th scope="row">';
+    const count = rn > 0 ? `<span class="note-count" aria-hidden="true">×${rn | 0}</span>` : '';
     // D4: the row +1 to hit would flip; the main table only. noteFor is '' on threshold - 1.
     const note = row.d20 === flipRow ? '<span class="note-flip">hits at +1</span>' : noteFor(row, threshold);
-    return `<tr class="${cls}">${th}${row.d20}</th>${cells}<td class="note">${note}</td></tr>`;
+    // A count of 10 or more (about one run in five million) leads the cell, so if a narrow note
+    // column has to clip, it clips the word and never a digit.
+    return `<tr class="${cls}">${th}${row.d20}</th>${cells}<td class="note">${rn >= 10 ? count + ' ' + note : note + count}</td></tr>`;
   }).join('');
   el.style.setProperty('--cols', String(X));
   el.tHead.innerHTML = head;
@@ -3613,7 +3649,7 @@ function renderTable(view, simCtx) {
     caption: `Damage dealt for every d20 roll (rows) and d${p.die} face (columns). ` +
       `AC ${p.ac}, attack ${signed(p.atk)}, damage ${signed(p.dmg)}.`,
     captionHidden: marked ? ' Outlined cells and d20 labels show your last roll of 20 rounds; ' +
-      'the round-by-round log is in the section below the chart.' : undefined,
+      'the round-by-round log is in the 20 rounds section further down.' : undefined,
     marks: simCtx ? simCtx.marks : null,
     flipRow: view.flipRow,
   });
@@ -4125,10 +4161,10 @@ function renderLegend(view) {
   legendEl.replaceChildren(
     legendItem(ramp, 'Hit damage, low to high (one scale for every table on the page)'),
     legendItem(swatch('m', '0'), 'Miss: always 0, whatever the die shows'),
-    legendItem(swatch('h hi crit', '', 1), 'Natural 20: crit, shown as 2 × face + damage bonus*'),
-    legendItem(swatch('threshold', ''), 'Rule: first d20 roll that hits'),
+    legendItem(swatch('h hi crit', 'crit', 1), 'Natural 20: crit, shown as 2 × face + damage bonus*'),
+    legendItem(swatch('threshold', 'hits'), 'Rule: first d20 roll that hits'),
     legendItem(rollSwatch,
-      'Outlined: rolled in your last 20 rounds (×2 = rolled twice). Misses and crits are counted on the d20 label.'),
+      'Outlined: rolled in your last 20 rounds (×2 = rolled twice). Misses and crits are counted in the note column.'),
   );
 }
 
@@ -4136,8 +4172,8 @@ function renderLegend(view) {
 function renderFootnote(view) {
   const d = 'd' + view.params.die;
   let text = `* On a natural 20 you roll the damage die twice and add the bonus once (for a ${d}: 2${d} + damage bonus). ` +
-    'Each column here is one die face, so the crit row shows 2 × face + damage bonus. ' +
-    `Averaged across the row, that equals the average of a real 2${d} crit, so this table's average is exactly the expected damage.`;
+    `Each column is one die face, so the crit row shows 2 × face + damage bonus, and averaged across the row that equals a real 2${d} crit. ` +
+    "So this table's average is exactly the expected damage.";
   if (view.critFloorDiffers) {
     text += ' With a damage penalty this large, the 0-damage floor makes the doubled-face shortcut slightly off. ' +
       'The stat cards below use the real two-dice rule.';
@@ -5105,7 +5141,7 @@ function runUiSmoke() {
     check('sim marks ui: row 20 count in the note column', noteCount(19), '×3');
     check('sim marks ui: row 1 count in the note column', noteCount(0), '×2');
     check('sim marks ui: no label carries a badge',
-      tableEl.querySelectorAll('th[data-n], th[data-down]').length, 0);
+      tableEl.querySelectorAll('th[data-n], th[data-' + 'down]').length, 0);
     check('sim marks ui: note counts are aria-hidden',
       Array.from(body.querySelectorAll('.note-count')).every((s) => s.getAttribute('aria-hidden') === 'true'), true);
     check('sim marks ui: note counts come after the note text',
