@@ -261,9 +261,10 @@
         #controls { scroll-margin-top: calc(-1 * var(--scroll-pad)); }
         /* The strip never leaves the screen here, so "Go to the controls" has nothing to do. */
         .explore-jump .jump-controls { display: none; }
-        /* The chart fits under the bar: 21rem is the bar, heading, intro, readout and y-title; 1.6 is
-           the viewBox ratio. 36rem keeps it readable on short windows, which then scroll a little. */
-        #chart { --plot-w: min(50rem, max(36rem, calc((100svh - 21rem) * 1.6))); }
+        /* After a jump the chart fits under the bar: the scroll padding is where its heading lands,
+           and 11.5rem is the heading, intro, readout, y-title and a small margin; 1.6 is the viewBox
+           ratio. 36rem keeps it readable on short windows, which then scroll a little. */
+        #chart { --plot-w: min(50rem, max(36rem, calc((100svh - var(--scroll-pad) - 11.5rem) * 1.6))); }
       }
     }
 
@@ -372,7 +373,7 @@
       font-family: var(--font-num); font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums;
       color: var(--ink);
     }
-    /* mid tier (Phase 2 three-up at 1366px) and narrow tier (phones): D-18 compact sizes.
+    /* mid tier (the compare tables on a laptop) and narrow tier (phones): D-18 compact sizes.
        Kept after the base table rules so equal-specificity overrides win. */
     @container (width < 42rem) {
       .outcome { --cell: 24px; --row: 24px; --rowhead: 32px; --note: 80px; font-size: 0.75rem; }
@@ -686,6 +687,10 @@
       caption-side: top; text-align: left; font-size: 0.875rem; font-weight: 700; line-height: 1.4;
       color: var(--ink); padding-bottom: var(--sp-2); min-height: calc(2 * 1.4em + var(--sp-2));
     }
+    /* The fold's summary names the log, so while the run is fresh the caption repeats it for assistive
+       tech only, and holds its two lines so the rows stay put when the stale suffix arrives. */
+    #sim:not(.is-stale) .sim-log caption { color: transparent; }
+    .fold.sim-log-fold[open] > summary { margin-bottom: 0; }
     .sim-log th, .sim-log td {
       height: 24px; line-height: 24px; padding: 0 var(--sp-1); border-bottom: 1px solid var(--line);
       font-size: 0.875rem; font-family: var(--font-num); font-variant-numeric: tabular-nums;
@@ -879,6 +884,7 @@
          The box takes what is left, down to the 320px phone; its spinners would only crowd it. */
       @container page (width < 70rem) {
         .group-bonus { flex: 1 1 calc(50% - var(--sp-4)); min-width: 0; }
+        .group-bonus .hint { white-space: nowrap; }
         .nudge-row { display: flex; gap: var(--sp-1); }
         .btn-nudge { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; }
         .nudge-row input[type="number"] { flex: 1 1 0; width: auto; min-width: 0; appearance: textfield; }
@@ -1222,7 +1228,7 @@
 
     <section id="explore" aria-labelledby="explore-h">
       <h2 id="explore-h">Try this</h2>
-      <p class="section-intro">Each button sets the controls at the top of the page, and every table, chart and figure follows. Read what to look for, then use the links below to go and see it.</p>
+      <p class="section-intro">Each button sets the controls at the top of the page, and every table, chart and figure follows. Read what to look for, then go and see it.</p>
       <ul class="explore-list" role="list">
         <li class="explore-item">
           <h3 class="explore-title">A crossover</h3>
@@ -1618,7 +1624,7 @@ const Sim = (() => {
 
   <script id="view-model">
 // Pure view-model: control spec, the one parser, exact fixed-point formatting, and the views:
-// statsView (Phase 1 stats only), compareView (three compact tables), chartView (the sweep
+// statsView (Phase 1 stats only), compareView (the compare tables), chartView (the sweep
 // chart), simExact and the roll copy (Phase 3), computeView (the page).
 const VM = (() => {
   'use strict';
@@ -3243,7 +3249,7 @@ const resetEl = document.getElementById('reset');
 const resetStatusEl = document.getElementById('reset-status');
 const ctlNoteEl = document.getElementById('ctl-note');
 const hpNoteEl = document.getElementById('hp-note');
-// Compare section (Phase 2): three compact tables, with the N slider now in the bar.
+// Compare section (Phase 2; 261105-emn): two compact tables, with the N slider now in the bar.
 const cmpSummaryEl = document.getElementById('cmp-summary');
 const nRangeEl = document.getElementById('n-range');
 const nOutEl = document.getElementById('n-out');
