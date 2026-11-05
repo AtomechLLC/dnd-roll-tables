@@ -1164,7 +1164,7 @@
           <button type="button" class="btn-preset" data-preset="cross" aria-describedby="ex-cross-d ex-cross-s" disabled>Try AC 25 with a d12</button>
         </li>
         <li class="explore-item">
-          <h3 class="explore-title">Damage always wins</h3>
+          <h3 class="explore-title">No crossover</h3>
           <p class="explore-desc" id="ex-dmg-d">At AC 15 with +0 to hit you expect 6 hits in 20 rounds, so each +1 to damage adds 6.0. Each +1 to hit adds one more hit, worth only 4.5. The dashed line stays on top at every N, and there is no ring.</p>
           <p class="explore-sets" id="ex-dmg-s">Sets: AC 15, d8, +0 to hit, +0 damage, compare at +5</p>
           <button type="button" class="btn-preset" data-preset="dmg" aria-describedby="ex-dmg-d ex-dmg-s" disabled>Try AC 15 with a d8</button>
@@ -1772,36 +1772,50 @@ const VM = (() => {
     });
   }
 
-  // The verdict line under the controls (D3, quick 261104-vx6). It only restates formulaView's
-  // win result, so it can never disagree with "Which wins"; it compares nothing itself.
+  // The verdict line under the controls (D3, quick 261104-vx6). The winner comes only from
+  // formulaView's win result, so it can never disagree with "Which wins"; the numbers are the
+  // 20-round strings the Value of the next +1 card prints; the crossing is the chart caption's own
+  // sentence from the result computeView already has. It compares nothing and sweeps nothing.
   const VERDICT_REASON = Object.freeze({
     cap: 'it already hits on 2+, the 95% cap',
     floor: 'still only a natural 20 hits',
     nodmg: 'the extra hits deal 0 damage at this penalty',
   });
-  function verdictView(sv, fv) {
-    const { hitRound: H, dmgRound: D, reason } = sv.marg;
+  // Expected hits over 20 rounds are exactly hitFaces (20 x k/20). "On each" is true only when
+  // the +1 reaches every hit, which an integer test decides: at the damage floor some hits stay 0.
+  function moreOnHits(sv) {
+    if (sv.exact.dmgNum !== sv.hitFaces * sv.exact.den) return '1 more on each hit that deals damage';
+    return sv.hitFaces === 1 ? '1 more on your 1 expected hit' : `1 more on each of your ${sv.hitFaces} expected hits`;
+  }
+  function verdictWhy(sv, fv) {
+    const { hit20: H, dmg20: D, reason } = sv.marg;
     if (fv.branch.win === 'zero-hit') {
       return {
         lead: '+1 to damage wins here.',
-        rest: ` +1 to hit adds nothing (${VERDICT_REASON[reason]}); +1 to damage adds ${D} per round.`,
+        why: ` Over 20 rounds +1 to hit adds nothing (${VERDICT_REASON[reason]}); +1 to damage adds ${D}: ${moreOnHits(sv)}.`,
       };
     }
     switch (fv.win.verdict) {
       case '+1 to hit wins.':
-        return { lead: '+1 to hit wins here.', rest: ` It adds ${H} per round; +1 to damage adds ${D}.` };
+        return { lead: '+1 to hit wins here.', why: ` Over 20 rounds it adds ${H}: one more hit. +1 to damage adds ${D}: ${moreOnHits(sv)}.` };
       case '+1 to damage wins.':
-        return { lead: '+1 to damage wins here.', rest: ` It adds ${D} per round; +1 to hit adds ${H}.` };
+        return { lead: '+1 to damage wins here.', why: ` Over 20 rounds it adds ${D}: ${moreOnHits(sv)}. +1 to hit adds ${H}: one more hit.` };
       case 'they tie.':
-        return { lead: 'They tie here.', rest: ` Each adds ${H} per round.` };
+        return { lead: 'They tie here.', why: ` Over 20 rounds each adds ${H}.` };
       default:
-        return { lead: 'They are about even here.', rest: ` Both add about ${H} per round.` };
+        return { lead: 'They are about even here.', why: ` Over 20 rounds both add about ${H}.` };
     }
   }
+  function verdictView(sv, fv, crossings) {
+    const { lead, why } = verdictWhy(sv, fv);
+    return { lead, why: crossings.list.length > 0 ? `${why} ${captionCross(crossings)}` : why };
+  }
 
-  // CMP-01..04 (D-04, D-06, D-08): Baseline, +N to hit, +N to damage, one DiceMath.stats call
-  // each. Plain values only. heatMax is the true largest cell across the three row sets.
-  // Deltas are displayed variant tenths minus displayed baseline tenths (RESEARCH Pitfall 7).
+  // CMP-01..04 (D-04, D-06, D-08): the settings as set, +N to hit, +N to damage, one DiceMath.stats
+  // call each. Plain values only. heatMax is the true largest cell across the three row sets.
+  // tables.base is not drawn (the main table is that table), but it stays here for the deltas,
+  // the summary and heatMax. Deltas are displayed variant tenths minus displayed base tenths
+  // (RESEARCH Pitfall 7).
   function compareView(p, n) {
     const specs = [
       ['base', p, 'Baseline (+0)'],
@@ -1829,7 +1843,7 @@ const VM = (() => {
         ruleText: rule,
         totalText,
         deltaText,
-        statsText: `${rule} · ${totalText} over 20 rounds` + (deltaText === null ? '' : ` · ${deltaText} vs baseline`),
+        statsText: `${rule} · ${totalText} over 20 rounds` + (deltaText === null ? '' : ` · ${deltaText} vs the main table`),
       };
     }
     // D10: the three totals in one line, from the same strings the .cmp-stats lines print.
@@ -1878,8 +1892,9 @@ const VM = (() => {
     if (cr.first === 'none' || (k === 0 && cr.ties.length === 0)) return 'The curves never cross.';
     if (k === 0) return `The curves meet at ${signed(cr.ties[0])} but do not cross.`;
     if (k === 1) {
-      const t = cr.list[0].tieN;
-      return 'The curves cross once' + (t !== null ? `, at ${signed(t)}` : '') + '.';
+      const { tieN: t, lastLeadN, flipN } = cr.list[0];
+      return 'The curves cross once' +
+        (t !== null ? `, at ${signed(t)}` : `, between ${signed(lastLeadN)} and ${signed(flipN)}`) + '.';
     }
     return k === 2 ? 'The curves cross twice.' : `The curves cross ${k} times.`;
   }
@@ -2156,7 +2171,7 @@ const VM = (() => {
       'extra d12 hit (6.5 over 20 rounds), while +1 to damage adds just 1.0. Look for the ring at +6, where +N to ' +
       'hit takes over.',
       { ac: 25, die: 12, atk: 0, dmg: 0, n: 6 }),
-    preset('dmg', 'Damage always wins', 'Try AC 15 with a d8',
+    preset('dmg', 'No crossover', 'Try AC 15 with a d8',
       'At AC 15 with +0 to hit you expect 6 hits in 20 rounds, so each +1 to damage adds 6.0. Each +1 to hit adds ' +
       'one more hit, worth only 4.5. The dashed line stays on top at every N, and there is no ring.',
       { ac: 15, die: 8, atk: 0, dmg: 0, n: 5 }),
@@ -2166,7 +2181,7 @@ const VM = (() => {
       { ac: 15, die: 12, atk: 0, dmg: 0, n: 15 }),
   ]);
   // The one announcement per preset click (UI-SPEC Click behavior): written only by the handler.
-  const presetStatus = (s) => `Set to ${settingsText(s)}, compare at ${signed(s.n)}. Everything above has updated.`;
+  const presetStatus = (s) => `Set to ${settingsText(s)}, compare at ${signed(s.n)}. Everything on the page has updated.`;
 
   // ---- Reset, shareable URL and clamp sentences (quick 261104-vx6, D7-D9) ----
   // The one announcement per Reset click, from the defaults themselves.
@@ -2304,12 +2319,12 @@ const VM = (() => {
     const erText = killNumText((20 * eh) / T.hitFaces, exR);
     const { tiny, text: simpleText } = simpleHits(sv, hp);
     // D-02, D-03: the two hit step buttons and the hits line under the HP box. Each label shows
-    // the change its click makes ('(0 HP)' when inert); the hits line reuses the card's simple
+    // the change its click makes (no HP part when inert); the hits line reuses the card's simple
     // division string and the Average damage card's avgPerHitText. Branches are integer tests.
     const st = hpStep(sv, hp);
     const minusInert = st.minus === 0, plusInert = st.plus === 0;
-    const minusLabel = minusInert ? '−1 hit (0 HP)' : `−1 hit (−${st.minus} HP)`;
-    const plusLabel = plusInert ? '+1 hit (0 HP)' : `+1 hit (+${st.plus} HP)`;
+    const minusLabel = minusInert ? '−1 hit' : `−1 hit (−${st.minus} HP)`;
+    const plusLabel = plusInert ? '+1 hit' : `+1 hit (+${st.plus} HP)`;
     const hitsLine = tiny ? `under 0.1 average hits (1 hit ≈ ${sv.avgPerHitText} HP)`
       : st.step === 0
         ? `≈ ${simpleText} average hits (1 hit ≈ ${sv.avgPerHitText} HP, which rounds to 0 HP, so the hit buttons are off)`
@@ -2438,13 +2453,14 @@ const VM = (() => {
     const compare = compareView(p, state.n);
     const sv = statsView(state);
     const formulas = formulaView(sv);
+    const chart = chartView(p, state.n);
     // simExact and kill are page-view only: statsView stays sim-free and kill-free for the
     // per-combo callers. The copy builders reuse this one statsView result (no second engine pass).
     return {
-      ...sv, heatMax: compare.heatMax, compare, chart: chartView(p, state.n),
+      ...sv, heatMax: compare.heatMax, compare, chart,
       simExact: simExact(p), formulas, twoRolls: twoRollsText(sv),
       kill: killView(sv, state.hp),
-      verdict: { ...verdictView(sv, formulas), set: `${settingsText(p)}, compare at ${signed(state.n)}` },
+      verdict: { ...verdictView(sv, formulas, chart.crossings), set: `${settingsText(p)}, compare at ${signed(state.n)}` },
     };
   }
 
@@ -2659,9 +2675,9 @@ const SelfTest = (() => {
     check('cmp: defaults n 5 baseline stats line', cv.tables.base.statsText,
       'hits on 10+ · 54.0 over 20 rounds');
     check('cmp: defaults n 5 +hit stats line', cv.tables.hit.statsText,
-      'hits on 5+ · 76.5 over 20 rounds · +22.5 vs baseline');
+      'hits on 5+ · 76.5 over 20 rounds · +22.5 vs the main table');
     check('cmp: defaults n 5 +dmg stats line', cv.tables.dmg.statsText,
-      'hits on 10+ · 109.0 over 20 rounds · +55.0 vs baseline');
+      'hits on 10+ · 109.0 over 20 rounds · +55.0 vs the main table');
     check('cmp: defaults n 5 +hit hidden caption suffix', cv.tables.hit.hiddenText,
       ': damage for every d20 roll (rows) and d8 face (columns) at AC 15, attack +10, damage +0.');
     check('cmp: +hit rows are the plain table at atk + N (CMP-04)',
@@ -2867,7 +2883,7 @@ const SelfTest = (() => {
     const two = [[0, 1, 4, 7, 8, 9], [0, 2, 3, 4, 9, 10]];
     check('cross: sentence 3, no crossing', CC(15, 0, 8, 0), 'The curves never cross.');
     check('cross: sentence 3, end tie', CC(27, -5, 4, 0), 'The curves meet at +20 but do not cross.');
-    check('cross: sentence 3, one crossing', CC(25, 0, 8, 0), 'The curves cross once.');
+    check('cross: sentence 3, one crossing', CC(25, 0, 8, 0), 'The curves cross once, between +6 and +7.');
     check('cross: sentence 3, tie crossing', CC(10, 0, 4, 14), 'The curves cross once, at +12.');
     check('cross: sentence 3, two crossings', VM.captionCross(CR(...two)), 'The curves cross twice.');
     check('cross: sentence 3, all equal', VM.captionCross(CR([0, 1, 2], [0, 1, 2])), 'The curves never cross.');
@@ -2892,7 +2908,7 @@ const SelfTest = (() => {
     const has = (cv, text) => (cv.caption.includes(text) ? text : cv.caption);
     const mk = (cv) => cv.markers.map((m) => `${m.label} | ${m.title}`).join(' ; ');
     let cv = CV(25, 0, 8, 0);
-    const s23 = '+N to damage leads from +1 to +6, then +N to hit leads from +7 to +20. The curves cross once.';
+    const s23 = '+N to damage leads from +1 to +6, then +N to hit leads from +7 to +20. The curves cross once, between +6 and +7.';
     check('cross: caption AC25 +0 d8 sentences 2 + 3', has(cv, s23), s23);
     check('cross: markers AC25 +0 d8', mk(cv), 'flips at +7 | The curves cross between +6 and +7.');
     cv = CV(15, 5, 8, 0);
@@ -2903,8 +2919,8 @@ const SelfTest = (() => {
     const refs = [
       [[15, 0, 8, 0], '+N to damage leads at every N from +1 to +20. The curves never cross.'],
       [[20, 5, 12, 3], '+N to hit leads at every N from +1 to +20. The curves never cross.'],
-      [[15, 0, 12, 0], '+N to hit leads from +1 to +14, then +N to damage leads from +15 to +20. The curves cross once.'],
-      [[25, 0, 12, 0], '+N to damage leads from +1 to +5, then +N to hit leads from +6 to +20. The curves cross once.'],
+      [[15, 0, 12, 0], '+N to hit leads from +1 to +14, then +N to damage leads from +15 to +20. The curves cross once, between +14 and +15.'],
+      [[25, 0, 12, 0], '+N to damage leads from +1 to +5, then +N to hit leads from +6 to +20. The curves cross once, between +5 and +6.'],
     ];
     for (const [args, text] of refs) {
       check(`cross: caption AC${args[0]} ${args[1]} d${args[2]} D${args[3]} sentences 2 + 3`, has(CV(...args), text), text);
@@ -3484,7 +3500,7 @@ function setNumbered(el, text) {
 function renderVerdict(view) {
   const v = view.verdict;
   setNumbered(verdictLeadEl, v.lead);
-  setNumbered(verdictRestEl, v.rest);
+  setNumbered(verdictRestEl, v.why);
   setText(verdictSetEl, v.set);
 }
 
@@ -3672,7 +3688,7 @@ function renderTable(view, simCtx) {
 }
 
 // CMP-01..04: three compact tables on the shared scale, each with its stats line
-// (rule · total over 20 rounds · delta vs baseline), built with createElement/textContent.
+// (rule · total over 20 rounds · delta vs the main table), built with createElement/textContent.
 // A number inside a prose line: <b class="num"> (tabular numerals, 700), text only.
 function num(text) {
   const b = document.createElement('b');
@@ -3691,7 +3707,7 @@ function renderCompare(view) {
       caption: t.title, captionHidden: t.hiddenText,
     });
     const parts = [t.ruleText + ' · ', num(t.totalText), ' over 20 rounds'];
-    if (t.deltaText !== null) parts.push(' · ', num(t.deltaText), ' vs baseline');
+    if (t.deltaText !== null) parts.push(' · ', num(t.deltaText), ' vs the main table');
     cmpEls[key].stats.replaceChildren(...parts);
   }
 }
@@ -4455,7 +4471,7 @@ function runUiSmoke() {
     check('d4 D-5: footnote says close to', critNoteEl.textContent.includes('close to the expected damage'), true);
     check('d4 D-5: verdict numbers use the number face',
       [...verdictLeadEl.querySelectorAll('.num'), ...verdictRestEl.querySelectorAll('.num')].map((n) => n.textContent).join(' '),
-      '+1 +1 0 +1 0.030');
+      '+1 ' + '20 +1 0 +1 0.6 1');
     check('chart: the readout sits above the plot',
       Boolean(chartReadoutEl.compareDocumentPosition(sweepEl) & Node.DOCUMENT_POSITION_FOLLOWING), true);
   } catch (err) {
@@ -5504,7 +5520,7 @@ function runUiSmoke() {
     check('hp step ui: minus label clamps near the bound', txt('hp-minus'), '−1 hit (−2' + HP + ')');
     click(minus);
     check('hp step ui: minus click stops at the bound', state.hp, 1);
-    check('hp step ui: minus label at the bound', txt('hp-minus'), '−1 hit (0' + HP + ')');
+    check('hp step ui: minus label at the bound', txt('hp-minus'), '−1 ' + 'hit');
     check('hp step ui: minus inert at the bound', inert(minus), 'true');
     check('hp step ui: bound announced (low)', status(),
       'Enemy' + HP + ' 1: about 0.2 average hits. That is the lowest ' + 'it goes.');
@@ -5516,12 +5532,12 @@ function runUiSmoke() {
     check('hp step ui: plus label clamps near the bound', txt('hp-plus'), '+1 hit (+1' + HP + ')');
     held(() => { plus.focus({ preventScroll: true }); plus.click(); plus.click(); });   // no render between
     check('hp step ui: two quick plus clicks at 499', state.hp, 500);
-    check('hp step ui: plus label at the bound', txt('hp-plus'), '+1 hit (0' + HP + ')');
+    check('hp step ui: plus label at the bound', txt('hp-plus'), '+1 ' + 'hit');
     check('hp step ui: plus inert at the bound', inert(plus), 'true');
     check('hp step ui: bound announced (high)', (status() ?? '').endsWith('That is the highest ' + 'it goes.'), true);
 
     show({ die: 4, dmg: -4 });
-    check('hp step ui: step 0 labels', [txt('hp-minus'), txt('hp-plus')].every((s) => (s ?? '').endsWith('(0' + HP + ')')), true);
+    check('hp step ui: step 0 labels', txt('hp-minus') + ' | ' + txt('hp-plus'), '−1 ' + 'hit | +1 ' + 'hit');
     check('hp step ui: step 0 both inert', inert(minus) + ' ' + inert(plus), 'true true');
     check('hp step ui: step 0 hits line', txt('hp-hits'),
       '≈ 352.0 average hits (1 hit ≈ 0.11' + HP + ', which rounds to 0' + HP + ', so the hit buttons are ' + 'off)');
